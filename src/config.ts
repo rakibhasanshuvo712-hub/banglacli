@@ -331,21 +331,21 @@ export async function promptConfig(isFirstTime = false): Promise<BanglaCLIConfig
   // 1. Choose Provider
   const provider = (await p.select({
     message: chalk.cyan('Select your AI Provider:'),
-    initialValue: existingConfig?.provider || 'gemini',
+    initialValue: existingConfig?.provider || 'openrouter',
     options: [
       {
-        value: 'gemini',
-        label: `${chalk.bold('Google Gemini')} ${chalk.green('(Free Tier - Fast & High Quota)')}`,
-        hint: 'Recommended: gemini-3.8-flash',
+        value: 'openrouter',
+        label: `${chalk.bold('OpenRouter')} ${chalk.green('(100% Free - Most Stable & Reliable)')}`,
+        hint: 'Recommended: openrouter/free (Zero 503 outages)',
       },
       {
-        value: 'openrouter',
-        label: `${chalk.bold('OpenRouter')} ${chalk.yellow('(Free Models: openrouter/free, Gemma, etc.)')}`,
-        hint: 'Recommended: openrouter/free',
+        value: 'gemini',
+        label: `${chalk.bold('Google Gemini')} ${chalk.yellow('(Free Tier - High Quota, Subject to 503 Spikes)')}`,
+        hint: 'gemini-3.8-flash, gemini-2.0-flash',
       },
       {
         value: 'custom',
-        label: `${chalk.bold('Custom OpenAI-Compatible')} ${chalk.magenta('(DeepSeek, Groq, Ollama, etc.)')}`,
+        label: `${chalk.bold('Custom OpenAI-Compatible')} ${chalk.magenta('(Groq, Ollama Offline, etc.)')}`,
         hint: 'Custom baseURL + API key',
       },
     ],

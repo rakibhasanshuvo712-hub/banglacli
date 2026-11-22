@@ -107,13 +107,59 @@ export class BanglaAgent {
   }
 
   /**
-   * Main chat turn loop with automatic tool execution.
+   * Main chat turn loop with automatic tool execution and cross-provider failover.
    */
   public async chat(userInput: string): Promise<string> {
-    if (this.config.provider === 'gemini') {
-      return this.chatGemini(userInput);
-    } else {
-      return this.chatOpenAI(userInput);
+    try {
+      if (this.config.provider === 'gemini') {
+        const reply = await this.chatGemini(userInput);
+        // Check if Gemini failed with 503 or server overload message
+        if (
+          typeof reply === 'string' &&
+          (reply.includes('503') ||
+            reply.includes('UNAVAILABLE') ||
+            reply.includes('high demand') ||
+            reply.includes('Unavailable') ||
+            reply.includes('Server Overload'))
+        ) {
+          const openRouterSaved = this.config.savedProviders?.openrouter;
+          if (openRouterSaved && openRouterSaved.apiKey) {
+            console.log(
+              chalk.bold.hex('#00FF7F')(
+                `\n⚡ [Auto-Recovery]: Google Gemini free servers are currently overloaded (503).\n` +
+                  `Seamlessly switched to OpenRouter (openrouter/free) to complete your request!\n`
+              )
+            );
+            this.config.provider = 'openrouter';
+            this.config.apiKey = openRouterSaved.apiKey;
+            this.config.model = 'openrouter/free';
+            this.config.baseURL = 'https://openrouter.ai/api/v1';
+            this.initClients();
+            return await this.chatOpenAI(userInput);
+          }
+        }
+        return reply;
+      } else {
+        return await this.chatOpenAI(userInput);
+      }
+    } catch (err: any) {
+      if (this.config.provider === 'gemini') {
+        const openRouterSaved = this.config.savedProviders?.openrouter;
+        if (openRouterSaved && openRouterSaved.apiKey) {
+          console.log(
+            chalk.bold.hex('#00FF7F')(
+              `\n⚡ [Auto-Recovery]: Google Gemini server error. Seamlessly switching to OpenRouter (openrouter/free)...\n`
+            )
+          );
+          this.config.provider = 'openrouter';
+          this.config.apiKey = openRouterSaved.apiKey;
+          this.config.model = 'openrouter/free';
+          this.config.baseURL = 'https://openrouter.ai/api/v1';
+          this.initClients();
+          return await this.chatOpenAI(userInput);
+        }
+      }
+      throw err;
     }
   }
 
