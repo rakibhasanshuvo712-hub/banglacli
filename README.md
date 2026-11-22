@@ -83,10 +83,11 @@ If it's your first time, the interactive setup wizard will guide you to select a
 
 1. **Google Gemini (Free Tier - Recommended)**
    - Get key: [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
-   - Default model: `gemini-3.8-flash`
-2. **OpenRouter (Free Models)**
+   - Default models: `gemini-2.0-flash` / `gemini-1.5-flash` / `gemini-3.8-flash` (1M token context, 15 RPM free)
+2. **OpenRouter (100% Free Coding Models)**
    - Get key: [openrouter.ai/keys](https://openrouter.ai/keys)
-   - Default model: `deepseek/deepseek-chat:free`
+   - Auto-router: `openrouter/free` (zero downtime)
+   - 1M token free models: `particle-ai/particle-1:free`, `nvidia/nemotron-3-ultra-550b-a55b:free`, `baidu/ernie-5.5-flash-preview:free`, `inclusionai/ling-3.2-flash:free`, `google/gemma-4-31b-it:free`
 3. **Custom OpenAI-Compatible (Groq, Ollama, DeepSeek)**
    - Groq Cloud (Free): [console.groq.com/keys](https://console.groq.com/keys) (Base URL: `https://api.groq.com/openai/v1`)
    - Local Offline (Ollama): `http://localhost:11434/v1` (100% Free & offline)

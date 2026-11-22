@@ -192,14 +192,18 @@ export function showFreeApiKeyGuide(): void {
   console.log(`   ${chalk.gray('Quota:')} Free tier gives 15 Requests/min & 1,500 Requests/day for free!\n`);
 
   // 2. OpenRouter Free Models
-  console.log(chalk.bold.hex('#00FF7F')('2. OpenRouter (Access 100% Free Coding Models)'));
+  console.log(chalk.bold.hex('#00FF7F')('2. OpenRouter (Access 14+ 100% Free Frontier Models)'));
   console.log(`   ${chalk.gray('Direct Link:')} ${chalk.bold.underline.cyan('https://openrouter.ai/keys')}`);
   console.log(`   ${chalk.gray('Steps:')} Sign in with GitHub/Google ➔ Click "${chalk.white('Create Key')}" ➔ Copy key.`);
-  console.log(`   ${chalk.gray('Free Models (Zero Cost):')}`);
-  console.log(`     • ${chalk.yellow('openrouter/free')} (🌟 Recommended - Auto routes to the best free coding model)`);
-  console.log(`     • ${chalk.yellow('google/gemma-4-31b-it:free')} (Free 31B code completion model)`);
-  console.log(`     • ${chalk.yellow('nvidia/nemotron-3.5-lightning:free')} (Ultra fast free model)`);
-  console.log(`     • ${chalk.yellow('inclusionai/ling-3.2-flash:free')} (Free flash model)`);
+  console.log(`   ${chalk.gray('Top Free Agent Models (Zero Cost):')}`);
+  console.log(`     • ${chalk.yellow('openrouter/free')} (🌟 Auto Best Free Model - Zero downtime)`);
+  console.log(`     • ${chalk.yellow('particle-ai/particle-1:free')} (1 Million token context agentic coding model)`);
+  console.log(`     • ${chalk.yellow('nvidia/nemotron-3-ultra-550b-a55b:free')} (Massive 550B frontier model, 1M context)`);
+  console.log(`     • ${chalk.yellow('google/gemma-4-31b-it:free')} (Google DeepMind 31B code instruction model)`);
+  console.log(`     • ${chalk.yellow('google/gemma-4-26b-a4b-it:free')} (Google Gemma MoE coding model)`);
+  console.log(`     • ${chalk.yellow('nvidia/nemotron-3.5-lightning:free')} (1M token context ultra-fast MoE)`);
+  console.log(`     • ${chalk.yellow('baidu/ernie-5.5-flash-preview:free')} (1M token context foundation model)`);
+  console.log(`     • ${chalk.yellow('inclusionai/ling-3.2-flash:free')} (1M token context hybrid reasoning)`);
   console.log(`   ${chalk.gray('Quota:')} 100% Free with zero payment or credit card needed!\n`);
 
   // 3. Groq (Blazing Fast Inference)
@@ -246,9 +250,13 @@ export function showTokenLimitsGuide(): void {
   console.log(chalk.dim('┌──────────────────────────────────────┬────────────────┬──────────────┬──────────────┐'));
   console.log(chalk.dim('│') + chalk.bold(' Model                                ') + chalk.dim('│') + chalk.bold(' Context Window ') + chalk.dim('│') + chalk.bold(' Rate Limit   ') + chalk.dim('│') + chalk.bold(' Cost         ') + chalk.dim('│'));
   console.log(chalk.dim('├──────────────────────────────────────┼────────────────┼──────────────┼──────────────┤'));
-  console.log(chalk.dim('│') + chalk.green(' deepseek/deepseek-chat:free          ') + chalk.dim('│') + chalk.white(' 128,000 toks   ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' $0.00 (Free) ') + chalk.dim('│'));
-  console.log(chalk.dim('│') + chalk.green(' zhipu/glm-4:free                     ') + chalk.dim('│') + chalk.white(' 128,000 toks   ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' $0.00 (Free) ') + chalk.dim('│'));
-  console.log(chalk.dim('│') + chalk.green(' meta-llama/llama-3.3-70b-instruct:free') + chalk.dim('│') + chalk.white(' 131,072 toks   ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' $0.00 (Free) ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' openrouter/free                      ') + chalk.dim('│') + chalk.white(' 200,000 toks   ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' $0.00 (Free) ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' particle-ai/particle-1:free          ') + chalk.dim('│') + chalk.cyan(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' $0.00 (Free) ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' nvidia/nemotron-3-ultra-550b:free    ') + chalk.dim('│') + chalk.cyan(' 1,000,000 toks ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' $0.00 (Free) ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' google/gemma-4-31b-it:free           ') + chalk.dim('│') + chalk.white(' 262,144 toks   ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' $0.00 (Free) ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' nvidia/nemotron-3.5-lightning:free   ') + chalk.dim('│') + chalk.cyan(' 1,000,000 toks ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' $0.00 (Free) ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' baidu/ernie-5.5-flash-preview:free   ') + chalk.dim('│') + chalk.cyan(' 1,024,000 toks ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' $0.00 (Free) ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' inclusionai/ling-3.2-flash:free      ') + chalk.dim('│') + chalk.cyan(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' $0.00 (Free) ') + chalk.dim('│'));
   console.log(chalk.dim('└──────────────────────────────────────┴────────────────┴──────────────┴──────────────┘'));
   console.log(chalk.gray('ℹ️ OpenRouter free models have zero 503 errors and are great backups when Google has high traffic spikes.\n'));
 
