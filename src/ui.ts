@@ -63,6 +63,7 @@ export function printBanner(provider?: string, model?: string, workspace?: strin
   console.log(
     `  ${dim('Commands:')} ${chalk.yellow('/help')} ${dim('•')} ` +
       `${chalk.yellow('/guide')} ${dim('•')} ` +
+      `${chalk.yellow('/limits')} ${dim('•')} ` +
       `${chalk.yellow('/provider')} ${dim('•')} ` +
       `${chalk.yellow('/model')} ${dim('•')} ${chalk.yellow('/config')} ${dim('•')} ` +
       `${chalk.yellow('/clear')} ${dim('•')} ${chalk.yellow('/exit')}`
@@ -152,6 +153,7 @@ export function showHelp(): void {
   console.log(`${chalk.yellow.bold('Slash Commands in Chat:')}`);
   console.log(`  ${chalk.cyan('/help')}        - Show this guide and available tools`);
   console.log(`  ${chalk.cyan('/guide')}       - Direct free API links & models guide (ফ্রি API গাইড)`);
+  console.log(`  ${chalk.cyan('/limits')}      - View free token limits, context windows & RPM/RPD`);
   console.log(`  ${chalk.cyan('/provider')}    - Switch AI provider (Gemini, OpenRouter, Custom)`);
   console.log(`  ${chalk.cyan('/model')}       - Switch current AI model on the fly`);
   console.log(`  ${chalk.cyan('/config')}      - Full interactive configuration wizard`);
@@ -215,4 +217,48 @@ export function showFreeApiKeyGuide(): void {
 
   console.log(line);
   console.log(chalk.cyan(`💡 Tip: Use ${chalk.yellow.bold('/provider')} or ${chalk.yellow.bold('/config')} in chat to switch anytime!\n`));
+}
+
+/**
+ * Show detailed free token limits and rate limits for all supported providers.
+ */
+export function showTokenLimitsGuide(): void {
+  const line = chalk.dim('─'.repeat(82));
+  console.log('\n' + chalk.bgHex('#0047AB').white.bold(' 📊 FREE TOKEN LIMITS & RATE LIMITS GUIDE (টোকেন ও রেট লিমিট) '));
+  console.log(chalk.gray('Exact quotas and context windows for each free provider in banglaCLI:\n'));
+
+  // 1. Google Gemini Free Tier Limits
+  console.log(chalk.bold.hex('#00FF7F')('1. Google Gemini (Google AI Studio Free Tier)'));
+  console.log(chalk.dim('┌──────────────────────┬────────────────┬──────────────┬──────────────┬──────────────┐'));
+  console.log(chalk.dim('│') + chalk.bold(' Model                ') + chalk.dim('│') + chalk.bold(' Context Window ') + chalk.dim('│') + chalk.bold(' Req / Minute ') + chalk.dim('│') + chalk.bold(' Tokens / Min ') + chalk.dim('│') + chalk.bold(' Req / Day    ') + chalk.dim('│'));
+  console.log(chalk.dim('├──────────────────────┼────────────────┼──────────────┼──────────────┼──────────────┤'));
+  console.log(chalk.dim('│') + chalk.green(' gemini-2.0-flash     ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' gemini-1.5-flash     ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' gemini-3.8-flash     ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.white(' gemini-1.5-pro       ') + chalk.dim('│') + chalk.white(' 2,097,152 toks ') + chalk.dim('│') + chalk.red(' 2 RPM        ') + chalk.dim('│') + chalk.cyan(' 32,000 TPM   ') + chalk.dim('│') + chalk.yellow(' 50 RPD       ') + chalk.dim('│'));
+  console.log(chalk.dim('└──────────────────────┴────────────────┴──────────────┴──────────────┴──────────────┘'));
+  console.log(chalk.gray('ℹ️ 1M Tokens/min is equivalent to ~750,000 words per minute! Gemini 2.0/1.5 Flash are best for 0% downtime.\n'));
+
+  // 2. OpenRouter Free Models Limits
+  console.log(chalk.bold.hex('#00FF7F')('2. OpenRouter (Free Models Ending in :free)'));
+  console.log(chalk.dim('┌──────────────────────────────────────┬────────────────┬──────────────┬──────────────┐'));
+  console.log(chalk.dim('│') + chalk.bold(' Model                                ') + chalk.dim('│') + chalk.bold(' Context Window ') + chalk.dim('│') + chalk.bold(' Rate Limit   ') + chalk.dim('│') + chalk.bold(' Cost         ') + chalk.dim('│'));
+  console.log(chalk.dim('├──────────────────────────────────────┼────────────────┼──────────────┼──────────────┤'));
+  console.log(chalk.dim('│') + chalk.green(' deepseek/deepseek-chat:free          ') + chalk.dim('│') + chalk.white(' 128,000 toks   ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' $0.00 (Free) ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' zhipu/glm-4:free                     ') + chalk.dim('│') + chalk.white(' 128,000 toks   ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' $0.00 (Free) ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' meta-llama/llama-3.3-70b-instruct:free') + chalk.dim('│') + chalk.white(' 131,072 toks   ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' $0.00 (Free) ') + chalk.dim('│'));
+  console.log(chalk.dim('└──────────────────────────────────────┴────────────────┴──────────────┴──────────────┘'));
+  console.log(chalk.gray('ℹ️ OpenRouter free models have zero 503 errors and are great backups when Google has high traffic spikes.\n'));
+
+  // 3. Groq Cloud Free Limits
+  console.log(chalk.bold.hex('#00FF7F')('3. Groq Cloud (Free Tier - Ultra High Speed)'));
+  console.log(`   • ${chalk.white('llama-3.3-70b-versatile:')} 30 Requests/min | 6,000 Tokens/min | ${chalk.green('14,400 Requests/day')}`);
+  console.log(`   • ${chalk.white('qwen-2.5-coder-32b:')} 30 Requests/min | 6,000 Tokens/min | ${chalk.green('14,400 Requests/day')}\n`);
+
+  // 4. Local Offline (Ollama)
+  console.log(chalk.bold.hex('#00FF7F')('4. Local Offline Models (Ollama)'));
+  console.log(`   • ${chalk.green('100% UNLIMITED:')} Zero rate limits, zero tokens per minute ceiling. Depends only on your machine's hardware.\n`);
+
+  console.log(line);
+  console.log(chalk.cyan(`💡 Quick Switch: Type ${chalk.yellow.bold('/provider')} in chat to instantly hop between providers!\n`));
 }

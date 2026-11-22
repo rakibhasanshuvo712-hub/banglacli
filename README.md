@@ -152,6 +152,7 @@ banglaCLI -m "gemini-2.0-flash"
 |---|---|
 | `/help` | Display command usage and tool reference |
 | `/guide` | Display direct links & guides for free API keys & models |
+| `/limits` | View free token quotas, context windows & rate limits |
 | `/provider` | Switch between Gemini, OpenRouter, or custom providers |
 | `/model` | Switch between models for the active provider |
 | `/config` | Full interactive setup to re-configure keys, provider, and endpoint |
@@ -191,6 +192,23 @@ You don't need to spend any money or enter credit cards to use `banglaCLI`. Here
 - **Run in terminal:** `ollama run qwen2.5-coder` or `ollama run deepseek-r1`
 - **Steps in banglaCLI:** Choose `Custom OpenAI-Compatible` ➔ Base URL: `http://localhost:11434/v1` ➔ API key: `ollama` (or any string).
 - **Cost:** 100% Free, unlimited, runs entirely on your local machine without internet.
+
+---
+
+### 📊 Token Capacities & Free Rate Limits Comparison
+
+| Provider | Model | Context Window | Req / Min (RPM) | Tokens / Min (TPM) | Req / Day (RPD) |
+|---|---|---|---|---|---|
+| **Google Gemini** | `gemini-2.0-flash` | **1,048,576** tokens | 15 RPM | **1,000,000** TPM | **1,500** RPD |
+| **Google Gemini** | `gemini-1.5-flash` | **1,048,576** tokens | 15 RPM | **1,000,000** TPM | **1,500** RPD |
+| **Google Gemini** | `gemini-3.8-flash` | **1,048,576** tokens | 15 RPM | **1,000,000** TPM | **1,500** RPD |
+| **Google Gemini** | `gemini-1.5-pro` | **2,097,152** tokens | 2 RPM | 32,000 TPM | 50 RPD |
+| **OpenRouter** | `deepseek/deepseek-chat:free` | 128,000 tokens | 20 RPM | Generous Free | ~200 RPD |
+| **OpenRouter** | `zhipu/glm-4:free` | 128,000 tokens | 20 RPM | Generous Free | ~200 RPD |
+| **Groq Cloud** | `llama-3.3-70b-versatile` | 128,000 tokens | 30 RPM | 6,000 TPM | **14,400** RPD |
+| **Ollama (Local)** | `qwen2.5-coder` | Hardware limit | **Unlimited** | **Unlimited** | **Unlimited** |
+
+> 🛡️ **Auto-Failover Protection:** If a model temporarily returns 503 (High Demand), `banglaCLI` automatically reroutes your request to a stable fallback model (`gemini-2.0-flash` or `gemini-1.5-flash`) so your building process never crashes!
 
 ---
 

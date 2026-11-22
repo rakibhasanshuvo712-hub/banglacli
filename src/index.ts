@@ -11,7 +11,7 @@ import {
   BanglaCLIConfig,
 } from './config.js';
 import { BanglaAgent } from './agent.js';
-import { printBanner, renderMarkdown, showHelp, showFreeApiKeyGuide } from './ui.js';
+import { printBanner, renderMarkdown, showHelp, showFreeApiKeyGuide, showTokenLimitsGuide } from './ui.js';
 import { safetySession } from './tools.js';
 
 const program = new Command();
@@ -94,6 +94,11 @@ program
         continue;
       }
 
+      if (trimmed === '/limits' || trimmed === '/tokens') {
+        showTokenLimitsGuide();
+        continue;
+      }
+
       if (trimmed === '/clear') {
         agent.resetHistory();
         console.clear();
@@ -157,6 +162,15 @@ program
     showFreeApiKeyGuide();
   });
 
+// Explicit limits subcommand
+program
+  .command('limits')
+  .alias('tokens')
+  .description('Display free token limits, context windows, and rate limits')
+  .action(() => {
+    showTokenLimitsGuide();
+  });
+
 /**
  * Handle dynamic model switching command (/model)
  */
@@ -168,10 +182,10 @@ async function handleSwitchModel(config: BanglaCLIConfig, agent: BanglaAgent): P
       message: chalk.cyan('Switch Gemini Model:'),
       initialValue: config.model,
       options: [
-        { value: 'gemini-3.8-flash', label: 'gemini-3.8-flash (Recommended Free & Fast)' },
-        { value: 'gemini-2.0-flash', label: 'gemini-2.0-flash (Multimodal & Fast)' },
-        { value: 'gemini-1.5-flash', label: 'gemini-1.5-flash (Stable)' },
-        { value: 'gemini-1.5-pro', label: 'gemini-1.5-pro (Complex Reasoning)' },
+        { value: 'gemini-2.0-flash', label: 'gemini-2.0-flash (Recommended - Fast, Ultra-Stable & 1M Tokens)' },
+        { value: 'gemini-1.5-flash', label: 'gemini-1.5-flash (Battle-Tested Stability - 1M Tokens)' },
+        { value: 'gemini-3.8-flash', label: 'gemini-3.8-flash (Latest Model - High Demand)' },
+        { value: 'gemini-1.5-pro', label: 'gemini-1.5-pro (Reasoning & 2M Tokens)' },
         { value: 'custom_input', label: 'Enter custom model name...' },
       ],
     })) as string;

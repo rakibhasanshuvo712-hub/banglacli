@@ -37,6 +37,13 @@ interface ChatMessage {
   content: string;
 }
 
+const GEMINI_FALLBACK_MAP: Record<string, string[]> = {
+  'gemini-3.8-flash': ['gemini-2.0-flash', 'gemini-1.5-flash'],
+  'gemini-2.0-flash': ['gemini-1.5-flash', 'gemini-3.8-flash'],
+  'gemini-1.5-flash': ['gemini-2.0-flash', 'gemini-3.8-flash'],
+  'gemini-1.5-pro': ['gemini-2.0-flash', 'gemini-1.5-flash'],
+};
+
 export class BanglaAgent {
   private config: BanglaCLIConfig;
   private openAIClient?: OpenAI;
@@ -134,34 +141,101 @@ export class BanglaAgent {
       );
       spinner.start();
 
-      let response: any;
-      try {
-        response = await this.geminiClient.models.generateContent({
-          model: this.config.model,
-          contents: this.geminiContents,
-          config: {
-            systemInstruction: SYSTEM_PROMPT,
-            tools: GEMINI_TOOLS as any,
-          },
-        });
-        spinner.stop();
-      } catch (err: any) {
-        spinner.stop();
-        const errMsg = err?.message || String(err);
+      let response: any = null;
+      let lastError: any = null;
+
+      // Candidate models: requested model first, then fallback models
+      const fallbacks = GEMINI_FALLBACK_MAP[this.config.model] || ['gemini-2.0-flash', 'gemini-1.5-flash'];
+      const modelCandidates = [this.config.model, ...fallbacks.filter((m) => m !== this.config.model)];
+
+      for (const candidateModel of modelCandidates) {
+        let attempts = 0;
+        const maxModelAttempts = 2;
+
+        while (attempts < maxModelAttempts) {
+          attempts++;
+          try {
+            response = await this.geminiClient.models.generateContent({
+              model: candidateModel,
+              contents: this.geminiContents,
+              config: {
+                systemInstruction: SYSTEM_PROMPT,
+                tools: GEMINI_TOOLS as any,
+              },
+            });
+
+            if (candidateModel !== this.config.model) {
+              console.log(
+                chalk.yellow(
+                  `\n⚡ [Auto-Failover]: "${this.config.model}" experienced high demand (503). Automatically rerouted request to "${candidateModel}"!`
+                )
+              );
+              this.config.model = candidateModel;
+            }
+
+            lastError = null;
+            break;
+          } catch (err: any) {
+            lastError = err;
+            const errMsg = err?.message || String(err);
+            const isTemporary =
+              errMsg.includes('503') ||
+              errMsg.includes('UNAVAILABLE') ||
+              errMsg.includes('high demand') ||
+              errMsg.includes('429') ||
+              errMsg.includes('RESOURCE_EXHAUSTED') ||
+              errMsg.includes('no longer available') ||
+              errMsg.includes('NOT_FOUND') ||
+              errMsg.includes('404');
+
+            if (!isTemporary) {
+              // Critical auth error, don't retry other models
+              break;
+            }
+
+            // Short pause before retrying
+            if (attempts < maxModelAttempts) {
+              await new Promise((resolve) => setTimeout(resolve, 1500));
+            }
+          }
+        }
+
+        if (response) {
+          break;
+        }
+
+        // If auth error, break out of all candidate models
+        if (lastError) {
+          const errMsg = lastError?.message || String(lastError);
+          if (errMsg.includes('API_KEY_INVALID') || errMsg.includes('403') || errMsg.includes('401')) {
+            break;
+          }
+        }
+      }
+
+      spinner.stop();
+
+      if (!response && lastError) {
+        const errMsg = lastError?.message || String(lastError);
         if (errMsg.includes('API_KEY_INVALID') || errMsg.includes('403') || errMsg.includes('401')) {
           return chalk.red(
             `\n✖ Gemini API Key Error: Your API key appears to be invalid or expired.\n` +
               `Please run ${chalk.yellow('/config')} to update your API key.`
           );
+        } else if (errMsg.includes('503') || errMsg.includes('UNAVAILABLE') || errMsg.includes('high demand')) {
+          return chalk.red(
+            `\n✖ Google Gemini Free Servers High Demand (503 UNAVAILABLE):\n` +
+              `Google's free servers are temporarily saturated during peak traffic.\n\n` +
+              `👉 Immediate Solutions:\n` +
+              `1. Run ${chalk.yellow.bold('/provider')} and switch to ${chalk.green.bold('OpenRouter')} (DeepSeek & GLM-4 are 100% free with no 503 errors).\n` +
+              `2. Run ${chalk.yellow.bold('/model')} to manually switch to ${chalk.green.bold('gemini-2.0-flash')} or ${chalk.green.bold('gemini-1.5-flash')}.\n` +
+              `3. Run ${chalk.yellow.bold('/limits')} to view all free token quotas across providers.`
+          );
         } else if (errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('429')) {
           return chalk.red(
-            `\n✖ Gemini Quota Exceeded (429 Rate Limit).\n` +
-              `You can switch models using ${chalk.yellow('/model')} or switch providers using ${chalk.yellow('/provider')}.`
-          );
-        } else if (errMsg.includes('no longer available') || errMsg.includes('NOT_FOUND') || errMsg.includes('404')) {
-          return chalk.red(
-            `\n✖ Gemini Model Unavailable: ${errMsg}\n` +
-              `👉 Quick fix: Type ${chalk.yellow.bold('/model')} and switch to ${chalk.green.bold('gemini-3.8-flash')} or ${chalk.green.bold('gemini-2.0-flash')}.`
+            `\n✖ Gemini Rate Limit Exceeded (429):\n` +
+              `You hit the free per-minute limit (15 requests/min).\n` +
+              `Wait 30-60 seconds, or run ${chalk.yellow('/provider')} to switch to OpenRouter (zero-wait).`
           );
         }
         throw new Error(`Gemini Error: ${errMsg}`);

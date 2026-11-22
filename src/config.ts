@@ -29,7 +29,7 @@ export const PROVIDER_LABELS: Record<ProviderType, string> = {
 };
 
 export const DEFAULT_MODELS: Record<ProviderType, string> = {
-  gemini: 'gemini-3.8-flash',
+  gemini: 'gemini-2.0-flash',
   openrouter: 'deepseek/deepseek-chat:free',
   custom: 'deepseek-chat',
 };
@@ -100,12 +100,12 @@ async function selectModelForProvider(
   if (provider === 'gemini') {
     const modelChoice = (await p.select({
       message: chalk.cyan('Select Gemini Model:'),
-      initialValue: currentModel || 'gemini-3.8-flash',
+      initialValue: currentModel || 'gemini-2.0-flash',
       options: [
-        { value: 'gemini-3.8-flash', label: 'gemini-3.8-flash (Recommended Free & Fast)' },
-        { value: 'gemini-2.0-flash', label: 'gemini-2.0-flash (Fast & Multimodal)' },
-        { value: 'gemini-1.5-flash', label: 'gemini-1.5-flash (Stable)' },
-        { value: 'gemini-1.5-pro', label: 'gemini-1.5-pro (Reasoning & Large Context)' },
+        { value: 'gemini-2.0-flash', label: 'gemini-2.0-flash (Recommended - Fast, Ultra-Stable & 1M Tokens)' },
+        { value: 'gemini-1.5-flash', label: 'gemini-1.5-flash (Battle-Tested Stability - 1M Tokens)' },
+        { value: 'gemini-3.8-flash', label: 'gemini-3.8-flash (Latest Model - High Demand)' },
+        { value: 'gemini-1.5-pro', label: 'gemini-1.5-pro (Reasoning & 2M Tokens)' },
         { value: 'custom_input', label: 'Enter custom model name manually...' },
       ],
     })) as string;
@@ -115,7 +115,7 @@ async function selectModelForProvider(
     if (modelChoice === 'custom_input') {
       const customModel = (await p.text({
         message: 'Enter Gemini model ID:',
-        initialValue: 'gemini-3.8-flash',
+        initialValue: 'gemini-2.0-flash',
       })) as string;
       if (p.isCancel(customModel)) return null;
       return customModel.trim();
