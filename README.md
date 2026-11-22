@@ -46,8 +46,9 @@ It is 100% **BYOK (Bring Your Own Key)** — you don't need costly subscriptions
   - Prompts you `[Y/n/a]` before modifying files or executing shell commands.
   - Includes a *"Yes to all (Auto-approve for this session)"* mode for hands-free autonomous building.
 - 💬 **Interactive Chat REPL & Slash Commands**:
+  - `/provider`: Switch between Gemini, OpenRouter, and Custom providers on the fly.
   - `/model`: Switch models on the fly without restarting.
-  - `/config`: Re-run provider and API key setup.
+  - `/config`: Re-run full provider and API key setup wizard.
   - `/clear`: Reset conversation history and free context memory.
   - `/help`: Display commands guide and tool manual.
   - `/exit`: Cleanly exit the session.
@@ -143,8 +144,9 @@ banglaCLI -m "gemini-2.0-flash"
 | Command | Description |
 |---|---|
 | `/help` | Display command usage and tool reference |
-| `/model` | Switch between Gemini, OpenRouter, or custom models |
-| `/config` | Change API key, provider, or endpoint URL |
+| `/provider` | Switch between Gemini, OpenRouter, or custom providers |
+| `/model` | Switch between models for the active provider |
+| `/config` | Full interactive setup to re-configure keys, provider, and endpoint |
 | `/clear` | Clear conversation memory and reset token context |
 | `/exit` | Exit the CLI session |
 

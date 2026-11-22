@@ -62,6 +62,7 @@ export function printBanner(provider?: string, model?: string, workspace?: strin
   }
   console.log(
     `  ${dim('Commands:')} ${chalk.yellow('/help')} ${dim('•')} ` +
+      `${chalk.yellow('/provider')} ${dim('•')} ` +
       `${chalk.yellow('/model')} ${dim('•')} ${chalk.yellow('/config')} ${dim('•')} ` +
       `${chalk.yellow('/clear')} ${dim('•')} ${chalk.yellow('/exit')}`
   );
@@ -148,11 +149,12 @@ export function showHelp(): void {
   console.log('\n' + chalk.bold.hex('#00FF7F')('🇧🇩 banglaCLI Help & Usage Guide'));
   console.log(chalk.dim('─'.repeat(70)));
   console.log(`${chalk.yellow.bold('Slash Commands in Chat:')}`);
-  console.log(`  ${chalk.cyan('/help')}    - Show this guide and available tools`);
-  console.log(`  ${chalk.cyan('/model')}   - Switch current AI model on the fly`);
-  console.log(`  ${chalk.cyan('/config')}  - Re-configure API key, provider, and baseURL`);
-  console.log(`  ${chalk.cyan('/clear')}   - Clear conversation history / reset memory`);
-  console.log(`  ${chalk.cyan('/exit')}    - Exit banglaCLI session`);
+  console.log(`  ${chalk.cyan('/help')}        - Show this guide and available tools`);
+  console.log(`  ${chalk.cyan('/provider')}    - Switch AI provider (Gemini, OpenRouter, Custom)`);
+  console.log(`  ${chalk.cyan('/model')}       - Switch current AI model on the fly`);
+  console.log(`  ${chalk.cyan('/config')}      - Full interactive configuration wizard`);
+  console.log(`  ${chalk.cyan('/clear')}       - Clear conversation history / reset memory`);
+  console.log(`  ${chalk.cyan('/exit')}        - Exit banglaCLI session`);
 
   console.log(`\n${chalk.yellow.bold('Autonomous Tool Capabilities:')}`);
   console.log(`  1. ${chalk.bold('list_files')}   - Lists workspace files (ignoring node_modules, .git)`);

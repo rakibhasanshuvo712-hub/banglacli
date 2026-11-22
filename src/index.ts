@@ -2,7 +2,14 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import * as p from '@clack/prompts';
-import { getConfig, promptConfig, updateModel, PROVIDER_LABELS, BanglaCLIConfig } from './config.js';
+import {
+  getConfig,
+  promptConfig,
+  switchProviderInteractive,
+  updateModel,
+  PROVIDER_LABELS,
+  BanglaCLIConfig,
+} from './config.js';
 import { BanglaAgent } from './agent.js';
 import { printBanner, renderMarkdown, showHelp } from './ui.js';
 import { safetySession } from './tools.js';
@@ -56,7 +63,7 @@ program
     while (running) {
       const input = (await p.text({
         message: chalk.bold.hex('#00FF7F')('banglaCLI ❯'),
-        placeholder: 'Type your message (Bangla / Banglish / English) or /help, /model, /exit...',
+        placeholder: 'Type your message (Bangla / Banglish / English) or /help, /provider, /model, /exit...',
         validate: (val) => {
           if (!val || val.trim().length === 0) {
             return 'Please enter a message or command.';
@@ -87,6 +94,20 @@ program
         console.clear();
         printBanner(PROVIDER_LABELS[config.provider], config.model, process.cwd());
         console.log(chalk.green('✔ Conversation history cleared! / কথোপকথনের মেমোরি রিসেট করা হয়েছে।\n'));
+        continue;
+      }
+
+      if (trimmed === '/provider') {
+        const newConfig = await switchProviderInteractive(config);
+        if (newConfig) {
+          config = newConfig;
+          agent.updateConfig(newConfig);
+          console.log(
+            chalk.green(
+              `\n✔ Active Provider: ${chalk.bold(PROVIDER_LABELS[config.provider])} (${chalk.bold(config.model)})\n`
+            )
+          );
+        }
         continue;
       }
 

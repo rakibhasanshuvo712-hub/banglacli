@@ -4,11 +4,18 @@ import chalk from 'chalk';
 
 export type ProviderType = 'gemini' | 'openrouter' | 'custom';
 
+export interface ProviderConfig {
+  apiKey: string;
+  model: string;
+  baseURL?: string;
+}
+
 export interface BanglaCLIConfig {
   provider: ProviderType;
   apiKey: string;
   model: string;
   baseURL?: string;
+  savedProviders?: Partial<Record<ProviderType, ProviderConfig>>;
 }
 
 const configStore = new Conf<{ config: BanglaCLIConfig }>({
@@ -37,13 +44,31 @@ export const PROVIDER_KEY_URLS: Record<ProviderType, string> = {
  * Retrieve saved configuration.
  */
 export function getConfig(): BanglaCLIConfig | undefined {
-  return configStore.get('config');
+  const cfg = configStore.get('config');
+  if (cfg && !cfg.savedProviders) {
+    cfg.savedProviders = {
+      [cfg.provider]: {
+        apiKey: cfg.apiKey,
+        model: cfg.model,
+        baseURL: cfg.baseURL,
+      },
+    };
+  }
+  return cfg;
 }
 
 /**
  * Save configuration to local storage.
  */
 export function saveConfig(config: BanglaCLIConfig): void {
+  if (!config.savedProviders) {
+    config.savedProviders = {};
+  }
+  config.savedProviders[config.provider] = {
+    apiKey: config.apiKey,
+    model: config.model,
+    baseURL: config.baseURL,
+  };
   configStore.set('config', config);
 }
 
@@ -63,6 +88,232 @@ export function updateModel(newModel: string): void {
     current.model = newModel;
     saveConfig(current);
   }
+}
+
+/**
+ * Interactive model selection helper for a provider.
+ */
+async function selectModelForProvider(
+  provider: ProviderType,
+  currentModel?: string
+): Promise<string | null> {
+  if (provider === 'gemini') {
+    const modelChoice = (await p.select({
+      message: chalk.cyan('Select Gemini Model:'),
+      initialValue: currentModel || 'gemini-2.5-flash',
+      options: [
+        { value: 'gemini-2.5-flash', label: 'gemini-2.5-flash (Default Free & Recommended)' },
+        { value: 'gemini-2.0-flash', label: 'gemini-2.0-flash (Fast & Multimodal)' },
+        { value: 'gemini-1.5-flash', label: 'gemini-1.5-flash (Stable)' },
+        { value: 'gemini-1.5-pro', label: 'gemini-1.5-pro (Reasoning & Large Context)' },
+        { value: 'custom_input', label: 'Enter custom model name manually...' },
+      ],
+    })) as string;
+
+    if (p.isCancel(modelChoice)) return null;
+
+    if (modelChoice === 'custom_input') {
+      const customModel = (await p.text({
+        message: 'Enter Gemini model ID:',
+        initialValue: 'gemini-2.5-flash',
+      })) as string;
+      if (p.isCancel(customModel)) return null;
+      return customModel.trim();
+    }
+    return modelChoice;
+  } else if (provider === 'openrouter') {
+    const modelChoice = (await p.select({
+      message: chalk.cyan('Select OpenRouter Model:'),
+      initialValue: currentModel || 'deepseek/deepseek-chat:free',
+      options: [
+        { value: 'deepseek/deepseek-chat:free', label: 'deepseek/deepseek-chat:free (Powerful Free Coding)' },
+        { value: 'zhipu/glm-4:free', label: 'zhipu/glm-4:free (Fast Free Model)' },
+        { value: 'meta-llama/llama-3.3-70b-instruct:free', label: 'meta-llama/llama-3.3-70b-instruct:free' },
+        { value: 'google/gemini-2.0-flash-exp:free', label: 'google/gemini-2.0-flash-exp:free' },
+        { value: 'custom_input', label: 'Enter custom OpenRouter model name...' },
+      ],
+    })) as string;
+
+    if (p.isCancel(modelChoice)) return null;
+
+    if (modelChoice === 'custom_input') {
+      const customModel = (await p.text({
+        message: 'Enter model ID (e.g. mistralai/mistral-7b-instruct:free):',
+        initialValue: 'deepseek/deepseek-chat:free',
+      })) as string;
+      if (p.isCancel(customModel)) return null;
+      return customModel.trim();
+    }
+    return modelChoice;
+  } else {
+    const customModel = (await p.text({
+      message: chalk.cyan('Enter model name (e.g., deepseek-chat, llama3, qwen2.5-coder):'),
+      initialValue: currentModel || 'deepseek-chat',
+      validate: (v) => (!v || v.trim().length === 0 ? 'Model name cannot be empty!' : undefined),
+    })) as string;
+
+    if (p.isCancel(customModel)) return null;
+    return customModel.trim();
+  }
+}
+
+/**
+ * Interactive helper to switch AI provider on the fly (/provider command).
+ */
+export async function switchProviderInteractive(
+  currentConfig: BanglaCLIConfig
+): Promise<BanglaCLIConfig | null> {
+  p.intro(chalk.bold.hex('#00FF7F')('🔄 Switch AI Provider'));
+
+  const provider = (await p.select({
+    message: chalk.cyan('Choose provider to switch to:'),
+    initialValue: currentConfig.provider,
+    options: [
+      {
+        value: 'gemini',
+        label: `${chalk.bold('Google Gemini')} ${chalk.green('(Free Tier - Fast & High Quota)')}`,
+        hint: currentConfig.provider === 'gemini' ? 'Currently active' : undefined,
+      },
+      {
+        value: 'openrouter',
+        label: `${chalk.bold('OpenRouter')} ${chalk.yellow('(Free Models: DeepSeek, GLM, etc.)')}`,
+        hint: currentConfig.provider === 'openrouter' ? 'Currently active' : undefined,
+      },
+      {
+        value: 'custom',
+        label: `${chalk.bold('Custom OpenAI-Compatible')} ${chalk.magenta('(DeepSeek, Groq, Ollama, etc.)')}`,
+        hint: currentConfig.provider === 'custom' ? 'Currently active' : undefined,
+      },
+    ],
+  })) as ProviderType;
+
+  if (p.isCancel(provider)) {
+    return null;
+  }
+
+  const saved = currentConfig.savedProviders?.[provider];
+
+  let apiKey: string;
+  let model: string;
+  let baseURL: string | undefined = provider === 'openrouter' ? 'https://openrouter.ai/api/v1' : undefined;
+
+  if (saved && saved.apiKey) {
+    const useSaved = await p.select({
+      message: chalk.cyan(`Saved credentials found for ${PROVIDER_LABELS[provider]}. Use saved configuration?`),
+      options: [
+        {
+          value: 'yes',
+          label: chalk.green(`✔ Use saved API key and model (${chalk.bold(saved.model)})`),
+        },
+        {
+          value: 'change_model',
+          label: chalk.cyan(`Use saved API key, but choose a different model`),
+        },
+        {
+          value: 'new_key',
+          label: chalk.yellow(`Enter new API key and configuration`),
+        },
+      ],
+    });
+
+    if (p.isCancel(useSaved)) return null;
+
+    if (useSaved === 'yes') {
+      apiKey = saved.apiKey;
+      model = saved.model;
+      baseURL = saved.baseURL;
+    } else if (useSaved === 'change_model') {
+      apiKey = saved.apiKey;
+      baseURL = saved.baseURL;
+      const newModel = await selectModelForProvider(provider, saved.model);
+      if (!newModel) return null;
+      model = newModel;
+    } else {
+      // Re-enter key
+      p.note(
+        `${chalk.white('Get your free API key here:')}\n` +
+          `${chalk.bold.underline.cyan(PROVIDER_KEY_URLS[provider])}\n`,
+        chalk.bold('API Key Instructions')
+      );
+
+      const enteredKey = (await p.password({
+        message: chalk.cyan(`Enter your ${PROVIDER_LABELS[provider]} API Key:`),
+        validate: (v) => (!v || v.trim().length === 0 ? 'API Key cannot be empty!' : undefined),
+      })) as string;
+
+      if (p.isCancel(enteredKey)) return null;
+      apiKey = enteredKey.trim();
+
+      if (provider === 'custom') {
+        const customURL = (await p.text({
+          message: chalk.cyan('Enter baseURL:'),
+          initialValue: saved.baseURL || 'https://api.deepseek.com/v1',
+        })) as string;
+        if (p.isCancel(customURL)) return null;
+        baseURL = customURL.trim();
+      }
+
+      const newModel = await selectModelForProvider(provider, saved.model || DEFAULT_MODELS[provider]);
+      if (!newModel) return null;
+      model = newModel;
+    }
+  } else {
+    // No saved credentials for this provider
+    p.note(
+      `${chalk.white('Get your free API key here:')}\n` +
+        `${chalk.bold.underline.cyan(PROVIDER_KEY_URLS[provider])}\n\n` +
+        `${chalk.gray('ℹ️ 100% BYOK - Key will be saved locally on your device.')}`,
+      chalk.bold('API Key Required')
+    );
+
+    const enteredKey = (await p.password({
+      message: chalk.cyan(`Enter your ${PROVIDER_LABELS[provider]} API Key:`),
+      validate: (v) => (!v || v.trim().length === 0 ? 'API Key cannot be empty!' : undefined),
+    })) as string;
+
+    if (p.isCancel(enteredKey)) return null;
+    apiKey = enteredKey.trim();
+
+    if (provider === 'custom') {
+      const customURL = (await p.text({
+        message: chalk.cyan('Enter custom baseURL (e.g. https://api.deepseek.com/v1 or http://localhost:11434/v1):'),
+        initialValue: 'https://api.deepseek.com/v1',
+      })) as string;
+      if (p.isCancel(customURL)) return null;
+      baseURL = customURL.trim();
+    }
+
+    const newModel = await selectModelForProvider(provider, DEFAULT_MODELS[provider]);
+    if (!newModel) return null;
+    model = newModel;
+  }
+
+  const updatedConfig: BanglaCLIConfig = {
+    ...currentConfig,
+    provider,
+    apiKey,
+    model,
+    baseURL,
+    savedProviders: {
+      ...currentConfig.savedProviders,
+      [provider]: {
+        apiKey,
+        model,
+        baseURL,
+      },
+    },
+  };
+
+  saveConfig(updatedConfig);
+
+  p.outro(
+    chalk.green(
+      `✔ Switched to: ${chalk.bold(PROVIDER_LABELS[provider])}\n` +
+        `Active Model: ${chalk.bold(model)}`
+    )
+  );
+
+  return updatedConfig;
 }
 
 /**
@@ -152,87 +403,29 @@ export async function promptConfig(isFirstTime = false): Promise<BanglaCLIConfig
   }
 
   // 5. Model Selection
-  let model: string;
-  if (provider === 'gemini') {
-    const modelChoice = (await p.select({
-      message: chalk.cyan('Select Gemini Model:'),
-      initialValue: existingConfig?.model || 'gemini-2.5-flash',
-      options: [
-        { value: 'gemini-2.5-flash', label: 'gemini-2.5-flash (Default Free & Recommended)' },
-        { value: 'gemini-2.0-flash', label: 'gemini-2.0-flash (Fast & Multimodal)' },
-        { value: 'gemini-1.5-flash', label: 'gemini-1.5-flash (Stable)' },
-        { value: 'gemini-1.5-pro', label: 'gemini-1.5-pro (Reasoning & Large Context)' },
-        { value: 'custom_input', label: 'Enter custom model name manually...' },
-      ],
-    })) as string;
+  const chosenModel = await selectModelForProvider(
+    provider,
+    existingConfig?.provider === provider ? existingConfig?.model : DEFAULT_MODELS[provider]
+  );
 
-    if (p.isCancel(modelChoice)) {
-      p.cancel(chalk.yellow('Setup cancelled.'));
-      process.exit(0);
-    }
-
-    if (modelChoice === 'custom_input') {
-      const customModel = (await p.text({
-        message: 'Enter Gemini model ID:',
-        initialValue: 'gemini-2.5-flash',
-      })) as string;
-      if (p.isCancel(customModel)) {
-        process.exit(0);
-      }
-      model = customModel.trim();
-    } else {
-      model = modelChoice;
-    }
-  } else if (provider === 'openrouter') {
-    const modelChoice = (await p.select({
-      message: chalk.cyan('Select OpenRouter Model:'),
-      initialValue: existingConfig?.model || 'deepseek/deepseek-chat:free',
-      options: [
-        { value: 'deepseek/deepseek-chat:free', label: 'deepseek/deepseek-chat:free (Powerful Free Coding)' },
-        { value: 'zhipu/glm-4:free', label: 'zhipu/glm-4:free (Fast Free Model)' },
-        { value: 'meta-llama/llama-3.3-70b-instruct:free', label: 'meta-llama/llama-3.3-70b-instruct:free' },
-        { value: 'google/gemini-2.0-flash-exp:free', label: 'google/gemini-2.0-flash-exp:free' },
-        { value: 'custom_input', label: 'Enter custom OpenRouter model name...' },
-      ],
-    })) as string;
-
-    if (p.isCancel(modelChoice)) {
-      p.cancel(chalk.yellow('Setup cancelled.'));
-      process.exit(0);
-    }
-
-    if (modelChoice === 'custom_input') {
-      const customModel = (await p.text({
-        message: 'Enter model ID (e.g. mistralai/mistral-7b-instruct:free):',
-        initialValue: 'deepseek/deepseek-chat:free',
-      })) as string;
-      if (p.isCancel(customModel)) {
-        process.exit(0);
-      }
-      model = customModel.trim();
-    } else {
-      model = modelChoice;
-    }
-  } else {
-    // Custom provider model
-    const customModel = (await p.text({
-      message: chalk.cyan('Enter model name (e.g., deepseek-chat, llama3, qwen2.5-coder):'),
-      initialValue: existingConfig?.model || 'deepseek-chat',
-      validate: (v) => (!v || v.trim().length === 0 ? 'Model name cannot be empty!' : undefined),
-    })) as string;
-
-    if (p.isCancel(customModel)) {
-      p.cancel(chalk.yellow('Setup cancelled.'));
-      process.exit(0);
-    }
-    model = customModel.trim();
+  if (!chosenModel) {
+    p.cancel(chalk.yellow('Setup cancelled.'));
+    process.exit(0);
   }
 
   const finalConfig: BanglaCLIConfig = {
     provider,
     apiKey: apiKey.trim(),
-    model,
+    model: chosenModel,
     baseURL,
+    savedProviders: {
+      ...existingConfig?.savedProviders,
+      [provider]: {
+        apiKey: apiKey.trim(),
+        model: chosenModel,
+        baseURL,
+      },
+    },
   };
 
   saveConfig(finalConfig);
@@ -241,7 +434,7 @@ export async function promptConfig(isFirstTime = false): Promise<BanglaCLIConfig
     chalk.green(
       `✅ Settings saved successfully!\n` +
         `Provider: ${chalk.bold(PROVIDER_LABELS[provider])}\n` +
-        `Model: ${chalk.bold(model)}`
+        `Model: ${chalk.bold(chosenModel)}`
     )
   );
 
