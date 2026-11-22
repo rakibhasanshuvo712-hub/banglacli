@@ -30,7 +30,7 @@ export const PROVIDER_LABELS: Record<ProviderType, string> = {
 
 export const DEFAULT_MODELS: Record<ProviderType, string> = {
   gemini: 'gemini-2.0-flash',
-  openrouter: 'deepseek/deepseek-chat:free',
+  openrouter: 'openrouter/free',
   custom: 'deepseek-chat',
 };
 
@@ -124,12 +124,12 @@ async function selectModelForProvider(
   } else if (provider === 'openrouter') {
     const modelChoice = (await p.select({
       message: chalk.cyan('Select OpenRouter Model:'),
-      initialValue: currentModel || 'deepseek/deepseek-chat:free',
+      initialValue: currentModel || 'openrouter/free',
       options: [
-        { value: 'deepseek/deepseek-chat:free', label: 'deepseek/deepseek-chat:free (Powerful Free Coding)' },
-        { value: 'zhipu/glm-4:free', label: 'zhipu/glm-4:free (Fast Free Model)' },
-        { value: 'meta-llama/llama-3.3-70b-instruct:free', label: 'meta-llama/llama-3.3-70b-instruct:free' },
-        { value: 'google/gemini-2.0-flash-exp:free', label: 'google/gemini-2.0-flash-exp:free' },
+        { value: 'openrouter/free', label: 'openrouter/free (Recommended - Best Free Model with Tools)' },
+        { value: 'google/gemma-4-31b-it:free', label: 'google/gemma-4-31b-it:free (Free 31B Coding & Chat)' },
+        { value: 'nvidia/nemotron-3.5-lightning:free', label: 'nvidia/nemotron-3.5-lightning:free (Free Fast Model)' },
+        { value: 'inclusionai/ling-3.2-flash:free', label: 'inclusionai/ling-3.2-flash:free (Free Flash Model)' },
         { value: 'custom_input', label: 'Enter custom OpenRouter model name...' },
       ],
     })) as string;
@@ -138,8 +138,8 @@ async function selectModelForProvider(
 
     if (modelChoice === 'custom_input') {
       const customModel = (await p.text({
-        message: 'Enter model ID (e.g. mistralai/mistral-7b-instruct:free):',
-        initialValue: 'deepseek/deepseek-chat:free',
+        message: 'Enter model ID (e.g. openrouter/free):',
+        initialValue: 'openrouter/free',
       })) as string;
       if (p.isCancel(customModel)) return null;
       return customModel.trim();
@@ -340,8 +340,8 @@ export async function promptConfig(isFirstTime = false): Promise<BanglaCLIConfig
       },
       {
         value: 'openrouter',
-        label: `${chalk.bold('OpenRouter')} ${chalk.yellow('(Free Models: DeepSeek, GLM, etc.)')}`,
-        hint: 'Recommended: deepseek/deepseek-chat:free',
+        label: `${chalk.bold('OpenRouter')} ${chalk.yellow('(Free Models: openrouter/free, Gemma, etc.)')}`,
+        hint: 'Recommended: openrouter/free',
       },
       {
         value: 'custom',

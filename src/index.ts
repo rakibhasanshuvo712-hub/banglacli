@@ -205,12 +205,12 @@ async function handleSwitchModel(config: BanglaCLIConfig, agent: BanglaAgent): P
   } else if (config.provider === 'openrouter') {
     const choice = (await p.select({
       message: chalk.cyan('Switch OpenRouter Model:'),
-      initialValue: config.model,
+      initialValue: config.model || 'openrouter/free',
       options: [
-        { value: 'deepseek/deepseek-chat:free', label: 'deepseek/deepseek-chat:free (Free Coding)' },
-        { value: 'zhipu/glm-4:free', label: 'zhipu/glm-4:free (Free Fast)' },
-        { value: 'meta-llama/llama-3.3-70b-instruct:free', label: 'meta-llama/llama-3.3-70b-instruct:free' },
-        { value: 'google/gemini-2.0-flash-exp:free', label: 'google/gemini-2.0-flash-exp:free' },
+        { value: 'openrouter/free', label: 'openrouter/free (Recommended - Best Free Model with Tools)' },
+        { value: 'google/gemma-4-31b-it:free', label: 'google/gemma-4-31b-it:free (Free 31B Coding & Chat)' },
+        { value: 'nvidia/nemotron-3.5-lightning:free', label: 'nvidia/nemotron-3.5-lightning:free (Free Fast Model)' },
+        { value: 'inclusionai/ling-3.2-flash:free', label: 'inclusionai/ling-3.2-flash:free (Free Flash Model)' },
         { value: 'custom_input', label: 'Enter custom OpenRouter model ID...' },
       ],
     })) as string;
@@ -219,8 +219,8 @@ async function handleSwitchModel(config: BanglaCLIConfig, agent: BanglaAgent): P
 
     if (choice === 'custom_input') {
       const custom = (await p.text({
-        message: 'Enter model ID (e.g. mistralai/mistral-7b-instruct:free):',
-        initialValue: config.model,
+        message: 'Enter model ID (e.g. openrouter/free):',
+        initialValue: config.model || 'openrouter/free',
       })) as string;
       if (p.isCancel(custom)) return;
       selectedModel = custom.trim();

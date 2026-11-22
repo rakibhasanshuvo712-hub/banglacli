@@ -190,14 +190,14 @@ export function showFreeApiKeyGuide(): void {
   console.log(`   ${chalk.gray('Quota:')} Free tier gives 15 Requests/min & 1,500 Requests/day for free!\n`);
 
   // 2. OpenRouter Free Models
-  console.log(chalk.bold.hex('#00FF7F')('2. OpenRouter (Access DeepSeek, GLM, Llama for Free)'));
+  console.log(chalk.bold.hex('#00FF7F')('2. OpenRouter (Access 100% Free Coding Models)'));
   console.log(`   ${chalk.gray('Direct Link:')} ${chalk.bold.underline.cyan('https://openrouter.ai/keys')}`);
   console.log(`   ${chalk.gray('Steps:')} Sign in with GitHub/Google ➔ Click "${chalk.white('Create Key')}" ➔ Copy key.`);
   console.log(`   ${chalk.gray('Free Models (Zero Cost):')}`);
-  console.log(`     • ${chalk.yellow('deepseek/deepseek-chat:free')} (Exceptional for coding & software projects)`);
-  console.log(`     • ${chalk.yellow('zhipu/glm-4:free')} (Ultra fast coding assistant)`);
-  console.log(`     • ${chalk.yellow('meta-llama/llama-3.3-70b-instruct:free')} (Powerful open-weight model)`);
-  console.log(`     • ${chalk.yellow('google/gemini-2.0-flash-exp:free')}`);
+  console.log(`     • ${chalk.yellow('openrouter/free')} (🌟 Recommended - Auto routes to the best free coding model)`);
+  console.log(`     • ${chalk.yellow('google/gemma-4-31b-it:free')} (Free 31B code completion model)`);
+  console.log(`     • ${chalk.yellow('nvidia/nemotron-3.5-lightning:free')} (Ultra fast free model)`);
+  console.log(`     • ${chalk.yellow('inclusionai/ling-3.2-flash:free')} (Free flash model)`);
   console.log(`   ${chalk.gray('Quota:')} 100% Free with zero payment or credit card needed!\n`);
 
   // 3. Groq (Blazing Fast Inference)
