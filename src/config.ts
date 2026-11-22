@@ -336,7 +336,7 @@ export async function promptConfig(isFirstTime = false): Promise<BanglaCLIConfig
       {
         value: 'gemini',
         label: `${chalk.bold('Google Gemini')} ${chalk.green('(Free Tier - Fast & High Quota)')}`,
-        hint: 'Recommended: gemini-2.5-flash',
+        hint: 'Recommended: gemini-3.8-flash',
       },
       {
         value: 'openrouter',

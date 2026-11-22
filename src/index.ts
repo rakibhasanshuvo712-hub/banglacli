@@ -11,7 +11,7 @@ import {
   BanglaCLIConfig,
 } from './config.js';
 import { BanglaAgent } from './agent.js';
-import { printBanner, renderMarkdown, showHelp } from './ui.js';
+import { printBanner, renderMarkdown, showHelp, showFreeApiKeyGuide } from './ui.js';
 import { safetySession } from './tools.js';
 
 const program = new Command();
@@ -19,7 +19,7 @@ const program = new Command();
 program
   .name('banglaCLI')
   .description('Autonomous BYOK terminal coding agent that speaks Bangla, Banglish & English.')
-  .version('1.0.0', '-v, --version', 'Output the current version')
+  .version('1.1.0', '-v, --version', 'Output the current version')
   .option('-m, --model <model>', 'Override model for this session')
   .option('-p, --prompt <prompt>', 'Run a single prompt and exit')
   .option('-y, --yes', 'Auto-approve all file writes and shell commands')
@@ -89,6 +89,11 @@ program
         continue;
       }
 
+      if (trimmed === '/guide' || trimmed === '/keys') {
+        showFreeApiKeyGuide();
+        continue;
+      }
+
       if (trimmed === '/clear') {
         agent.resetHistory();
         console.clear();
@@ -141,6 +146,15 @@ program
   .description('Run interactive configuration to set provider, API key, and model')
   .action(async () => {
     await promptConfig(false);
+  });
+
+// Explicit guide subcommand
+program
+  .command('guide')
+  .alias('keys')
+  .description('Display the free API keys & models guide with direct links')
+  .action(() => {
+    showFreeApiKeyGuide();
   });
 
 /**

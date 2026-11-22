@@ -83,12 +83,18 @@ If it's your first time, the interactive setup wizard will guide you to select a
 
 1. **Google Gemini (Free Tier - Recommended)**
    - Get key: [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
-   - Default model: `gemini-2.5-flash`
+   - Default model: `gemini-3.8-flash`
 2. **OpenRouter (Free Models)**
    - Get key: [openrouter.ai/keys](https://openrouter.ai/keys)
    - Default model: `deepseek/deepseek-chat:free`
-3. **Custom OpenAI-Compatible**
-   - Use any endpoint: `https://api.deepseek.com/v1`, local `http://localhost:11434/v1` (Ollama), etc.
+3. **Custom OpenAI-Compatible (Groq, Ollama, DeepSeek)**
+   - Groq Cloud (Free): [console.groq.com/keys](https://console.groq.com/keys) (Base URL: `https://api.groq.com/openai/v1`)
+   - Local Offline (Ollama): `http://localhost:11434/v1` (100% Free & offline)
+
+To view the interactive free API guide:
+```bash
+banglaCLI guide
+```
 
 To reconfigure anytime:
 ```bash
@@ -113,6 +119,7 @@ Options:
 
 Commands:
   config                 Run interactive setup wizard
+  guide (alias: keys)    Display free API keys & models guide
 ```
 
 ### Examples
@@ -144,11 +151,46 @@ banglaCLI -m "gemini-2.0-flash"
 | Command | Description |
 |---|---|
 | `/help` | Display command usage and tool reference |
+| `/guide` | Display direct links & guides for free API keys & models |
 | `/provider` | Switch between Gemini, OpenRouter, or custom providers |
 | `/model` | Switch between models for the active provider |
 | `/config` | Full interactive setup to re-configure keys, provider, and endpoint |
 | `/clear` | Clear conversation memory and reset token context |
 | `/exit` | Exit the CLI session |
+
+---
+
+## 🔑 Free API Keys & Models Guide (১০০% ফ্রি API গাইড)
+
+You don't need to spend any money or enter credit cards to use `banglaCLI`. Here are the top free options:
+
+### 1. Google Gemini (Google AI Studio) — 🌟 Recommended
+- **Key URL:** [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+- **Steps:** Sign in with Google account ➔ Click **Create API Key** ➔ Copy the key.
+- **Recommended Free Model:** `gemini-3.8-flash` (Fast, high rate limits, excels at code generation).
+- **Alternative Free Models:** `gemini-2.0-flash`, `gemini-1.5-pro`.
+- **Free Limit:** 15 Requests per minute (RPM) and 1,500 Requests per day (RPD) free of charge!
+
+### 2. OpenRouter (Access DeepSeek & Llama for Free)
+- **Key URL:** [openrouter.ai/keys](https://openrouter.ai/keys)
+- **Steps:** Sign in with GitHub or Google ➔ Click **Create Key** ➔ Copy the key.
+- **Top Free Models (`:free`):**
+  - `deepseek/deepseek-chat:free` — Outstanding coding and full-stack software development.
+  - `zhipu/glm-4:free` — Fast, versatile code completions.
+  - `meta-llama/llama-3.3-70b-instruct:free` — High intelligence 70B open model.
+  - `google/gemini-2.0-flash-exp:free` — Experimental free flash model.
+- **Cost:** 100% Free with zero credit card required.
+
+### 3. Groq Cloud (Ultra-Fast 500+ tokens/sec)
+- **Key URL:** [console.groq.com/keys](https://console.groq.com/keys)
+- **Steps:** Choose `Custom OpenAI-Compatible` in `banglaCLI` ➔ Set Base URL to `https://api.groq.com/openai/v1`.
+- **Free Models:** `llama-3.3-70b-versatile`, `qwen-2.5-coder-32b`, `deepseek-r1-distill-llama-70b`.
+
+### 4. Local Offline Models (100% Private via Ollama)
+- **Download:** [ollama.com](https://ollama.com)
+- **Run in terminal:** `ollama run qwen2.5-coder` or `ollama run deepseek-r1`
+- **Steps in banglaCLI:** Choose `Custom OpenAI-Compatible` ➔ Base URL: `http://localhost:11434/v1` ➔ API key: `ollama` (or any string).
+- **Cost:** 100% Free, unlimited, runs entirely on your local machine without internet.
 
 ---
 

@@ -62,6 +62,7 @@ export function printBanner(provider?: string, model?: string, workspace?: strin
   }
   console.log(
     `  ${dim('Commands:')} ${chalk.yellow('/help')} ${dim('•')} ` +
+      `${chalk.yellow('/guide')} ${dim('•')} ` +
       `${chalk.yellow('/provider')} ${dim('•')} ` +
       `${chalk.yellow('/model')} ${dim('•')} ${chalk.yellow('/config')} ${dim('•')} ` +
       `${chalk.yellow('/clear')} ${dim('•')} ${chalk.yellow('/exit')}`
@@ -150,6 +151,7 @@ export function showHelp(): void {
   console.log(chalk.dim('─'.repeat(70)));
   console.log(`${chalk.yellow.bold('Slash Commands in Chat:')}`);
   console.log(`  ${chalk.cyan('/help')}        - Show this guide and available tools`);
+  console.log(`  ${chalk.cyan('/guide')}       - Direct free API links & models guide (ফ্রি API গাইড)`);
   console.log(`  ${chalk.cyan('/provider')}    - Switch AI provider (Gemini, OpenRouter, Custom)`);
   console.log(`  ${chalk.cyan('/model')}       - Switch current AI model on the fly`);
   console.log(`  ${chalk.cyan('/config')}      - Full interactive configuration wizard`);
@@ -167,4 +169,50 @@ export function showHelp(): void {
   console.log(`  • ${chalk.green('Banglish:')} "Express diye ekta REST API banaw auth soho"`);
   console.log(`  • ${chalk.green('English:')}  "Build a full-stack Next.js portfolio website"`);
   console.log(chalk.dim('─'.repeat(70)) + '\n');
+}
+
+/**
+ * Show a comprehensive guide with updated links for getting free API keys and models.
+ */
+export function showFreeApiKeyGuide(): void {
+  const line = chalk.dim('─'.repeat(78));
+  console.log('\n' + chalk.bgHex('#006A4E').white.bold(' 🔑 FREE API KEYS & MODELS GUIDE (১০০% ফ্রি কোডিং গাইড) '));
+  console.log(chalk.gray('Get free API keys with generous quotas for banglaCLI - no credit card required!\n'));
+
+  // 1. Google Gemini
+  console.log(chalk.bold.hex('#00FF7F')('1. Google Gemini (Google AI Studio) - 🌟 RECOMMENDED'));
+  console.log(`   ${chalk.gray('Direct Link:')} ${chalk.bold.underline.cyan('https://aistudio.google.com/apikey')}`);
+  console.log(`   ${chalk.gray('Steps:')} Sign in with Google ➔ Click "${chalk.white('Create API Key')}" ➔ Copy key.`);
+  console.log(`   ${chalk.gray('Best Free Model:')} ${chalk.bold.yellow('gemini-3.8-flash')} (Super fast & smart)`);
+  console.log(`   ${chalk.gray('Alternative Models:')} ${chalk.white('gemini-2.0-flash, gemini-1.5-pro')}`);
+  console.log(`   ${chalk.gray('Quota:')} Free tier gives 15 Requests/min & 1,500 Requests/day for free!\n`);
+
+  // 2. OpenRouter Free Models
+  console.log(chalk.bold.hex('#00FF7F')('2. OpenRouter (Access DeepSeek, GLM, Llama for Free)'));
+  console.log(`   ${chalk.gray('Direct Link:')} ${chalk.bold.underline.cyan('https://openrouter.ai/keys')}`);
+  console.log(`   ${chalk.gray('Steps:')} Sign in with GitHub/Google ➔ Click "${chalk.white('Create Key')}" ➔ Copy key.`);
+  console.log(`   ${chalk.gray('Free Models (Zero Cost):')}`);
+  console.log(`     • ${chalk.yellow('deepseek/deepseek-chat:free')} (Exceptional for coding & software projects)`);
+  console.log(`     • ${chalk.yellow('zhipu/glm-4:free')} (Ultra fast coding assistant)`);
+  console.log(`     • ${chalk.yellow('meta-llama/llama-3.3-70b-instruct:free')} (Powerful open-weight model)`);
+  console.log(`     • ${chalk.yellow('google/gemini-2.0-flash-exp:free')}`);
+  console.log(`   ${chalk.gray('Quota:')} 100% Free with zero payment or credit card needed!\n`);
+
+  // 3. Groq (Blazing Fast Inference)
+  console.log(chalk.bold.hex('#00FF7F')('3. Groq Cloud (Ultra-Fast 500+ tokens/sec)'));
+  console.log(`   ${chalk.gray('Direct Link:')} ${chalk.bold.underline.cyan('https://console.groq.com/keys')}`);
+  console.log(`   ${chalk.gray('Steps:')} Select "${chalk.white('Custom OpenAI-Compatible')}" in banglaCLI.`);
+  console.log(`   ${chalk.gray('Base URL:')} ${chalk.cyan('https://api.groq.com/openai/v1')}`);
+  console.log(`   ${chalk.gray('Free Models:')} ${chalk.yellow('llama-3.3-70b-versatile')}, ${chalk.yellow('qwen-2.5-coder-32b')}\n`);
+
+  // 4. Local Offline Models (Ollama)
+  console.log(chalk.bold.hex('#00FF7F')('4. Local Offline (100% Private, Free & Offline via Ollama)'));
+  console.log(`   ${chalk.gray('Download:')} ${chalk.bold.underline.cyan('https://ollama.com')}`);
+  console.log(`   ${chalk.gray('Run in Terminal:')} ${chalk.white('ollama run qwen2.5-coder')}`);
+  console.log(`   ${chalk.gray('In banglaCLI:')} Choose "${chalk.white('Custom OpenAI-Compatible')}"`);
+  console.log(`   ${chalk.gray('Base URL:')} ${chalk.cyan('http://localhost:11434/v1')}`);
+  console.log(`   ${chalk.gray('API Key:')} Any text (e.g. ${chalk.white('ollama')})\n`);
+
+  console.log(line);
+  console.log(chalk.cyan(`💡 Tip: Use ${chalk.yellow.bold('/provider')} or ${chalk.yellow.bold('/config')} in chat to switch anytime!\n`));
 }
