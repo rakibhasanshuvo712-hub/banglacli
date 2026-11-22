@@ -1,0 +1,52 @@
+{
+  "name": "banglacli",
+  "version": "1.0.0",
+  "description": "Production-ready, lightweight BYOK AI coding agent CLI that speaks Bangla, Banglish & English.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "banglaCLI": "./dist/index.js",
+    "banglacli": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx scripts/test-tools.ts",
+    "start": "node ./dist/index.js"
+  },
+  "keywords": [
+    "ai",
+    "coding-agent",
+    "bangla",
+    "banglish",
+    "byok",
+    "terminal",
+    "gemini",
+    "openrouter",
+    "deepseek"
+  ],
+  "author": "BanglaCLI Team",
+  "license": "MIT",
+  "dependencies": {
+    "@clack/prompts": "^1.9.0",
+    "@google/genai": "^3.6.1",
+    "chalk": "^6.0.1",
+    "commander": "^15.1.0",
+    "conf": "^16.0.0",
+    "marked": "^18.2.1",
+    "marked-terminal": "^8.0.0",
+    "openai": "^7.62.0",
+    "ora": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/marked-terminal": "^6.1.1",
+    "@types/node": "^26.6.6",
+    "tsup": "^9.0.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
