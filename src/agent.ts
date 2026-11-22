@@ -1,11 +1,35 @@
 import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
 import { BanglaCLIConfig } from './config.js';
-import { GEMINI_TOOLS, OPENAI_TOOLS, executeTool } from './tools.js';
+import {
+  BUILD_GEMINI_TOOLS,
+  PLAN_GEMINI_TOOLS,
+  BUILD_OPENAI_TOOLS,
+  PLAN_OPENAI_TOOLS,
+  executeTool,
+} from './tools.js';
 import { createSpinner, renderMarkdown } from './ui.js';
 import chalk from 'chalk';
 
-export const SYSTEM_PROMPT = `You are banglaCLI, a world-class Senior Full-Stack Software Architect and Autonomous AI Coding Agent running directly in the user's terminal.
+export type AgentMode = 'build' | 'plan';
+
+export function getSystemPrompt(mode: AgentMode = 'build'): string {
+  if (mode === 'plan') {
+    return `You are banglacli, a world-class Senior Software Architect running directly in the user's terminal.
+
+### 🌟 CURRENT ACTIVE MODE: 📋 PLAN MODE (ARCHITECT & PLANNING ONLY)
+- You are strictly in PLAN MODE.
+- Your goal is to inspect the workspace, analyze requirements, explore existing code, and formulate a clear, detailed, numbered step-by-step architectural implementation plan.
+- In this mode, you ONLY have read-only tools:
+  1. list_files(dirPath): Explore folders and project structure.
+  2. read_file(filePath): Inspect existing configuration and code files.
+- YOU CANNOT AND MUST NOT write files or run terminal commands. Any attempt will be safely blocked.
+- Break down your architectural plan logically:
+  1. Overview & Architecture breakdown.
+  2. File structure & components to create or modify.
+  3. Dependencies or packages to be installed later.
+  4. Step-by-step implementation order.
+- At the end of your plan, remind the user: "When you are ready to execute this plan and generate code, type /build or /mode to switch to BUILD mode."
 
 ### 1. LANGUAGE & COMMUNICATION RULES (CRITICAL):
 - You possess native fluency in Bangla (বাংলা), Banglish (Romanized Bengali, e.g. "amake ekta Express auth backend banaye dao"), and English.
@@ -13,10 +37,14 @@ export const SYSTEM_PROMPT = `You are banglaCLI, a world-class Senior Full-Stack
   * If the user writes in Bangla (বাংলা লিপি), respond in natural, friendly, accurate Bangla.
   * If the user writes in Banglish, respond in natural Banglish with Bengali developer slang/enthusiasm.
   * If the user writes in English, respond in clear, professional English.
-  * If the user mixes languages, mirror their style naturally.
+  * If the user mixes languages, mirror their style naturally.`;
+  }
 
-### 2. AUTONOMOUS PROJECT BUILDER PROTOCOL (PROACTIVE TOOL CALLING):
-- You are not just a chatbot; you are an active developer who BUILDS projects using the 4 workspace tools:
+  return `You are banglacli, a world-class Senior Full-Stack Software Architect and Autonomous AI Coding Agent running directly in the user's terminal.
+
+### 🌟 CURRENT ACTIVE MODE: ⚡ BUILD MODE (AUTONOMOUS BUILDER)
+- You are in BUILD MODE with full autonomous authority to build, edit, and run code.
+- You have all 4 workspace tools:
   1. list_files(dirPath): Explore directories to understand workspace context.
   2. read_file(filePath): Inspect existing files before editing.
   3. write_file(filePath, content): Create directories and write complete, fully-functional, production-grade code.
@@ -28,9 +56,20 @@ export const SYSTEM_PROMPT = `You are banglaCLI, a world-class Senior Full-Stack
   * Install dependencies using run_command when required.
   * Keep code modular, clean, well-commented, and robust.
 
-### 3. INTERACTIVE FEEDBACK:
+### 1. LANGUAGE & COMMUNICATION RULES (CRITICAL):
+- You possess native fluency in Bangla (বাংলা), Banglish (Romanized Bengali, e.g. "amake ekta Express auth backend banaye dao"), and English.
+- Always detect the user's language and respond in the EXACT same language and tone:
+  * If the user writes in Bangla (বাংলা লিপি), respond in natural, friendly, accurate Bangla.
+  * If the user writes in Banglish, respond in natural Banglish with Bengali developer slang/enthusiasm.
+  * If the user writes in English, respond in clear, professional English.
+  * If the user mixes languages, mirror their style naturally.
+
+### 2. INTERACTIVE FEEDBACK:
 - Before and after tool actions, provide concise explanations in the user's language.
 - At the end of a build, provide clear instructions on how the user can test or start the application (e.g., "npm run dev").`;
+}
+
+export const SYSTEM_PROMPT = getSystemPrompt('build');
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system' | 'tool';
@@ -46,6 +85,7 @@ const GEMINI_FALLBACK_MAP: Record<string, string[]> = {
 
 export class BanglaAgent {
   private config: BanglaCLIConfig;
+  private mode: AgentMode = 'build';
   private openAIClient?: OpenAI;
   private geminiClient?: GoogleGenAI;
 
@@ -58,8 +98,9 @@ export class BanglaAgent {
     parts: Array<any>;
   }> = [];
 
-  constructor(config: BanglaCLIConfig) {
+  constructor(config: BanglaCLIConfig, mode: AgentMode = 'build') {
     this.config = config;
+    this.mode = mode;
     this.initClients();
     this.resetHistory();
   }
@@ -74,6 +115,30 @@ export class BanglaAgent {
         baseURL: this.config.baseURL,
       });
       this.geminiClient = undefined;
+    }
+  }
+
+  /**
+   * Set agent mode (build or plan) and update prompt instructions.
+   */
+  public setMode(mode: AgentMode): void {
+    this.mode = mode;
+    this.updateSystemPrompt();
+  }
+
+  /**
+   * Get current active agent mode.
+   */
+  public getMode(): AgentMode {
+    return this.mode;
+  }
+
+  /**
+   * Sync active system prompt with current mode.
+   */
+  public updateSystemPrompt(): void {
+    if (this.openAIMessages.length > 0 && this.openAIMessages[0].role === 'system') {
+      this.openAIMessages[0].content = getSystemPrompt(this.mode);
     }
   }
 
@@ -100,7 +165,7 @@ export class BanglaAgent {
     this.openAIMessages = [
       {
         role: 'system',
-        content: SYSTEM_PROMPT,
+        content: getSystemPrompt(this.mode),
       },
     ];
     this.geminiContents = [];
@@ -183,7 +248,7 @@ export class BanglaAgent {
     while (turnCount < maxTurns) {
       turnCount++;
       const spinner = createSpinner(
-        turnCount === 1 ? 'banglaCLI thinking...' : `banglaCLI working (step ${turnCount})...`
+        turnCount === 1 ? 'banglacli thinking...' : `banglacli working (step ${turnCount})...`
       );
       spinner.start();
 
@@ -205,8 +270,8 @@ export class BanglaAgent {
               model: candidateModel,
               contents: this.geminiContents,
               config: {
-                systemInstruction: SYSTEM_PROMPT,
-                tools: GEMINI_TOOLS as any,
+                systemInstruction: getSystemPrompt(this.mode),
+                tools: (this.mode === 'plan' ? PLAN_GEMINI_TOOLS : BUILD_GEMINI_TOOLS) as any,
               },
             });
 
@@ -307,7 +372,7 @@ export class BanglaAgent {
         const toolName = call.name;
         const toolArgs = call.args || {};
 
-        const output = await executeTool(toolName, toolArgs);
+        const output = await executeTool(toolName, toolArgs, this.mode);
 
         toolResponseParts.push({
           functionResponse: {
@@ -347,7 +412,7 @@ export class BanglaAgent {
     while (turnCount < maxTurns) {
       turnCount++;
       const spinner = createSpinner(
-        turnCount === 1 ? 'banglaCLI thinking...' : `banglaCLI executing (step ${turnCount})...`
+        turnCount === 1 ? 'banglacli thinking...' : `banglacli executing (step ${turnCount})...`
       );
       spinner.start();
 
@@ -356,7 +421,7 @@ export class BanglaAgent {
         completion = await this.openAIClient.chat.completions.create({
           model: this.config.model,
           messages: this.openAIMessages,
-          tools: OPENAI_TOOLS,
+          tools: this.mode === 'plan' ? PLAN_OPENAI_TOOLS : BUILD_OPENAI_TOOLS,
           tool_choice: 'auto',
         });
         spinner.stop();
@@ -403,7 +468,7 @@ export class BanglaAgent {
           fnArgs = {};
         }
 
-        const toolResult = await executeTool(fnName, fnArgs);
+        const toolResult = await executeTool(fnName, fnArgs, this.mode);
 
         this.openAIMessages.push({
           role: 'tool',

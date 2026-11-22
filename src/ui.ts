@@ -44,7 +44,7 @@ export function printBanner(provider?: string, model?: string, workspace?: strin
 
   console.log(asciiArt);
   console.log(
-    `  ${chalk.bgHex('#006A4E').white.bold(' 🇧🇩 banglaCLI ')} ${chalk.hex('#00FF7F')(
+    `  ${chalk.bgHex('#006A4E').white.bold(' 🇧🇩 banglacli ')} ${chalk.hex('#00FF7F')(
       'The Autonomous BYOK Terminal Coding Agent'
     )}`
   );
@@ -61,15 +61,33 @@ export function printBanner(provider?: string, model?: string, workspace?: strin
     );
   }
   console.log(
-    `  ${dim('Commands:')} ${chalk.yellow('/help')} ${dim('•')} ` +
+    `  ${dim('Commands:')} ${chalk.yellow('/mode')} ${dim('•')} ` +
       `${chalk.yellow('/agent')} ${dim('•')} ` +
       `${chalk.yellow('/provider')} ${dim('•')} ` +
       `${chalk.yellow('/limits')} ${dim('•')} ` +
       `${chalk.yellow('/guide')} ${dim('•')} ` +
-      `${chalk.yellow('/config')} ${dim('•')} ` +
       `${chalk.yellow('/clear')} ${dim('•')} ${chalk.yellow('/exit')}`
   );
   console.log(dim('─'.repeat(78)));
+}
+
+/**
+ * Render the bottom status bar displaying active mode, model, and quick shortcuts.
+ */
+export function renderStatusBar(mode: 'build' | 'plan', model: string, provider?: string): void {
+  const isBuild = mode === 'build';
+  const modeBadge = isBuild
+    ? chalk.bgHex('#00C853').black.bold(' ⚡ BUILD MODE ')
+    : chalk.bgHex('#FFB300').black.bold(' 📋 PLAN MODE ');
+
+  const modeText = isBuild
+    ? chalk.green.bold('Autonomous Coder (Full Execution)')
+    : chalk.yellow.bold('Architect & Planner (Read-Only)');
+
+  const modelBadge = chalk.bgHex('#1A237E').white.bold(` 🤖 ${model} `);
+  const helpHint = chalk.dim('• /mode to switch • /agent for models');
+
+  console.log(`\n${modeBadge} ${modeText}  ${modelBadge}  ${helpHint}`);
 }
 
 /**
@@ -149,10 +167,15 @@ export function createSpinner(text: string): Ora {
  * Show a styled help manual.
  */
 export function showHelp(): void {
-  console.log('\n' + chalk.bold.hex('#00FF7F')('🇧🇩 banglaCLI Help & Usage Guide'));
+  console.log('\n' + chalk.bold.hex('#00FF7F')('🇧🇩 banglacli Help & Usage Guide'));
   console.log(chalk.dim('─'.repeat(70)));
-  console.log(`${chalk.yellow.bold('Slash Commands in Chat:')}`);
-  console.log(`  ${chalk.cyan('/help')}        - Show this guide and available tools`);
+  console.log(`${chalk.yellow.bold('Agent Modes (OpenCode Style):')}`);
+  console.log(`  ${chalk.green.bold('⚡ BUILD Mode')}   - Autonomous full-stack coder. Can create/edit files & run terminal commands.`);
+  console.log(`  ${chalk.yellow.bold('📋 PLAN Mode')}    - Senior Architect. Read-only codebase investigation & step-by-step planning.`);
+  console.log(`\n${chalk.yellow.bold('Slash Commands in Chat:')}`);
+  console.log(`  ${chalk.cyan('/mode')}        - Toggle or select between BUILD mode and PLAN mode`);
+  console.log(`  ${chalk.cyan('/plan')}        - Switch instantly to PLAN mode (architectural read-only)`);
+  console.log(`  ${chalk.cyan('/build')}       - Switch instantly to BUILD mode (autonomous coding & execution)`);
   console.log(`  ${chalk.cyan('/agent')}       - OpenCode-style AI agent & model selector (Free, Flagship, Local)`);
   console.log(`  ${chalk.cyan('/model')}       - Alias for /agent to quickly switch models`);
   console.log(`  ${chalk.cyan('/provider')}    - Switch AI provider (Gemini, OpenRouter, Custom)`);
@@ -160,13 +183,13 @@ export function showHelp(): void {
   console.log(`  ${chalk.cyan('/guide')}       - Direct free API links & models guide (ফ্রি API গাইড)`);
   console.log(`  ${chalk.cyan('/config')}      - Full interactive configuration wizard`);
   console.log(`  ${chalk.cyan('/clear')}       - Clear conversation history / reset memory`);
-  console.log(`  ${chalk.cyan('/exit')}        - Exit banglaCLI session`);
+  console.log(`  ${chalk.cyan('/exit')}        - Exit banglacli session`);
 
   console.log(`\n${chalk.yellow.bold('Autonomous Tool Capabilities:')}`);
   console.log(`  1. ${chalk.bold('list_files')}   - Lists workspace files (ignoring node_modules, .git)`);
   console.log(`  2. ${chalk.bold('read_file')}    - Reads contents of any file in workspace`);
-  console.log(`  3. ${chalk.bold('write_file')}   - Creates directories and writes/updates files`);
-  console.log(`  4. ${chalk.bold('run_command')}  - Runs terminal commands (npm install, tests, dev)`);
+  console.log(`  3. ${chalk.bold('write_file')}   - Creates directories and writes/updates files (BUILD mode)`);
+  console.log(`  4. ${chalk.bold('run_command')}  - Runs terminal commands (BUILD mode)`);
 
   console.log(`\n${chalk.yellow.bold('Language Support:')}`);
   console.log(`  • ${chalk.green('Bangla:')}   "একটি React Counter অ্যাপ বানিয়ে দাও"`);

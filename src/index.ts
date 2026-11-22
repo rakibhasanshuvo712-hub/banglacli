@@ -11,17 +11,25 @@ import {
   BanglaCLIConfig,
 } from './config.js';
 import { BanglaAgent } from './agent.js';
-import { printBanner, renderMarkdown, showHelp, showFreeApiKeyGuide, showTokenLimitsGuide } from './ui.js';
+import {
+  printBanner,
+  renderMarkdown,
+  showHelp,
+  showFreeApiKeyGuide,
+  showTokenLimitsGuide,
+  renderStatusBar,
+} from './ui.js';
 import { safetySession } from './tools.js';
 import { selectAgentModelInteractive } from './models.js';
 
 const program = new Command();
 
 program
-  .name('banglaCLI')
+  .name('banglacli')
   .description('Autonomous BYOK terminal coding agent that speaks Bangla, Banglish & English.')
-  .version('1.1.0', '-v, --version', 'Output the current version')
+  .version('1.2.0', '-v, --version', 'Output the current version')
   .option('-m, --model <model>', 'Override model for this session')
+  .option('-M, --mode <mode>', 'Execution mode: "build" (default) or "plan"', 'build')
   .option('-p, --prompt <prompt>', 'Run a single prompt and exit')
   .option('-y, --yes', 'Auto-approve all file writes and shell commands')
   .action(async (options) => {
@@ -41,11 +49,16 @@ program
       config.model = options.model;
     }
 
-    const agent = new BanglaAgent(config);
+    const initialMode: 'build' | 'plan' = options.mode === 'plan' ? 'plan' : 'build';
+    const agent = new BanglaAgent(config, initialMode);
 
     // If single prompt mode is active (-p / --prompt)
     if (options.prompt) {
-      console.log(chalk.cyan(`\n⚡ Running single prompt with ${config.provider} (${config.model}):`));
+      console.log(
+        chalk.cyan(
+          `\n⚡ Running single prompt with ${config.provider} (${config.model}) in [${initialMode.toUpperCase()} MODE]:`
+        )
+      );
       console.log(chalk.white(options.prompt) + '\n');
       try {
         const reply = await agent.chat(options.prompt);
@@ -62,9 +75,22 @@ program
 
     let running = true;
     while (running) {
+      // Show bottom status bar showing active mode and model (like OpenCode)
+      renderStatusBar(agent.getMode(), config.model, config.provider);
+
+      const promptLabel =
+        agent.getMode() === 'build'
+          ? chalk.bold.hex('#00FF7F')('⚡ banglacli [BUILD] ❯')
+          : chalk.bold.hex('#FFB300')('📋 banglacli [PLAN] ❯');
+
+      const placeholderText =
+        agent.getMode() === 'build'
+          ? 'Type what to build, or /plan, /mode, /agent, /help...'
+          : 'Ask for architectural plan or analysis, or /build, /mode...';
+
       const input = (await p.text({
-        message: chalk.bold.hex('#00FF7F')('banglaCLI ❯'),
-        placeholder: 'Type your message (Bangla / Banglish / English) or /help, /provider, /model, /exit...',
+        message: promptLabel,
+        placeholder: placeholderText,
         validate: (val) => {
           if (!val || val.trim().length === 0) {
             return 'Please enter a message or command.';
@@ -73,7 +99,7 @@ program
       })) as string;
 
       if (p.isCancel(input)) {
-        console.log(chalk.yellow('\nবিদায়! Goodbye! Exiting banglaCLI.\n'));
+        console.log(chalk.yellow('\nবিদায়! Goodbye! Exiting banglacli.\n'));
         break;
       }
 
@@ -81,12 +107,62 @@ program
 
       // Handle Slash Commands
       if (trimmed === '/exit' || trimmed === '/quit') {
-        console.log(chalk.hex('#00FF7F')('\nধন্যবাদ! Thanks for using banglaCLI. Happy coding! 🚀\n'));
+        console.log(chalk.hex('#00FF7F')('\nধন্যবাদ! Thanks for using banglacli. Happy coding! 🚀\n'));
         break;
       }
 
       if (trimmed === '/help') {
         showHelp();
+        continue;
+      }
+
+      // Mode Switching (OpenCode Style)
+      if (trimmed === '/mode') {
+        const modeChoice = (await p.select({
+          message: chalk.cyan('Select Agent Mode (OpenCode Style):'),
+          initialValue: agent.getMode(),
+          options: [
+            {
+              value: 'build',
+              label: '⚡ BUILD Mode (Autonomous Full-Stack Coding)',
+              hint: 'Full tool access: inspect, create/update files & run terminal commands',
+            },
+            {
+              value: 'plan',
+              label: '📋 PLAN Mode (Senior Architect & Planning)',
+              hint: 'Read-only: inspect files, explore architecture & design step-by-step plans',
+            },
+          ],
+        })) as 'build' | 'plan';
+
+        if (!p.isCancel(modeChoice)) {
+          agent.setMode(modeChoice);
+          if (modeChoice === 'build') {
+            console.log(
+              chalk.green('\n✔ Switched to ⚡ BUILD MODE (Autonomous Builder: file writes & commands enabled)\n')
+            );
+          } else {
+            console.log(
+              chalk.yellow('\n✔ Switched to 📋 PLAN MODE (Senior Architect: read-only analysis & planning)\n')
+            );
+          }
+        }
+        continue;
+      }
+
+      if (trimmed === '/plan') {
+        agent.setMode('plan');
+        console.log(
+          chalk.yellow('\n✔ Switched to 📋 PLAN MODE (Senior Architect: read-only analysis & planning enabled)\n')
+        );
+        continue;
+      }
+
+      if (trimmed === '/build') {
+        agent.setMode('build');
+        console.log(
+          chalk.green('\n✔ Switched to ⚡ BUILD MODE (Autonomous Builder: file writes & commands enabled)\n')
+        );
         continue;
       }
 
@@ -142,7 +218,7 @@ program
       // Agent chat execution
       try {
         const reply = await agent.chat(trimmed);
-        console.log('\n' + chalk.bold.hex('#00FF7F')('banglaCLI:'));
+        console.log('\n' + chalk.bold.hex('#00FF7F')('banglacli:'));
         console.log(renderMarkdown(reply) + '\n');
       } catch (err: any) {
         console.error(chalk.red(`\n✖ Agent Error: ${err.message}\n`));
@@ -187,6 +263,17 @@ program
       config = await promptConfig(true);
     }
     await selectAgentModelInteractive(config);
+  });
+
+// Explicit mode subcommand
+program
+  .command('mode')
+  .description('Switch agent mode between BUILD (autonomous coder) and PLAN (architect)')
+  .action(async () => {
+    console.log(chalk.bold.hex('#00FF7F')('\n🇧🇩 banglacli Agent Modes (OpenCode Style):\n'));
+    console.log(`  ${chalk.green.bold('⚡ BUILD Mode:')} Autonomous full-stack coder. Inspects, writes files & runs terminal commands.`);
+    console.log(`  ${chalk.yellow.bold('📋 PLAN Mode:')} Senior Architect. Read-only codebase investigation & architectural planning.\n`);
+    console.log(chalk.gray('Use "/mode", "/plan", or "/build" inside interactive chat or launch with "banglacli -M plan".\n'));
   });
 
 /**

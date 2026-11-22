@@ -200,7 +200,19 @@ export async function runCommand(command: string): Promise<string> {
 /**
  * Tool dispatcher
  */
-export async function executeTool(name: string, args: Record<string, any>): Promise<string> {
+export async function executeTool(
+  name: string,
+  args: Record<string, any>,
+  mode: 'build' | 'plan' = 'build'
+): Promise<string> {
+  // If in PLAN mode, block write and command execution
+  if (mode === 'plan' && (name === 'write_file' || name === 'run_command')) {
+    const errorMsg = `⚠️ Action blocked: banglacli is currently in PLAN MODE. File modifications and terminal commands are disabled. Switch to BUILD mode (/build or /mode) to execute changes.`;
+    renderToolCall(name, args);
+    renderToolResult(name, errorMsg, true);
+    return errorMsg;
+  }
+
   renderToolCall(name, args);
 
   let result = '';
@@ -380,5 +392,22 @@ export const GEMINI_TOOLS = [
         },
       },
     ],
+  },
+];
+
+/**
+ * Mode-specific Tool Exports
+ */
+export const BUILD_OPENAI_TOOLS = OPENAI_TOOLS;
+export const PLAN_OPENAI_TOOLS = OPENAI_TOOLS.filter((t) =>
+  ['list_files', 'read_file'].includes(t.function.name)
+);
+
+export const BUILD_GEMINI_TOOLS = GEMINI_TOOLS;
+export const PLAN_GEMINI_TOOLS = [
+  {
+    functionDeclarations: GEMINI_TOOLS[0].functionDeclarations.filter((t) =>
+      ['list_files', 'read_file'].includes(t.name)
+    ),
   },
 ];

@@ -40,6 +40,14 @@ async function testAll() {
     throw new Error('runCommand output mismatch');
   }
 
+  // 5. Test executeTool in PLAN mode (should block write_file)
+  const { executeTool } = await import('../src/tools.js');
+  const planBlockRes = await executeTool('write_file', { filePath: 'temp-test/block.txt', content: 'test' }, 'plan');
+  console.log('planMode block result:', planBlockRes);
+  if (!planBlockRes.includes('PLAN MODE')) {
+    throw new Error('executeTool in PLAN mode did not block write_file');
+  }
+
   // Clean up
   fs.rmSync('temp-test', { recursive: true, force: true });
   console.log('All tool tests passed successfully! ✅');

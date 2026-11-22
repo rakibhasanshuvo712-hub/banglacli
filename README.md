@@ -1,6 +1,6 @@
-# 🇧🇩 banglaCLI
+# 🇧🇩 banglacli
 
-> **The Autonomous, Lightweight BYOK AI Coding Agent in Your Terminal — Fluent in Bangla, Banglish & English.**
+> **The Autonomous, Lightweight BYOK AI Coding Agent in Your Terminal — Fluent in Bangla, Banglish & English with OpenCode-Style Build & Plan Modes.**
 
 [![npm version](https://img.shields.io/npm/v/banglacli.svg?style=flat-square&color=00FF66)](https://www.npmjs.com/package/banglacli)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg?style=flat-square)](https://nodejs.org/)
@@ -20,9 +20,14 @@
 
 ## 🌟 Overview
 
-**banglaCLI** is an open-source, serverless terminal coding assistant designed from the ground up for developers who think, speak, and code in **বাংলা (Bangla)**, **Banglish**, or **English**.
+**banglacli** is an open-source, serverless terminal coding assistant designed from the ground up for developers who think, speak, and code in **বাংলা (Bangla)**, **Banglish**, or **English**.
 
-It is 100% **BYOK (Bring Your Own Key)** — you don't need costly subscriptions. Connect your free **Google Gemini** API key (generous free rate limits) or **OpenRouter** free models (DeepSeek, GLM, Llama) and start building software right inside your terminal.
+It brings the best of modern agent design (like OpenCode):
+- **⚡ BUILD Mode:** Full autonomous development — reads and writes code, builds packages, runs tests and shell commands.
+- **📋 PLAN Mode:** Senior architect mode — read-only codebase exploration, architecture analysis, and concrete step-by-step implementation plans.
+- **Live Status Bar:** Always displays the currently active model and mode directly above your prompt.
+
+It is 100% **BYOK (Bring Your Own Key)** — you don't need costly subscriptions. Connect your free **Google Gemini** API key or **OpenRouter** free models (Particle-1, Nemotron, Gemma 4, ERNIE, Groq) and start building software right inside your terminal.
 
 ---
 
@@ -32,11 +37,17 @@ It is 100% **BYOK (Bring Your Own Key)** — you don't need costly subscriptions
   - **Bangla (বাংলা লিপি):** *"একটি Express.js REST API বানাও JWT auth সহ"*
   - **Banglish:** *"Ekta React counter app banaye dao Tailwind CSS diye"*
   - **English:** *"Build a full-stack Next.js portfolio website"*
+- ⚡ **OpenCode-Style Build & Plan Modes**:
+  - `⚡ BUILD Mode`: Autonomous builder with tools to create files, install dependencies, and run commands.
+  - `📋 PLAN Mode`: Safe read-only mode to analyze codebase, design architecture, and formulate plans without modifying files.
+  - Switch anytime with `/mode`, `/plan`, or `/build`.
+- 📊 **Real-Time Model & Mode Status Indicator**:
+  - Displays `[⚡ BUILD MODE] [🤖 openrouter/free]` right above the prompt so you always know what model you are running.
 - ⚡ **100% BYOK & Serverless**:
   - No middleman backend. Your API keys are stored locally on your machine via `conf`.
-  - Supports **Google Gemini** (`gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-1.5-pro`).
-  - Supports **OpenRouter** (`deepseek/deepseek-chat:free`, `zhipu/glm-4:free`, etc.).
-  - Supports **Custom OpenAI-Compatible** endpoints (DeepSeek API, Ollama, Groq, vLLM).
+  - Supports **Google Gemini** (`gemini-2.0-flash`, `gemini-1.5-flash`, `gemini-3.8-flash`).
+  - Supports **OpenRouter** (`openrouter/free`, `particle-ai/particle-1:free`, `nvidia/nemotron-3-ultra-550b-a55b:free`, `google/gemma-4-31b-it:free`).
+  - Supports **Custom OpenAI-Compatible** endpoints (Groq Cloud, Ollama, DeepSeek API).
 - 🛠️ **Autonomous Project Builder (4 Native Tools)**:
   - `list_files(dirPath)`: Explores workspace directory hierarchy (auto-ignoring `node_modules` and `.git`).
   - `read_file(filePath)`: Inspects existing source code before editing.
@@ -45,13 +56,6 @@ It is 100% **BYOK (Bring Your Own Key)** — you don't need costly subscriptions
 - 🛡️ **Interactive Safety Confirmation**:
   - Prompts you `[Y/n/a]` before modifying files or executing shell commands.
   - Includes a *"Yes to all (Auto-approve for this session)"* mode for hands-free autonomous building.
-- 💬 **Interactive Chat REPL & Slash Commands**:
-  - `/provider`: Switch between Gemini, OpenRouter, and Custom providers on the fly.
-  - `/model`: Switch models on the fly without restarting.
-  - `/config`: Re-run full provider and API key setup wizard.
-  - `/clear`: Reset conversation history and free context memory.
-  - `/help`: Display commands guide and tool manual.
-  - `/exit`: Cleanly exit the session.
 
 ---
 
@@ -73,10 +77,10 @@ npx banglacli
 
 ### First-Time Setup
 
-Simply run:
+Simply type:
 
 ```bash
-banglaCLI
+banglacli
 ```
 
 If it's your first time, the interactive setup wizard will guide you to select a provider and enter your API key:
@@ -94,12 +98,12 @@ If it's your first time, the interactive setup wizard will guide you to select a
 
 To view the interactive free API guide:
 ```bash
-banglaCLI guide
+banglacli guide
 ```
 
 To reconfigure anytime:
 ```bash
-banglaCLI config
+banglacli config
 ```
 
 ---
@@ -107,13 +111,14 @@ banglaCLI config
 ## 💻 CLI Usage
 
 ```text
-Usage: banglaCLI [options] [command]
+Usage: banglacli [options] [command]
 
 Autonomous BYOK terminal coding agent that speaks Bangla, Banglish & English.
 
 Options:
   -v, --version          Output current version
   -m, --model <model>    Override model for this session
+  -M, --mode <mode>      Agent mode: "build" (default) or "plan"
   -p, --prompt <prompt>  Run a single prompt and exit directly
   -y, --yes              Auto-approve all file writes and shell commands
   -h, --help             Display help for command
@@ -121,28 +126,31 @@ Options:
 Commands:
   config                 Run interactive setup wizard
   guide (alias: keys)    Display free API keys & models guide
+  limits (alias: tokens) Display free token limits & context windows
+  agent (alias: model)   OpenCode-style AI agent & model selector
+  mode                   Display agent modes guide
 ```
 
 ### Examples
 
 **Interactive Mode:**
 ```bash
-banglaCLI
+banglacli
+```
+
+**Launch directly in PLAN Mode:**
+```bash
+banglacli -M plan
 ```
 
 **Auto-Approve Autonomous Building:**
 ```bash
-banglaCLI -y
+banglacli -y
 ```
 
 **Single Command Execution:**
 ```bash
-banglaCLI -p "Ekta Node.js CLI tool banaw jeta weather show kore" -y
-```
-
-**Override Model on Launch:**
-```bash
-banglaCLI -m "gemini-2.0-flash"
+banglacli -p "Ekta Node.js CLI tool banaw jeta weather show kore" -y
 ```
 
 ---
@@ -151,7 +159,9 @@ banglaCLI -m "gemini-2.0-flash"
 
 | Command | Description |
 |---|---|
-| `/help` | Display command usage and tool reference |
+| `/mode` | **Toggle between BUILD Mode and PLAN Mode** (OpenCode style) |
+| `/plan` | Switch directly to **PLAN Mode** (read-only architectural planning) |
+| `/build` | Switch directly to **BUILD Mode** (autonomous coding & execution) |
 | `/agent` (or `/model`) | **OpenCode-Style Agent Selector** (Free, Flagship, Gemini, Local) |
 | `/provider` | Switch between Gemini, OpenRouter, or custom providers |
 | `/limits` | View free token quotas, context windows & rate limits |
