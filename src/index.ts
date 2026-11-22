@@ -154,7 +154,7 @@ async function handleSwitchModel(config: BanglaCLIConfig, agent: BanglaAgent): P
       message: chalk.cyan('Switch Gemini Model:'),
       initialValue: config.model,
       options: [
-        { value: 'gemini-2.5-flash', label: 'gemini-2.5-flash (Default Free & Fast)' },
+        { value: 'gemini-3.8-flash', label: 'gemini-3.8-flash (Recommended Free & Fast)' },
         { value: 'gemini-2.0-flash', label: 'gemini-2.0-flash (Multimodal & Fast)' },
         { value: 'gemini-1.5-flash', label: 'gemini-1.5-flash (Stable)' },
         { value: 'gemini-1.5-pro', label: 'gemini-1.5-pro (Complex Reasoning)' },
@@ -167,7 +167,7 @@ async function handleSwitchModel(config: BanglaCLIConfig, agent: BanglaAgent): P
     if (choice === 'custom_input') {
       const custom = (await p.text({
         message: 'Enter Gemini model ID:',
-        initialValue: config.model,
+        initialValue: config.model || 'gemini-3.8-flash',
       })) as string;
       if (p.isCancel(custom)) return;
       selectedModel = custom.trim();

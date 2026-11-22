@@ -156,7 +156,12 @@ export class BanglaAgent {
         } else if (errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('429')) {
           return chalk.red(
             `\n✖ Gemini Quota Exceeded (429 Rate Limit).\n` +
-              `You can switch models using ${chalk.yellow('/model')} or switch providers using ${chalk.yellow('/config')}.`
+              `You can switch models using ${chalk.yellow('/model')} or switch providers using ${chalk.yellow('/provider')}.`
+          );
+        } else if (errMsg.includes('no longer available') || errMsg.includes('NOT_FOUND') || errMsg.includes('404')) {
+          return chalk.red(
+            `\n✖ Gemini Model Unavailable: ${errMsg}\n` +
+              `👉 Quick fix: Type ${chalk.yellow.bold('/model')} and switch to ${chalk.green.bold('gemini-3.8-flash')} or ${chalk.green.bold('gemini-2.0-flash')}.`
           );
         }
         throw new Error(`Gemini Error: ${errMsg}`);
