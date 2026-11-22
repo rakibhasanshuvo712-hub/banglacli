@@ -151,10 +151,10 @@ banglaCLI -m "gemini-2.0-flash"
 | Command | Description |
 |---|---|
 | `/help` | Display command usage and tool reference |
-| `/guide` | Display direct links & guides for free API keys & models |
-| `/limits` | View free token quotas, context windows & rate limits |
+| `/agent` (or `/model`) | **OpenCode-Style Agent Selector** (Free, Flagship, Gemini, Local) |
 | `/provider` | Switch between Gemini, OpenRouter, or custom providers |
-| `/model` | Switch between models for the active provider |
+| `/limits` | View free token quotas, context windows & rate limits |
+| `/guide` | Display direct links & guides for free API keys & models |
 | `/config` | Full interactive setup to re-configure keys, provider, and endpoint |
 | `/clear` | Clear conversation memory and reset token context |
 | `/exit` | Exit the CLI session |

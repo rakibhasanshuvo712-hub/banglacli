@@ -13,6 +13,7 @@ import {
 import { BanglaAgent } from './agent.js';
 import { printBanner, renderMarkdown, showHelp, showFreeApiKeyGuide, showTokenLimitsGuide } from './ui.js';
 import { safetySession } from './tools.js';
+import { selectAgentModelInteractive } from './models.js';
 
 const program = new Command();
 
@@ -129,8 +130,12 @@ program
         continue;
       }
 
-      if (trimmed === '/model') {
-        await handleSwitchModel(config, agent);
+      if (trimmed === '/model' || trimmed === '/agent') {
+        const newConfig = await selectAgentModelInteractive(config);
+        if (newConfig) {
+          config = newConfig;
+          agent.updateConfig(newConfig);
+        }
         continue;
       }
 
@@ -169,6 +174,19 @@ program
   .description('Display free token limits, context windows, and rate limits')
   .action(() => {
     showTokenLimitsGuide();
+  });
+
+// Explicit agent/model selector subcommand (OpenCode style)
+program
+  .command('agent')
+  .alias('model')
+  .description('OpenCode-style AI agent & model selector (Free, Flagship, Gemini, Local)')
+  .action(async () => {
+    let config = getConfig();
+    if (!config) {
+      config = await promptConfig(true);
+    }
+    await selectAgentModelInteractive(config);
   });
 
 /**

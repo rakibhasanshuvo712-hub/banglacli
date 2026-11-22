@@ -62,10 +62,11 @@ export function printBanner(provider?: string, model?: string, workspace?: strin
   }
   console.log(
     `  ${dim('Commands:')} ${chalk.yellow('/help')} ${dim('•')} ` +
-      `${chalk.yellow('/guide')} ${dim('•')} ` +
-      `${chalk.yellow('/limits')} ${dim('•')} ` +
+      `${chalk.yellow('/agent')} ${dim('•')} ` +
       `${chalk.yellow('/provider')} ${dim('•')} ` +
-      `${chalk.yellow('/model')} ${dim('•')} ${chalk.yellow('/config')} ${dim('•')} ` +
+      `${chalk.yellow('/limits')} ${dim('•')} ` +
+      `${chalk.yellow('/guide')} ${dim('•')} ` +
+      `${chalk.yellow('/config')} ${dim('•')} ` +
       `${chalk.yellow('/clear')} ${dim('•')} ${chalk.yellow('/exit')}`
   );
   console.log(dim('─'.repeat(78)));
@@ -152,10 +153,11 @@ export function showHelp(): void {
   console.log(chalk.dim('─'.repeat(70)));
   console.log(`${chalk.yellow.bold('Slash Commands in Chat:')}`);
   console.log(`  ${chalk.cyan('/help')}        - Show this guide and available tools`);
-  console.log(`  ${chalk.cyan('/guide')}       - Direct free API links & models guide (ফ্রি API গাইড)`);
-  console.log(`  ${chalk.cyan('/limits')}      - View free token limits, context windows & RPM/RPD`);
+  console.log(`  ${chalk.cyan('/agent')}       - OpenCode-style AI agent & model selector (Free, Flagship, Local)`);
+  console.log(`  ${chalk.cyan('/model')}       - Alias for /agent to quickly switch models`);
   console.log(`  ${chalk.cyan('/provider')}    - Switch AI provider (Gemini, OpenRouter, Custom)`);
-  console.log(`  ${chalk.cyan('/model')}       - Switch current AI model on the fly`);
+  console.log(`  ${chalk.cyan('/limits')}      - View free token limits, context windows & RPM/RPD`);
+  console.log(`  ${chalk.cyan('/guide')}       - Direct free API links & models guide (ফ্রি API গাইড)`);
   console.log(`  ${chalk.cyan('/config')}      - Full interactive configuration wizard`);
   console.log(`  ${chalk.cyan('/clear')}       - Clear conversation history / reset memory`);
   console.log(`  ${chalk.cyan('/exit')}        - Exit banglaCLI session`);
