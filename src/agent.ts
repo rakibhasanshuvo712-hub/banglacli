@@ -97,6 +97,12 @@ export function getSystemPrompt(mode: AgentMode = 'build'): string {
 7. **Non-Interactive Shell Execution (OpenCode Standard)**:
    - All terminal commands run in a non-interactive shell. Never run commands that prompt for manual terminal input. Always pass flags like -y, --yes, -m "<message>".
    - On Windows, when testing HTTP endpoints or downloading assets, always use "curl.exe" or "Invoke-WebRequest -UseBasicParsing" so commands execute cleanly without interactive prompts.
+8. **Strict One-By-One Continuous Command Execution (CRITICAL FOR PERFORMANCE)**:
+   - Apply terminal commands strictly ONE BY ONE.
+   - NEVER apply two or more commands at the same time or batch multiple run_command calls together.
+   - NEVER chain lengthy commands with "&&" or ";".
+   - Execute ONE command, wait for its output, inspect the result, and ONLY THEN proceed to the next step.
+   - This ensures rapid real-time feedback, prevents lengthy hangs, and keeps execution continuous, smooth, and fast.
 
 ### 1. LANGUAGE & COMMUNICATION RULES (CRITICAL):
 - You possess native fluency in Bangla (বাংলা), Banglish (Romanized Bengali, e.g. "amake ekta Express auth backend banaye dao"), and English.

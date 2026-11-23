@@ -54,7 +54,14 @@ async function testAll() {
     throw new Error('runCommand output mismatch');
   }
 
-  // 7. Test executeTool in PLAN mode (should block write_file)
+  // 7. Test sequential one-by-one command execution
+  const seqRes = await runCommand('node -e "console.log(\'step1\');" && node -e "console.log(\'step2\');"');
+  console.log('sequential command result:', seqRes);
+  if (!seqRes.includes('step1') || !seqRes.includes('step2')) {
+    throw new Error('sequential execution failed');
+  }
+
+  // 8. Test executeTool in PLAN mode (should block write_file)
   const { executeTool } = await import('../src/tools.js');
   const planBlockRes = await executeTool('write_file', { filePath: 'temp-test/block.txt', content: 'test' }, 'plan');
   console.log('planMode block result:', planBlockRes);

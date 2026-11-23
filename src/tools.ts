@@ -208,10 +208,75 @@ export async function writeFile(filePath: string, content: string): Promise<stri
   }
 }
 
+// Mutex to ensure commands execute strictly ONE BY ONE sequentially
+let commandExecutionMutex = Promise.resolve();
+
 /**
- * 4. run_command: Run a shell command non-interactively (with safety confirmation)
+ * 4. run_command: Run a shell command non-interactively and strictly ONE BY ONE.
+ * Guarantees that multiple commands never run at the same time, avoiding lengthy timeouts.
  */
 export async function runCommand(command: string, signal?: AbortSignal): Promise<string> {
+  // Wait for any active command to complete so execution is strictly continuous and sequential
+  const prevLock = commandExecutionMutex;
+  let release: () => void = () => {};
+  commandExecutionMutex = new Promise((resolve) => {
+    release = resolve;
+  });
+
+  try {
+    await prevLock;
+    return await executeSequentialCommand(command, signal);
+  } finally {
+    release();
+  }
+}
+
+/**
+ * Splits compound shell commands (e.g. "cmd1 && cmd2") while respecting quotes.
+ */
+export function splitShellCommands(command: string): string[] {
+  const commands: string[] = [];
+  let current = '';
+  let inDoubleQuote = false;
+  let inSingleQuote = false;
+
+  for (let i = 0; i < command.length; i++) {
+    const char = command[i];
+    const nextChar = command[i + 1];
+
+    if (char === '"' && !inSingleQuote) {
+      inDoubleQuote = !inDoubleQuote;
+      current += char;
+    } else if (char === "'" && !inDoubleQuote) {
+      inSingleQuote = !inSingleQuote;
+      current += char;
+    } else if (!inDoubleQuote && !inSingleQuote) {
+      if (char === '&' && nextChar === '&') {
+        if (current.trim()) commands.push(current.trim());
+        current = '';
+        i++;
+      } else if (char === ';' || char === '\n') {
+        if (current.trim()) commands.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    } else {
+      current += char;
+    }
+  }
+
+  if (current.trim()) {
+    commands.push(current.trim());
+  }
+
+  return commands;
+}
+
+/**
+ * Executes a command or breaks chained commands (&&, ;, newlines) into individual steps applied one by one.
+ */
+async function executeSequentialCommand(command: string, signal?: AbortSignal): Promise<string> {
   // Safety confirmation check
   if (!safetySession.autoApproveAll) {
     const summary = `${chalk.gray('Shell Command:')} ${chalk.magenta.bold(command)}\n${chalk.gray('Working Directory:')} ${process.cwd()}`;
@@ -229,8 +294,45 @@ export async function runCommand(command: string, signal?: AbortSignal): Promise
     return 'Action aborted by user (Escape).';
   }
 
-  console.log(chalk.cyan(`\n⚡ Running command: ${chalk.bold(command)}...`));
+  // Decompose compound commands (&&, ;, newlines) quote-safely so each sub-command runs strictly one by one
+  const subCommands = splitShellCommands(command);
 
+  if (subCommands.length > 1) {
+    console.log(
+      chalk.cyan(
+        `\n⚡ Continuous Execution: Running ${chalk.bold(subCommands.length)} commands strictly one by one...`
+      )
+    );
+
+    const stepResults: string[] = [];
+    for (let i = 0; i < subCommands.length; i++) {
+      if (signal?.aborted) {
+        return 'Action aborted by user (Escape).';
+      }
+
+      const sub = subCommands[i];
+      console.log(chalk.cyan(`\n⚡ Step ${i + 1}/${subCommands.length}: ${chalk.bold(sub)}`));
+      const res = await runActualProcess(sub, signal);
+      stepResults.push(`[Step ${i + 1}/${subCommands.length}: ${sub}]\n${res}`);
+
+      // If a step fails, abort subsequent steps immediately so the model can self-heal without wasting time
+      if (res.includes('Command exited with status code') || res.includes('Command timed out') || res.includes('failed to start')) {
+        console.log(chalk.yellow(`\n⚠️ Step ${i + 1} exited with error. Stopping subsequent steps immediately.`));
+        break;
+      }
+    }
+
+    return stepResults.join('\n\n');
+  }
+
+  console.log(chalk.cyan(`\n⚡ Running command: ${chalk.bold(command)}...`));
+  return await runActualProcess(command, signal);
+}
+
+/**
+ * Spawns an individual command non-interactively with detached stdin and auto-timeout.
+ */
+function runActualProcess(command: string, signal?: AbortSignal): Promise<string> {
   return new Promise((resolve) => {
     const isWindows = process.platform === 'win32';
     let sanitizedCommand = command;
@@ -239,12 +341,12 @@ export async function runCommand(command: string, signal?: AbortSignal): Promise
     let shellArgs: string[];
 
     if (isWindows) {
-      // 1. Auto-inject -UseBasicParsing if Invoke-WebRequest or iwr is used without it to prevent IE engine prompt
+      // Auto-inject -UseBasicParsing if Invoke-WebRequest or iwr is used without it
       if (/\b(Invoke-WebRequest|iwr)\b/i.test(sanitizedCommand) && !/-UseBasicParsing\b/i.test(sanitizedCommand)) {
         sanitizedCommand = sanitizedCommand.replace(/\b(Invoke-WebRequest|iwr)\b/gi, '$1 -UseBasicParsing');
       }
 
-      // 2. Wrap with Non-Interactive preferences so PowerShell never prompts
+      // Non-interactive PowerShell environment
       const wrappedCmd = `$ConfirmPreference = 'None'; $ProgressPreference = 'SilentlyContinue'; ${sanitizedCommand}`;
       shellProgram = 'powershell.exe';
       shellArgs = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', wrappedCmd];
@@ -255,14 +357,13 @@ export async function runCommand(command: string, signal?: AbortSignal): Promise
 
     const child = spawn(shellProgram, shellArgs, {
       cwd: process.cwd(),
-      // stdio: ['ignore', 'pipe', 'pipe'] ensures stdin is detached so commands NEVER freeze on interactive prompts
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
         FORCE_COLOR: '0',
         CI: 'true',
-        GIT_TERMINAL_PROMPT: '0', // Prevents git from hanging on auth prompt
-        NPM_CONFIG_YES: 'true', // Auto-approves npx / npm package prompts
+        GIT_TERMINAL_PROMPT: '0',
+        NPM_CONFIG_YES: 'true',
         DEBIAN_FRONTEND: 'noninteractive',
       },
     });
@@ -622,13 +723,13 @@ export const OPENAI_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'run_command',
-      description: 'Executes a shell command in the workspace directory (e.g., npm init, npm install, build, test).',
+      description: 'Executes a single terminal command in the workspace directory. Run commands strictly ONE BY ONE sequentially. Do not batch or chain multiple heavy commands.',
       parameters: {
         type: 'object',
         properties: {
           command: {
             type: 'string',
-            description: 'The shell command line string to run.',
+            description: 'The single shell command line string to run.',
           },
         },
         required: ['command'],
@@ -745,13 +846,13 @@ export const GEMINI_TOOLS = [
       },
       {
         name: 'run_command',
-        description: 'Executes a shell command in the workspace directory (e.g., npm init, npm install, build, test).',
+        description: 'Executes a single terminal command in the workspace directory. Run commands strictly ONE BY ONE sequentially. Do not batch or chain multiple heavy commands.',
         parameters: {
           type: Type.OBJECT,
           properties: {
             command: {
               type: Type.STRING,
-              description: 'The shell command line string to run.',
+              description: 'The single shell command line string to run.',
             },
           },
           required: ['command'],
