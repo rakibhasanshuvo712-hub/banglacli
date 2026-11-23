@@ -1,4 +1,5 @@
-import { listFiles, readFile, writeFile, runCommand, grepSearch, findFiles, safetySession } from '../src/tools.js';
+import { listFiles, readFile, writeFile, editFile, webSearch, runCommand, grepSearch, findFiles, safetySession } from '../src/tools.js';
+import { detectProjectContext } from '../src/detector.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -16,14 +17,22 @@ async function testAll() {
     throw new Error('writeFile failed to create file');
   }
 
-  // 2. Test readFile
+  // 2. Test editFile (surgical in-place replacement)
+  const editRes = await editFile(testFilePath, 'Hello BanglaCLI', 'Hello World');
+  console.log('editFile result:', editRes);
+  const updatedContent = await readFile(testFilePath);
+  if (!updatedContent.includes('Hello World from test!')) {
+    throw new Error('editFile failed to replace target text');
+  }
+
+  // 3. Test readFile
   const readRes = await readFile(testFilePath);
   console.log('readFile result:', readRes);
-  if (!readRes.includes('Hello BanglaCLI from test!')) {
+  if (!readRes.includes('Hello World from test!')) {
     throw new Error('readFile content mismatch');
   }
 
-  // 3. Test listFiles
+  // 4. Test listFiles
   const listRes = await listFiles('.');
   console.log('listFiles contains temp-test:', listRes.includes('temp-test/hello.txt'));
   if (!listRes.includes('temp-test/hello.txt')) {
@@ -33,40 +42,51 @@ async function testAll() {
     throw new Error('listFiles should ignore node_modules');
   }
 
-  // 4. Test grepSearch
-  const grepRes = await grepSearch('Hello BanglaCLI', 'temp-test/*');
+  // 5. Test grepSearch
+  const grepRes = await grepSearch('Hello World', 'temp-test/*');
   console.log('grepSearch result:', grepRes);
-  if (!grepRes.includes('Hello BanglaCLI from test!')) {
+  if (!grepRes.includes('Hello World from test!')) {
     throw new Error('grepSearch failed to find text in test file');
   }
 
-  // 5. Test findFiles
+  // 6. Test findFiles
   const findRes = await findFiles('*.txt');
   console.log('findFiles result:', findRes);
   if (!findRes.includes('hello.txt')) {
     throw new Error('findFiles failed to locate hello.txt');
   }
 
-  // 6. Test runCommand
+  // 7. Test detectProjectContext
+  const ctx = detectProjectContext();
+  console.log('detectProjectContext summary:', ctx.summary);
+  if (!ctx.packageManager || !ctx.language) {
+    throw new Error('detectProjectContext missing core properties');
+  }
+
+  // 8. Test runCommand
   const cmdRes = await runCommand('node -e "console.log(12345);"');
   console.log('runCommand result:', cmdRes);
   if (!cmdRes.includes('12345')) {
     throw new Error('runCommand output mismatch');
   }
 
-  // 7. Test sequential one-by-one command execution
+  // 9. Test sequential one-by-one command execution
   const seqRes = await runCommand('node -e "console.log(\'step1\');" && node -e "console.log(\'step2\');"');
   console.log('sequential command result:', seqRes);
   if (!seqRes.includes('step1') || !seqRes.includes('step2')) {
     throw new Error('sequential execution failed');
   }
 
-  // 8. Test executeTool in PLAN mode (should block write_file)
+  // 10. Test executeTool in PLAN mode (should block edit_file and write_file)
   const { executeTool } = await import('../src/tools.js');
   const planBlockRes = await executeTool('write_file', { filePath: 'temp-test/block.txt', content: 'test' }, 'plan');
   console.log('planMode block result:', planBlockRes);
   if (!planBlockRes.includes('PLAN MODE')) {
     throw new Error('executeTool in PLAN mode did not block write_file');
+  }
+  const planEditBlockRes = await executeTool('edit_file', { filePath: testFilePath, target: 'a', replacement: 'b' }, 'plan');
+  if (!planEditBlockRes.includes('PLAN MODE')) {
+    throw new Error('executeTool in PLAN mode did not block edit_file');
   }
 
   // Clean up

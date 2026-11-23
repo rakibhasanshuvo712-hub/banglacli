@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { execSync } from 'node:child_process';
 import chalk from 'chalk';
 import { marked } from 'marked';
 import { markedTerminal } from 'marked-terminal';
@@ -115,12 +118,12 @@ export function renderCascadeNotice(fromModel: string, toModel: string, reason: 
  * Display action details before executing a dangerous tool (write_file or run_command).
  */
 export async function askToolConfirmation(
-  toolName: 'write_file' | 'run_command',
+  toolName: 'write_file' | 'run_command' | 'edit_file',
   summary: string
 ): Promise<'yes' | 'no' | 'all'> {
   console.log('\n' + chalk.bgHex('#FF9900').black.bold(' ⚠️  SAFETY CONFIRMATION '));
   console.log(
-    `${chalk.gray('Tool:')} ${toolName === 'write_file' ? chalk.cyan.bold(toolName) : chalk.magenta.bold(toolName)}`
+    `${chalk.gray('Tool:')} ${chalk.cyan.bold(toolName)}`
   );
   console.log(`${chalk.gray('Details:')}\n${chalk.white(summary)}`);
 
@@ -295,6 +298,9 @@ export function showHelp(): void {
   console.log(`  ${chalk.cyan('/stats')}       - View live session tokens, LLM calls, and estimated dollar savings`);
   console.log(`  ${chalk.cyan('/diff')}        - Show files modified or created in this session`);
   console.log(`  ${chalk.cyan('/undo')}        - Revert the most recent file change made by agent`);
+  console.log(`  ${chalk.cyan('/git')}         - View git branch, modified files, and recent commits`);
+  console.log(`  ${chalk.cyan('/tree')}        - View elegant Unicode directory tree of workspace`);
+  console.log(`  ${chalk.cyan('/detect')}      - View detected project stack, package manager & scripts`);
   console.log(`  ${chalk.cyan('/compact')}     - Compact conversation history to free context window`);
   console.log(`  ${chalk.cyan('/session')}     - View active session status, files touched & memory`);
   console.log(`  ${chalk.cyan('/limits')}      - View free token limits, context windows & RPM/RPD`);
@@ -311,10 +317,16 @@ export function showHelp(): void {
   console.log(`  • ${chalk.green.bold('Enter')}          : Submit your prompt to the active AI agent.`);
   console.log(`  • ${chalk.green.bold('Escape')}         : Clear input buffer while typing; stops agent immediately while running.`);
 
-  console.log(`\n${chalk.yellow.bold('Autonomous Tool Capabilities (7 Built-in Tools):')}`);
+  console.log(`\n${chalk.yellow.bold('Autonomous Tool Capabilities (9 Built-in Tools):')}`);
   console.log(`  1. ${chalk.bold('list_files')}   - Lists workspace files (ignoring node_modules, .git)`);
   console.log(`  2. ${chalk.bold('read_file')}    - Reads contents of any file in workspace`);
-  console.log(`  3. ${chalk.bold('write_file')}   - Creates directories and writes/updates files (BUILD mode)`);
+  console.log(`  3. ${chalk.bold('write_file')}   - Creates directories and writes new files (BUILD mode)`);
+  console.log(`  4. ${chalk.bold('edit_file')}    - Surgically replaces code blocks in existing files (BUILD mode)`);
+  console.log(`  5. ${chalk.bold('run_command')}  - Runs commands sequentially one by one (BUILD mode)`);
+  console.log(`  6. ${chalk.bold('grep_search')}  - Fast text/regex search across workspace files`);
+  console.log(`  7. ${chalk.bold('find_files')}   - Finds files by wildcard patterns (e.g. "*.json")`);
+  console.log(`  8. ${chalk.bold('fetch_url')}    - Fetches web/API documentation directly`);
+  console.log(`  9. ${chalk.bold('web_search')}   - Autonomous web search for docs, APIs & solutions`);
   console.log(`  4. ${chalk.bold('run_command')}  - Runs terminal commands (BUILD mode)`);
   console.log(`  5. ${chalk.bold('grep_search')}  - Fast codebase search for text or regex patterns with line numbers`);
   console.log(`  6. ${chalk.bold('find_files')}   - Wildcard file finder across the entire repository`);
@@ -451,4 +463,105 @@ export function showTokenLimitsGuide(): void {
 
   console.log(line);
   console.log(chalk.cyan(`💡 Quick Switch: Type ${chalk.yellow.bold('/provider')} in chat to instantly hop between providers!\n`));
+}
+
+/**
+ * Render visual Git status summary box (/git)
+ */
+export function renderGitStatus(): void {
+  const border = chalk.hex('#00FF7F')('─'.repeat(70));
+  console.log('\n' + border);
+  console.log(chalk.bgHex('#006A4E').white.bold(' 🌿 GIT REPOSITORY STATUS '));
+  console.log(chalk.dim('─'.repeat(70)));
+
+  try {
+    const branch = execSync('git rev-parse --abbrev-ref HEAD 2>/dev/null || git branch --show-current', {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+
+    const status = execSync('git status --short', {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+
+    const log = execSync('git log -3 --oneline 2>/dev/null', {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+
+    console.log(`  ${chalk.gray('Current Branch:')}  ${chalk.cyan.bold(branch || 'Detached / Unknown')}`);
+
+    if (status.length === 0) {
+      console.log(`  ${chalk.gray('Working Tree:')}   ${chalk.green('✔ Working directory is clean')}`);
+    } else {
+      const statusLines = status.split('\n');
+      console.log(`  ${chalk.gray('Modified Files:')} ${chalk.yellow(statusLines.length)} file(s):`);
+      for (const line of statusLines.slice(0, 10)) {
+        const flag = line.slice(0, 2).trim();
+        const file = line.slice(3).trim();
+        const coloredFlag = flag === 'M' ? chalk.yellow('M') : flag === '??' ? chalk.green('?') : chalk.cyan(flag);
+        console.log(`    ${coloredFlag} ${file}`);
+      }
+      if (statusLines.length > 10) {
+        console.log(`    ${chalk.dim(`... and ${statusLines.length - 10} more`)}`);
+      }
+    }
+
+    if (log.length > 0) {
+      console.log(`\n  ${chalk.gray('Recent Commits:')}`);
+      for (const commit of log.split('\n')) {
+        const [hash, ...rest] = commit.split(' ');
+        console.log(`    ${chalk.yellow(hash)} ${chalk.dim(rest.join(' '))}`);
+      }
+    }
+  } catch {
+    console.log(`  ${chalk.yellow('Not a git repository or git is not installed in PATH.')}`);
+  }
+  console.log(border + '\n');
+}
+
+/**
+ * Render visual Unicode directory tree (/tree)
+ */
+export function renderDirectoryTree(dirPath = '.', maxDepth = 2): void {
+  const border = chalk.hex('#00FF7F')('─'.repeat(70));
+  console.log('\n' + border);
+  console.log(chalk.bgHex('#1A237E').white.bold(` 📂 WORKSPACE TREE: ${path.resolve(dirPath)} `));
+  console.log(chalk.dim('─'.repeat(70)));
+
+  const IGNORED = new Set(['node_modules', '.git', '.next', 'dist', 'build', '.cache', 'coverage']);
+
+  function printTree(currentDir: string, prefix = '', depth = 0) {
+    if (depth >= maxDepth) return;
+    let entries: fs.Dirent[] = [];
+    try {
+      entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    const filtered = entries.filter((e) => !IGNORED.has(e.name) && !e.name.startsWith('.'));
+    filtered.sort((a, b) => {
+      if (a.isDirectory() === b.isDirectory()) return a.name.localeCompare(b.name);
+      return a.isDirectory() ? -1 : 1;
+    });
+
+    for (let i = 0; i < filtered.length; i++) {
+      const entry = filtered[i];
+      const isLast = i === filtered.length - 1;
+      const pointer = isLast ? '└── ' : '├── ';
+      const nextPrefix = prefix + (isLast ? '    ' : '│   ');
+
+      if (entry.isDirectory()) {
+        console.log(prefix + pointer + chalk.cyan.bold(entry.name) + chalk.dim('/'));
+        printTree(path.join(currentDir, entry.name), nextPrefix, depth + 1);
+      } else {
+        console.log(prefix + pointer + chalk.white(entry.name));
+      }
+    }
+  }
+
+  printTree(process.cwd());
+  console.log(border + '\n');
 }

@@ -26,10 +26,13 @@ import {
   renderInterruptedNotice,
   renderDoctorReport,
   renderSessionStats,
+  renderGitStatus,
+  renderDirectoryTree,
 } from './ui.js';
 import { safetySession, getSessionChanges, undoLastChange } from './tools.js';
 import { selectAgentModelInteractive } from './models.js';
 import { readOpenCodePrompt, expandOpenCodeMentions } from './prompt.js';
+import { detectProjectContext } from './detector.js';
 
 /**
  * Real-time Escape key listener during agent thinking / tool execution.
@@ -332,6 +335,25 @@ program
         } else {
           console.log(chalk.yellow(`\nℹ️  ${result.message}\n`));
         }
+        continue;
+      }
+
+      if (trimmed === '/git') {
+        renderGitStatus();
+        continue;
+      }
+
+      if (trimmed === '/tree') {
+        renderDirectoryTree();
+        continue;
+      }
+
+      if (trimmed === '/detect' || trimmed === '/stack') {
+        const ctx = detectProjectContext();
+        console.log('\n' + chalk.bold.hex('#00FF7F')('🔍 Detected Workspace Environment'));
+        console.log(chalk.dim('─'.repeat(60)));
+        console.log(ctx.summary.split('\n').slice(1).map(l => '  ' + l).join('\n'));
+        console.log(chalk.dim('─'.repeat(60)) + '\n');
         continue;
       }
 

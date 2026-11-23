@@ -208,6 +208,68 @@ export async function writeFile(filePath: string, content: string): Promise<stri
   }
 }
 
+/**
+ * 3b. edit_file: Surgically edits an existing file by replacing a unique target text block.
+ * Avoids rewriting entire large files, saves tokens, and tracks reversible session history.
+ */
+export async function editFile(filePath: string, target: string, replacement: string): Promise<string> {
+  const rootDir = process.cwd();
+  const targetFile = path.resolve(rootDir, filePath);
+
+  if (!fs.existsSync(targetFile)) {
+    return `Error: File "${filePath}" does not exist. Use write_file to create new files.`;
+  }
+
+  const stat = fs.statSync(targetFile);
+  if (!stat.isFile()) {
+    return `Error: "${filePath}" is a directory, not a file.`;
+  }
+
+  const content = fs.readFileSync(targetFile, 'utf8');
+
+  if (!content.includes(target)) {
+    return `Error: Target string not found in "${filePath}". Please use read_file first to verify the exact lines and whitespace before calling edit_file.`;
+  }
+
+  // Check for uniqueness
+  const occurrences = content.split(target).length - 1;
+  if (occurrences > 1) {
+    return `Warning: Target string matches ${occurrences} times in "${filePath}". Please include more surrounding context lines in 'target' so it matches uniquely.`;
+  }
+
+  // Ask confirmation if auto-approve is disabled
+  if (!safetySession.autoApproveAll) {
+    const summary =
+      `${chalk.yellow('Surgically edit file:')} ${chalk.cyan(filePath)}\n` +
+      `Replacing: ${target.split('\n').length} line(s) (${target.length} bytes)\n` +
+      `With: ${replacement.split('\n').length} line(s) (${replacement.length} bytes)`;
+
+    const decision = await askToolConfirmation('edit_file', summary);
+    if (decision === 'no') {
+      return `Action rejected: User declined editing "${filePath}".`;
+    } else if (decision === 'all') {
+      safetySession.autoApproveAll = true;
+      console.log(chalk.cyan('⚡ Auto-approve enabled for this session.'));
+    }
+  }
+
+  // Track session history for /undo and /diff
+  sessionFileHistory.push({
+    filePath,
+    isNew: false,
+    previousContent: content,
+    newContent: content.replace(target, replacement),
+    timestamp: new Date(),
+  });
+
+  const updatedContent = content.replace(target, replacement);
+  fs.writeFileSync(targetFile, updatedContent, 'utf8');
+
+  const beforeLines = target.split('\n').length;
+  const afterLines = replacement.split('\n').length;
+  return `✔ Successfully edited "${filePath}" (surgically replaced ${beforeLines} line(s) with ${afterLines} line(s)).`;
+}
+
 // Mutex to ensure commands execute strictly ONE BY ONE sequentially
 let commandExecutionMutex = Promise.resolve();
 
@@ -330,6 +392,50 @@ async function executeSequentialCommand(command: string, signal?: AbortSignal): 
 }
 
 /**
+ * Smart Diagnostic Engine: Analyzes failed commands and generates exact,
+ * actionable self-healing recommendations for the model.
+ */
+function diagnoseCommandFailure(command: string, stdout: string, stderr: string, code: number): string | null {
+  const combined = stdout + '\n' + stderr;
+
+  // 1. Missing npm / Node.js package
+  const nodeModuleMatch = combined.match(/(?:Cannot find module|Module not found: Can't resolve) ['"]([^'"]+)['"]/i);
+  if (nodeModuleMatch && nodeModuleMatch[1] && !nodeModuleMatch[1].startsWith('.')) {
+    const pkg = nodeModuleMatch[1].startsWith('@')
+      ? nodeModuleMatch[1].split('/').slice(0, 2).join('/')
+      : nodeModuleMatch[1].split('/')[0];
+    return `💡 Banglacli Smart Diagnostic: Missing npm package "${pkg}" detected. Recommendation: run "npm install ${pkg}" to install it.`;
+  }
+
+  // 2. Missing Python package
+  const pyModuleMatch = combined.match(/(?:ModuleNotFoundError: No module named|ImportError: cannot import name) ['"]([^'"]+)['"]/i);
+  if (pyModuleMatch && pyModuleMatch[1]) {
+    return `💡 Banglacli Smart Diagnostic: Missing Python package "${pyModuleMatch[1]}" detected. Recommendation: run "pip install ${pyModuleMatch[1]}".`;
+  }
+
+  // 3. Port collision (EADDRINUSE)
+  const portMatch = combined.match(/EADDRINUSE.*?[:\s](\d{4,5})\b/i) || combined.match(/port (\d{4,5}) is already in use/i);
+  if (portMatch) {
+    return `💡 Banglacli Smart Diagnostic: Port ${portMatch[1]} is already occupied. Recommendation: use a different port (e.g. PORT=${parseInt(portMatch[1], 10) + 1}) or terminate the existing process.`;
+  }
+
+  // 4. TypeScript compilation error
+  const tsErrorMatch = combined.match(/error TS(\d+):/i);
+  if (tsErrorMatch) {
+    return `💡 Banglacli Smart Diagnostic: TypeScript compilation error (TS${tsErrorMatch[1]}) detected. Inspect the file and line number shown in the error log above and use edit_file or write_file to fix it.`;
+  }
+
+  // 5. Git upstream missing
+  if (combined.includes('has no upstream branch') || combined.includes('set-upstream')) {
+    const branchMatch = combined.match(/git push --set-upstream origin ([^\s]+)/i);
+    const branchName = branchMatch ? branchMatch[1] : 'main';
+    return `💡 Banglacli Smart Diagnostic: Git remote branch has no upstream. Recommendation: run "git push -u origin ${branchName}".`;
+  }
+
+  return null;
+}
+
+/**
  * Spawns an individual command non-interactively with detached stdin and auto-timeout.
  */
 function runActualProcess(command: string, signal?: AbortSignal): Promise<string> {
@@ -424,6 +530,10 @@ function runActualProcess(command: string, signal?: AbortSignal): Promise<string
 
       if (code !== 0 && code !== null) {
         outputParts.unshift(`Command exited with status code: ${code}`);
+        const diag = diagnoseCommandFailure(command, stdout, stderr, code);
+        if (diag) {
+          outputParts.push(diag);
+        }
       }
 
       if (outputParts.length === 0) {
@@ -596,6 +706,67 @@ export async function fetchUrl(targetUrl: string): Promise<string> {
 }
 
 /**
+ * 8. web_search: Searches the web for documentation, API references, or bug solutions.
+ */
+export async function webSearch(query: string): Promise<string> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
+    const apiUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
+    const res = await fetch(apiUrl, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) banglacli/2.0',
+        'Accept': 'application/json',
+      },
+    });
+
+    clearTimeout(timeout);
+
+    if (res.ok) {
+      const data: any = await res.json();
+      const results: string[] = [];
+
+      if (data.Heading) {
+        results.push(`### ${data.Heading}`);
+      }
+      if (data.AbstractText) {
+        results.push(data.AbstractText);
+        if (data.AbstractURL) {
+          results.push(`Source: ${data.AbstractURL}`);
+        }
+      }
+
+      if (Array.isArray(data.RelatedTopics) && data.RelatedTopics.length > 0) {
+        results.push('\n**Related Results:**');
+        for (const item of data.RelatedTopics.slice(0, 5)) {
+          if (item.Text && item.FirstURL) {
+            results.push(`- [${item.Text}](${item.FirstURL})`);
+          } else if (Array.isArray(item.Topics)) {
+            for (const sub of item.Topics.slice(0, 2)) {
+              if (sub.Text && sub.FirstURL) {
+                results.push(`- [${sub.Text}](${sub.FirstURL})`);
+              }
+            }
+          }
+        }
+      }
+
+      if (results.length > 0) {
+        return `[Web Search Results for "${query}"]:\n\n` + results.join('\n');
+      }
+    }
+
+    // Fallback: search via fetchUrl
+    const ddgHtmlUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    return await fetchUrl(ddgHtmlUrl);
+  } catch (err: any) {
+    return `Failed to perform web search for "${query}": ${err.message}`;
+  }
+}
+
+/**
  * Tool dispatcher
  */
 export async function executeTool(
@@ -608,8 +779,8 @@ export async function executeTool(
     return 'Action aborted by user (Escape).';
   }
 
-  // If in PLAN mode, block write and command execution
-  if (mode === 'plan' && (name === 'write_file' || name === 'run_command')) {
+  // If in PLAN mode, block write, edit, and command execution
+  if (mode === 'plan' && (name === 'write_file' || name === 'edit_file' || name === 'run_command')) {
     const errorMsg = `⚠️ Action blocked: banglacli is currently in PLAN MODE. File modifications and terminal commands are disabled. Switch to BUILD mode (/build or /mode) to execute changes.`;
     renderToolCall(name, args);
     renderToolResult(name, errorMsg, true);
@@ -632,6 +803,9 @@ export async function executeTool(
       case 'write_file':
         result = await writeFile(args.filePath, args.content);
         break;
+      case 'edit_file':
+        result = await editFile(args.filePath, args.target, args.replacement);
+        break;
       case 'run_command':
         result = await runCommand(args.command, signal);
         break;
@@ -643,6 +817,9 @@ export async function executeTool(
         break;
       case 'fetch_url':
         result = await fetchUrl(args.url);
+        break;
+      case 'web_search':
+        result = await webSearch(args.query);
         break;
       default:
         result = `Error: Unknown tool "${name}".`;
@@ -777,6 +954,48 @@ export const OPENAI_TOOLS = [
   {
     type: 'function' as const,
     function: {
+      name: 'edit_file',
+      description: 'Surgically edits an existing file by replacing an exact, unique target code block with replacement code. Always read_file first to get the exact lines.',
+      parameters: {
+        type: 'object',
+        properties: {
+          filePath: {
+            type: 'string',
+            description: 'Relative path of the existing file to edit.',
+          },
+          target: {
+            type: 'string',
+            description: 'The exact existing text or lines to be replaced (must match uniquely).',
+          },
+          replacement: {
+            type: 'string',
+            description: 'The new replacement text or lines.',
+          },
+        },
+        required: ['filePath', 'target', 'replacement'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'web_search',
+      description: 'Searches the web for technical documentation, library APIs, and error solutions using DuckDuckGo.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'The technical search query (e.g., "nextjs 15 cookies", "tailwind v4 upgrade").',
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
       name: 'fetch_url',
       description: 'Fetches content or API reference from a public HTTP/HTTPS URL and returns clean readable text or JSON.',
       parameters: {
@@ -891,6 +1110,42 @@ export const GEMINI_TOOLS = [
         },
       },
       {
+        name: 'edit_file',
+        description: 'Surgically edits an existing file by replacing an exact, unique target code block with replacement code. Always read_file first to get the exact lines.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            filePath: {
+              type: Type.STRING,
+              description: 'Relative path of the existing file to edit.',
+            },
+            target: {
+              type: Type.STRING,
+              description: 'The exact existing text or lines to be replaced (must match uniquely).',
+            },
+            replacement: {
+              type: Type.STRING,
+              description: 'The new replacement text or lines.',
+            },
+          },
+          required: ['filePath', 'target', 'replacement'],
+        },
+      },
+      {
+        name: 'web_search',
+        description: 'Searches the web for technical documentation, library APIs, and error solutions using DuckDuckGo.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            query: {
+              type: Type.STRING,
+              description: 'The technical search query (e.g., "nextjs 15 cookies", "tailwind v4 upgrade").',
+            },
+          },
+          required: ['query'],
+        },
+      },
+      {
         name: 'fetch_url',
         description: 'Fetches content or API reference from a public HTTP/HTTPS URL and returns clean readable text or JSON.',
         parameters: {
@@ -913,14 +1168,14 @@ export const GEMINI_TOOLS = [
  */
 export const BUILD_OPENAI_TOOLS = OPENAI_TOOLS;
 export const PLAN_OPENAI_TOOLS = OPENAI_TOOLS.filter((t) =>
-  ['list_files', 'read_file', 'grep_search', 'find_files', 'fetch_url'].includes(t.function.name)
+  ['list_files', 'read_file', 'grep_search', 'find_files', 'fetch_url', 'web_search'].includes(t.function.name)
 );
 
 export const BUILD_GEMINI_TOOLS = GEMINI_TOOLS;
 export const PLAN_GEMINI_TOOLS = [
   {
     functionDeclarations: GEMINI_TOOLS[0].functionDeclarations.filter((t) =>
-      ['list_files', 'read_file', 'grep_search', 'find_files', 'fetch_url'].includes(t.name)
+      ['list_files', 'read_file', 'grep_search', 'find_files', 'fetch_url', 'web_search'].includes(t.name)
     ),
   },
 ];
