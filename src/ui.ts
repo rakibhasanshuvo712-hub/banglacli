@@ -53,7 +53,10 @@ export function printBanner(provider?: string, model?: string, workspace?: strin
   );
   console.log(
     `  ${dim('Speaks natural')} ${chalk.bold.hex('#FFDF00')('বাংলা (Bangla)')}${dim(',')} ` +
-      `${chalk.bold.cyan('Banglish')}${dim(', &')} ${chalk.bold.white('English')}\n`
+      `${chalk.bold.cyan('Banglish')}${dim(', &')} ${chalk.bold.white('English')}`
+  );
+  console.log(
+    `  ${dim('Developer:')} ${chalk.bold.hex('#00FF7F')('Rakib Hasan Shuvo')} ${dim('(@rakibhasanshuvo712-hub)')}\n`
   );
 
   if (provider && model) {
@@ -327,15 +330,12 @@ export function showHelp(): void {
   console.log(`  7. ${chalk.bold('find_files')}   - Finds files by wildcard patterns (e.g. "*.json")`);
   console.log(`  8. ${chalk.bold('fetch_url')}    - Fetches web/API documentation directly`);
   console.log(`  9. ${chalk.bold('web_search')}   - Autonomous web search for docs, APIs & solutions`);
-  console.log(`  4. ${chalk.bold('run_command')}  - Runs terminal commands (BUILD mode)`);
-  console.log(`  5. ${chalk.bold('grep_search')}  - Fast codebase search for text or regex patterns with line numbers`);
-  console.log(`  6. ${chalk.bold('find_files')}   - Wildcard file finder across the entire repository`);
-  console.log(`  7. ${chalk.bold('fetch_url')}    - Fetches clean text/documentation from any public URL`);
 
   console.log(`\n${chalk.yellow.bold('Language Support:')}`);
   console.log(`  • ${chalk.green('Bangla:')}   "একটি React Counter অ্যাপ বানিয়ে দাও"`);
   console.log(`  • ${chalk.green('Banglish:')} "Express diye ekta REST API banaw auth soho"`);
   console.log(`  • ${chalk.green('English:')}  "Build a full-stack Next.js portfolio website"`);
+  console.log(`\n  ${chalk.gray('Lead Developer & Creator:')} ${chalk.hex('#00FF7F').bold('Rakib Hasan Shuvo')} ${chalk.dim('(https://github.com/rakibhasanshuvo712-hub)')}`);
   console.log(chalk.dim('─'.repeat(70)) + '\n');
 }
 

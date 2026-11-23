@@ -285,6 +285,15 @@ banglaCLI --help
 
 ---
 
+## 👨‍💻 Author & Lead Developer
+
+Developed with ❤️ by **Rakib Hasan Shuvo**:
+- **GitHub:** [@rakibhasanshuvo712-hub](https://github.com/rakibhasanshuvo712-hub)
+- **Repository:** [rakibhasanshuvo712-hub/banglacli](https://github.com/rakibhasanshuvo712-hub/banglacli)
+- **Email:** `rakibhasanshuvo712@gmail.com`
+
+---
+
 ## 📄 License
 
-[MIT](LICENSE) © 2026 BanglaCLI Team. Free and open source for everyone.
+[MIT](LICENSE) © 2026 Rakib Hasan Shuvo & BanglaCLI Contributors. Free and open source for everyone.
