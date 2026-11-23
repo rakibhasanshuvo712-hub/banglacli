@@ -7,7 +7,7 @@ export interface AgentModelPreset {
   id: string;
   name: string;
   provider: ProviderType;
-  category: 'free' | 'gemini' | 'deepseek' | 'hy4' | 'glm' | 'groq' | 'local';
+  category: 'free' | 'gemini' | 'deepseek' | 'hy4' | 'glm' | 'groq' | 'flagship' | 'local';
   description: string;
   badge: string;
   baseURL?: string;
@@ -432,6 +432,60 @@ export const AGENT_MODELS: AgentModelPreset[] = [
     contextLength: 'Local RAM',
     baseURL: 'http://localhost:11434/v1',
   },
+
+  // ==========================================
+  // 👑 Frontier AI Coding Agents (OpenCode Flagships)
+  // ==========================================
+  {
+    id: 'anthropic/claude-3.5-sonnet',
+    name: 'Claude 3.5 Sonnet (OpenCode Benchmark SOTA)',
+    provider: 'openrouter',
+    category: 'flagship',
+    description: 'Autonomous full-stack engineering & architectural reasoning champion.',
+    badge: 'SOTA Coding',
+    contextLength: '200,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'openai/gpt-4o',
+    name: 'OpenAI GPT-4o Multimodal Agent',
+    provider: 'openrouter',
+    category: 'flagship',
+    description: 'OpenAI flagship multimodal coding agent with fast tool calling.',
+    badge: 'GPT-4o',
+    contextLength: '128,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'openai/o3-mini',
+    name: 'OpenAI o3-mini Reasoning Agent',
+    provider: 'openrouter',
+    category: 'flagship',
+    description: 'High-speed mathematical & algorithmic chain-of-thought agent.',
+    badge: 'o3-mini',
+    contextLength: '200,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'mistralai/codestral-2508',
+    name: 'Mistral Codestral (Specialized Code Agent)',
+    provider: 'openrouter',
+    category: 'flagship',
+    description: 'Leading European code-specific model with 256k context.',
+    badge: 'Codestral',
+    contextLength: '256,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'qwen/qwen-2.5-coder-32b-instruct',
+    name: 'Qwen 2.5 Coder 32B Instruct',
+    provider: 'openrouter',
+    category: 'flagship',
+    description: 'Frontier programming model tuned specifically for autonomous building.',
+    badge: 'Qwen Coder',
+    contextLength: '32,768',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
 ];
 
 /**
@@ -544,6 +598,11 @@ export async function selectAgentModelInteractive(
         value: 'groq',
         label: `${chalk.bold.hex('#FF9900')('⚡ Groq Cloud Free Tier')} ${chalk.dim('(Llama 3.3 70B, Qwen Coder)')}`,
         hint: '14,400 requests/day, 500+ tokens/sec',
+      },
+      {
+        value: 'flagship',
+        label: `${chalk.bold.hex('#FFD700')('👑 Frontier Flagship Coding Agents')} ${chalk.dim('(Claude 3.5 Sonnet, GPT-4o, o3-mini, Codestral)')}`,
+        hint: 'OpenCode SOTA benchmark models (OpenRouter BYOK)',
       },
       {
         value: 'local',

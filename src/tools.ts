@@ -1,12 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { exec } from 'node:child_process';
-import { promisify } from 'node:util';
+import { spawn } from 'node:child_process';
 import { Type } from '@google/genai';
 import { askToolConfirmation, renderToolCall, renderToolResult } from './ui.js';
 import chalk from 'chalk';
-
-const execAsync = promisify(exec);
 
 export interface SafetySession {
   autoApproveAll: boolean;
@@ -146,7 +143,7 @@ export async function writeFile(filePath: string, content: string): Promise<stri
 }
 
 /**
- * 4. run_command: Run a shell command (with safety confirmation)
+ * 4. run_command: Run a shell command non-interactively (with safety confirmation)
  */
 export async function runCommand(command: string): Promise<string> {
   // Safety confirmation check
@@ -164,44 +161,99 @@ export async function runCommand(command: string): Promise<string> {
 
   console.log(chalk.cyan(`\n⚡ Running command: ${chalk.bold(command)}...`));
 
-  try {
+  return new Promise((resolve) => {
     const isWindows = process.platform === 'win32';
-    const { stdout, stderr } = await execAsync(command, {
+    let sanitizedCommand = command;
+
+    let shellProgram: string;
+    let shellArgs: string[];
+
+    if (isWindows) {
+      // 1. Auto-inject -UseBasicParsing if Invoke-WebRequest or iwr is used without it to prevent IE engine prompt
+      if (/\b(Invoke-WebRequest|iwr)\b/i.test(sanitizedCommand) && !/-UseBasicParsing\b/i.test(sanitizedCommand)) {
+        sanitizedCommand = sanitizedCommand.replace(/\b(Invoke-WebRequest|iwr)\b/gi, '$1 -UseBasicParsing');
+      }
+
+      // 2. Wrap with Non-Interactive preferences so PowerShell never prompts
+      const wrappedCmd = `$ConfirmPreference = 'None'; $ProgressPreference = 'SilentlyContinue'; ${sanitizedCommand}`;
+      shellProgram = 'powershell.exe';
+      shellArgs = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', wrappedCmd];
+    } else {
+      shellProgram = '/bin/sh';
+      shellArgs = ['-c', sanitizedCommand];
+    }
+
+    const child = spawn(shellProgram, shellArgs, {
       cwd: process.cwd(),
-      shell: isWindows ? 'powershell.exe' : undefined,
-      timeout: 180000, // 3 minutes max (good for npm/pip installations)
-      maxBuffer: 20 * 1024 * 1024, // 20MB buffer
+      // stdio: ['ignore', 'pipe', 'pipe'] ensures stdin is detached so commands NEVER freeze on interactive prompts
+      stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
         FORCE_COLOR: '0',
-        CI: 'true', // Prevents interactive prompts from freezing execution
+        CI: 'true',
+        GIT_TERMINAL_PROMPT: '0', // Prevents git from hanging on auth prompt
+        NPM_CONFIG_YES: 'true', // Auto-approves npx / npm package prompts
+        DEBIAN_FRONTEND: 'noninteractive',
       },
     });
 
-    const outputParts: string[] = [];
-    if (stdout && stdout.trim()) {
-      outputParts.push(`[stdout]:\n${stdout.trim()}`);
-    }
-    if (stderr && stderr.trim()) {
-      outputParts.push(`[stderr]:\n${stderr.trim()}`);
-    }
+    let stdout = '';
+    let stderr = '';
+    let isTimedOut = false;
 
-    if (outputParts.length === 0) {
-      return `Command executed successfully with no output (exit code 0).`;
-    }
+    const timeoutMs = 180000; // 3 minutes timeout
+    const timer = setTimeout(() => {
+      isTimedOut = true;
+      try {
+        child.kill('SIGTERM');
+      } catch {}
+    }, timeoutMs);
 
-    return outputParts.join('\n\n');
-  } catch (error: any) {
-    const output = [
-      `Command failed with error: ${error.message}`,
-      error.stdout ? `[stdout]:\n${error.stdout.trim()}` : '',
-      error.stderr ? `[stderr]:\n${error.stderr.trim()}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n\n');
+    child.stdout.on('data', (data) => {
+      if (stdout.length < 20 * 1024 * 1024) {
+        stdout += data.toString();
+      }
+    });
 
-    return output;
-  }
+    child.stderr.on('data', (data) => {
+      if (stderr.length < 20 * 1024 * 1024) {
+        stderr += data.toString();
+      }
+    });
+
+    child.on('error', (err) => {
+      clearTimeout(timer);
+      resolve(`Command failed to start: ${err.message}`);
+    });
+
+    child.on('close', (code) => {
+      clearTimeout(timer);
+
+      if (isTimedOut) {
+        resolve(`Command timed out after ${timeoutMs / 1000} seconds.`);
+        return;
+      }
+
+      const outputParts: string[] = [];
+      if (stdout && stdout.trim()) {
+        outputParts.push(`[stdout]:\n${stdout.trim()}`);
+      }
+      if (stderr && stderr.trim()) {
+        outputParts.push(`[stderr]:\n${stderr.trim()}`);
+      }
+
+      if (code !== 0 && code !== null) {
+        outputParts.unshift(`Command exited with status code: ${code}`);
+      }
+
+      if (outputParts.length === 0) {
+        resolve(`Command executed successfully with no output (exit code 0).`);
+        return;
+      }
+
+      resolve(outputParts.join('\n\n'));
+    });
+  });
 }
 
 /**
