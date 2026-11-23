@@ -482,8 +482,8 @@ export class BanglaAgent {
             `\n✖ Google Gemini Free Servers High Demand (503 UNAVAILABLE):\n` +
               `Google's free servers are temporarily saturated during peak traffic.\n\n` +
               `👉 Immediate Solutions:\n` +
-              `1. Run ${chalk.yellow.bold('/provider')} and switch to ${chalk.green.bold('OpenRouter')} (DeepSeek & GLM-4 are 100% free with no 503 errors).\n` +
-              `2. Run ${chalk.yellow.bold('/model')} to manually switch to ${chalk.green.bold('gemini-2.0-flash')} or ${chalk.green.bold('gemini-1.5-flash')}.\n` +
+              `1. Run ${chalk.yellow.bold('/provider')} and switch to ${chalk.green.bold('OpenRouter')} (DeepSeek & Nemotron are free with no 503 errors).\n` +
+              `2. Run ${chalk.yellow.bold('/model')} to manually switch to ${chalk.green.bold('gemini-3.5-flash-lite')} or ${chalk.green.bold('gemini-3.1-flash-lite')}.\n` +
               `3. Run ${chalk.yellow.bold('/limits')} to view all free token quotas across providers.`
           );
         } else if (errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('429')) {
@@ -527,9 +527,9 @@ export class BanglaAgent {
         });
       }
 
-      // Append function response turn to Gemini contents
+      // Append function response turn to Gemini contents (Gemini API requires role: 'user')
       this.geminiContents.push({
-        role: 'tool',
+        role: 'user',
         parts: toolResponseParts,
       });
     }

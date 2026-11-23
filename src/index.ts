@@ -304,10 +304,10 @@ async function handleSwitchModel(config: BanglaCLIConfig, agent: BanglaAgent): P
       message: chalk.cyan('Switch Gemini Model:'),
       initialValue: config.model,
       options: [
-        { value: 'gemini-2.0-flash', label: 'gemini-2.0-flash (Recommended - Fast, Ultra-Stable & 1M Tokens)' },
-        { value: 'gemini-1.5-flash', label: 'gemini-1.5-flash (Battle-Tested Stability - 1M Tokens)' },
-        { value: 'gemini-3.8-flash', label: 'gemini-3.8-flash (Latest Model - High Demand)' },
-        { value: 'gemini-1.5-pro', label: 'gemini-1.5-pro (Reasoning & 2M Tokens)' },
+        { value: 'gemini-3.5-flash-lite', label: 'gemini-3.5-flash-lite (🌟 Recommended - 100% Free, High Speed & 1M Tokens)' },
+        { value: 'gemini-3.1-flash-lite', label: 'gemini-3.1-flash-lite (Free, Low Latency)' },
+        { value: 'gemini-3.5-flash', label: 'gemini-3.5-flash (Next-Gen Free Flash)' },
+        { value: 'gemini-3.8-flash', label: 'gemini-3.8-flash (Latest Preview)' },
         { value: 'custom_input', label: 'Enter custom model name...' },
       ],
     })) as string;

@@ -7,7 +7,7 @@ export interface AgentModelPreset {
   id: string;
   name: string;
   provider: ProviderType;
-  category: 'free' | 'gemini' | 'groq' | 'local';
+  category: 'free' | 'gemini' | 'deepseek' | 'groq' | 'local';
   description: string;
   badge: string;
   baseURL?: string;
@@ -187,6 +187,70 @@ export const AGENT_MODELS: AgentModelPreset[] = [
     description: 'Latest Google model (auto-fails over to 3.5-flash-lite if 503 occurs).',
     badge: '100% Free',
     contextLength: '1,048,576',
+  },
+
+  // ==========================================
+  // 🧠 DeepSeek Frontier Models (Free Tokens & High Speed)
+  // ==========================================
+  {
+    id: 'deepseek-chat',
+    name: 'DeepSeek V4.1 / V3.2 Chat (🌟 5M Free Tokens)',
+    provider: 'custom',
+    category: 'deepseek',
+    description: 'DeepSeek flagship frontier coding model with 5M free tokens on platform.deepseek.com.',
+    badge: '5M Free',
+    contextLength: '128,000',
+    baseURL: 'https://api.deepseek.com/v1',
+  },
+  {
+    id: 'deepseek-reasoner',
+    name: 'DeepSeek R1 Reasoner (Chain-of-Thought)',
+    provider: 'custom',
+    category: 'deepseek',
+    description: 'DeepSeek frontier reasoning model with free tokens on platform.deepseek.com.',
+    badge: 'R1 Reasoning',
+    contextLength: '128,000',
+    baseURL: 'https://api.deepseek.com/v1',
+  },
+  {
+    id: 'deepseek-r1-distill-llama-70b',
+    name: 'Groq: DeepSeek R1 Distill 70B (Free Tier)',
+    provider: 'custom',
+    category: 'deepseek',
+    description: '500+ tokens/sec DeepSeek R1 reasoning on Groq Cloud free tier (14,400 req/day free).',
+    badge: 'Groq Free',
+    contextLength: '128,000',
+    baseURL: 'https://api.groq.com/openai/v1',
+  },
+  {
+    id: 'deepseek-r1-distill-qwen-32b',
+    name: 'Groq: DeepSeek R1 Distill Qwen 32B (Free Tier)',
+    provider: 'custom',
+    category: 'deepseek',
+    description: 'Ultra-fast specialized coding agent on Groq Cloud free tier.',
+    badge: 'Groq Free',
+    contextLength: '128,000',
+    baseURL: 'https://api.groq.com/openai/v1',
+  },
+  {
+    id: 'deepseek/deepseek-v4.1-flash',
+    name: 'OpenRouter: DeepSeek V4.1 Flash (Latest 2026)',
+    provider: 'openrouter',
+    category: 'deepseek',
+    description: 'Latest high-efficiency DeepSeek V4.1 Flash architecture on OpenRouter.',
+    badge: 'V4.1 Flash',
+    contextLength: '128,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'deepseek/deepseek-chat',
+    name: 'OpenRouter: DeepSeek V4 Frontier Coding',
+    provider: 'openrouter',
+    category: 'deepseek',
+    description: 'DeepSeek flagship coding and instruction model on OpenRouter.',
+    badge: 'DeepSeek SOTA',
+    contextLength: '128,000',
+    baseURL: 'https://openrouter.ai/api/v1',
   },
 
   // ==========================================
@@ -380,6 +444,11 @@ export async function selectAgentModelInteractive(
         value: 'gemini',
         label: `${chalk.bold.yellow('🔷 Google Gemini Free Suite')} ${chalk.dim('(Gemini 3.5/3.1 Flash-Lite, 3.5/3.8 Flash)')}`,
         hint: '1M tokens, 1,500 req/day free tier',
+      },
+      {
+        value: 'deepseek',
+        label: `${chalk.bold.hex('#00D2FF')('🧠 DeepSeek Frontier Models')} ${chalk.dim('(DeepSeek V4.1, R1 Reasoner, Distill 70B)')}`,
+        hint: '5M free tokens on DeepSeek platform, Groq & OpenRouter',
       },
       {
         value: 'groq',
