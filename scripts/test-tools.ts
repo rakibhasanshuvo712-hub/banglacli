@@ -1,4 +1,4 @@
-import { listFiles, readFile, writeFile, runCommand, safetySession } from '../src/tools.js';
+import { listFiles, readFile, writeFile, runCommand, grepSearch, findFiles, safetySession } from '../src/tools.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -33,14 +33,28 @@ async function testAll() {
     throw new Error('listFiles should ignore node_modules');
   }
 
-  // 4. Test runCommand
+  // 4. Test grepSearch
+  const grepRes = await grepSearch('Hello BanglaCLI', 'temp-test/*');
+  console.log('grepSearch result:', grepRes);
+  if (!grepRes.includes('Hello BanglaCLI from test!')) {
+    throw new Error('grepSearch failed to find text in test file');
+  }
+
+  // 5. Test findFiles
+  const findRes = await findFiles('*.txt');
+  console.log('findFiles result:', findRes);
+  if (!findRes.includes('hello.txt')) {
+    throw new Error('findFiles failed to locate hello.txt');
+  }
+
+  // 6. Test runCommand
   const cmdRes = await runCommand('node -e "console.log(12345);"');
   console.log('runCommand result:', cmdRes);
   if (!cmdRes.includes('12345')) {
     throw new Error('runCommand output mismatch');
   }
 
-  // 5. Test executeTool in PLAN mode (should block write_file)
+  // 7. Test executeTool in PLAN mode (should block write_file)
   const { executeTool } = await import('../src/tools.js');
   const planBlockRes = await executeTool('write_file', { filePath: 'temp-test/block.txt', content: 'test' }, 'plan');
   console.log('planMode block result:', planBlockRes);

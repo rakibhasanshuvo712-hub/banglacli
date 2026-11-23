@@ -44,8 +44,8 @@ export function printBanner(provider?: string, model?: string, workspace?: strin
 
   console.log(asciiArt);
   console.log(
-    `  ${chalk.bgHex('#006A4E').white.bold(' 🇧🇩 banglacli ')} ${chalk.hex('#00FF7F')(
-      'The Autonomous BYOK Terminal Coding Agent'
+    `  ${chalk.bgHex('#006A4E').white.bold(' 🇧🇩 banglacli v2.0 ')} ${chalk.hex('#00FF7F')(
+      'Next-Gen Autonomous BYOK Terminal Coding Agent'
     )}`
   );
   console.log(
@@ -63,10 +63,10 @@ export function printBanner(provider?: string, model?: string, workspace?: strin
   console.log(
     `  ${dim('Commands:')} ${chalk.yellow('/mode')} ${dim('•')} ` +
       `${chalk.yellow('/agent')} ${dim('•')} ` +
-      `${chalk.yellow('/provider')} ${dim('•')} ` +
+      `${chalk.yellow('/doctor')} ${dim('•')} ` +
+      `${chalk.yellow('/stats')} ${dim('•')} ` +
       `${chalk.yellow('/limits')} ${dim('•')} ` +
-      `${chalk.yellow('/guide')} ${dim('•')} ` +
-      `${chalk.yellow('/clear')} ${dim('•')} ${chalk.yellow('/exit')}`
+      `${chalk.yellow('/help')} ${dim('•')} ${chalk.yellow('/exit')}`
   );
   console.log(dim('─'.repeat(78)));
 }
@@ -156,6 +156,12 @@ export function renderToolCall(toolName: string, args: Record<string, any>): voi
     console.log(chalk.gray(`Reading: `) + chalk.cyan(args.filePath));
   } else if (toolName === 'list_files') {
     console.log(chalk.gray(`Directory: `) + chalk.cyan(args.dirPath || '.'));
+  } else if (toolName === 'grep_search') {
+    console.log(chalk.gray(`Searching for: `) + chalk.cyan.bold(args.query) + (args.filePattern ? chalk.gray(` in ${args.filePattern}`) : ''));
+  } else if (toolName === 'find_files') {
+    console.log(chalk.gray(`Pattern: `) + chalk.cyan.bold(args.pattern));
+  } else if (toolName === 'fetch_url') {
+    console.log(chalk.gray(`Fetching URL: `) + chalk.cyan.bold(args.url));
   }
 }
 
@@ -219,6 +225,55 @@ export function renderInterruptedNotice(): void {
 }
 
 /**
+ * Render system diagnostic report (OpenCode /doctor style)
+ */
+export function renderDoctorReport(checks: { name: string; status: 'ok' | 'warn' | 'error'; detail: string }[]): void {
+  const border = chalk.hex('#00FF7F')('═'.repeat(74));
+  console.log('\n' + border);
+  console.log(chalk.bgHex('#006A4E').white.bold(' 🩺 BANGLACLI SYSTEM DOCTOR (SYSTEM HEALTH REPORT) '));
+  console.log(chalk.gray('Comprehensive diagnostic check of your agent environment:\n'));
+
+  for (const c of checks) {
+    const symbol =
+      c.status === 'ok'
+        ? chalk.green.bold('  ✔ [PASS]')
+        : c.status === 'warn'
+        ? chalk.yellow.bold('  ⚠️  [WARN]')
+        : chalk.red.bold('  ✖ [FAIL]');
+    console.log(`${symbol} ${chalk.white.bold(c.name)}: ${chalk.gray(c.detail)}`);
+  }
+  console.log(border + '\n');
+}
+
+/**
+ * Render Live Session Intelligence & Cost Tracker (/stats or /cost)
+ */
+export function renderSessionStats(stats: {
+  model: string;
+  provider: string;
+  mode: string;
+  totalTokens: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalRequests: number;
+  estimatedCostSavedUsd: number;
+  filesTouched: number;
+}): void {
+  const border = chalk.hex('#00FF7F')('─'.repeat(70));
+  console.log('\n' + border);
+  console.log(chalk.bgHex('#1A237E').white.bold(' 📊 LIVE SESSION INTELLIGENCE & SAVINGS (OpenCode Style) '));
+  console.log(chalk.dim('─'.repeat(70)));
+  console.log(`  ${chalk.gray('Active Provider:')}    ${chalk.bold.cyan(stats.provider)}`);
+  console.log(`  ${chalk.gray('Selected Model:')}     ${chalk.bold.green(stats.model)}`);
+  console.log(`  ${chalk.gray('Current Mode:')}       ${stats.mode === 'build' ? chalk.green.bold('⚡ BUILD') : chalk.yellow.bold('📋 PLAN')}`);
+  console.log(`  ${chalk.gray('Total LLM Calls:')}    ${chalk.bold.yellow(stats.totalRequests)} calls`);
+  console.log(`  ${chalk.gray('Total Tokens Used:')}  ${chalk.bold.white(stats.totalTokens.toLocaleString())} tokens ${chalk.dim(`(Prompt: ${stats.promptTokens.toLocaleString()} • Completion: ${stats.completionTokens.toLocaleString()})`)}`);
+  console.log(`  ${chalk.gray('Estimated Savings:')}  ${chalk.bold.hex('#00FF7F')(`$${stats.estimatedCostSavedUsd.toFixed(3)} USD`)} ${chalk.dim('(vs commercial GPT-4 / Opus)')}`);
+  console.log(`  ${chalk.gray('Files Touched:')}      ${chalk.bold.cyan(stats.filesTouched)} file(s)`);
+  console.log(border + '\n');
+}
+
+/**
  * Show a styled help manual.
  */
 export function showHelp(): void {
@@ -236,6 +291,8 @@ export function showHelp(): void {
   console.log(`  ${chalk.cyan('/agent')}       - OpenCode AI agent & model selector (Free, HY4, GLM, DeepSeek, Flagship)`);
   console.log(`  ${chalk.cyan('/model')}       - Alias for /agent to quickly switch models`);
   console.log(`  ${chalk.cyan('/provider')}    - Switch AI provider (Gemini, OpenRouter, Custom)`);
+  console.log(`  ${chalk.cyan('/doctor')}      - Run automated environment & configuration diagnostic health check`);
+  console.log(`  ${chalk.cyan('/stats')}       - View live session tokens, LLM calls, and estimated dollar savings`);
   console.log(`  ${chalk.cyan('/diff')}        - Show files modified or created in this session`);
   console.log(`  ${chalk.cyan('/undo')}        - Revert the most recent file change made by agent`);
   console.log(`  ${chalk.cyan('/compact')}     - Compact conversation history to free context window`);
@@ -248,16 +305,20 @@ export function showHelp(): void {
   console.log(`\n${chalk.yellow.bold('OpenCode & Antigravity Interactive Input Controls:')}`);
   console.log(`  • ${chalk.green.bold('Pasting Safety')} : Bracketed paste protection enabled! Pasting code, JSON or multi-line logs`);
   console.log(`                     ${chalk.dim('never auto-submits. It captures cleanly and waits for your Enter key.')}`);
-  console.log(`  • ${chalk.green.bold('@ Mentions')}     : Type ${chalk.cyan('@path/to/file')} (e.g. ${chalk.cyan('@package.json')}) to auto-ingest file content.`);
+  console.log(`  • ${chalk.green.bold('@ Mentions')}     : Type ${chalk.cyan('@path/to/file')} (e.g. ${chalk.cyan('@package.json')}) or ${chalk.cyan('@dir/')} to auto-ingest.`);
+  console.log(`  • ${chalk.green.bold('Web Ingestion')}  : Include any ${chalk.cyan('https://...')} link to auto-fetch documentation or APIs.`);
   console.log(`  • ${chalk.green.bold('Shift + Enter')}  : Insert a new line (${chalk.cyan('Alt+Enter')} or ${chalk.cyan('Ctrl+J')}) for multiline writing.`);
   console.log(`  • ${chalk.green.bold('Enter')}          : Submit your prompt to the active AI agent.`);
   console.log(`  • ${chalk.green.bold('Escape')}         : Clear input buffer while typing; stops agent immediately while running.`);
 
-  console.log(`\n${chalk.yellow.bold('Autonomous Tool Capabilities:')}`);
+  console.log(`\n${chalk.yellow.bold('Autonomous Tool Capabilities (7 Built-in Tools):')}`);
   console.log(`  1. ${chalk.bold('list_files')}   - Lists workspace files (ignoring node_modules, .git)`);
   console.log(`  2. ${chalk.bold('read_file')}    - Reads contents of any file in workspace`);
   console.log(`  3. ${chalk.bold('write_file')}   - Creates directories and writes/updates files (BUILD mode)`);
   console.log(`  4. ${chalk.bold('run_command')}  - Runs terminal commands (BUILD mode)`);
+  console.log(`  5. ${chalk.bold('grep_search')}  - Fast codebase search for text or regex patterns with line numbers`);
+  console.log(`  6. ${chalk.bold('find_files')}   - Wildcard file finder across the entire repository`);
+  console.log(`  7. ${chalk.bold('fetch_url')}    - Fetches clean text/documentation from any public URL`);
 
   console.log(`\n${chalk.yellow.bold('Language Support:')}`);
   console.log(`  • ${chalk.green('Bangla:')}   "একটি React Counter অ্যাপ বানিয়ে দাও"`);

@@ -24,6 +24,9 @@ export function getSystemPrompt(mode: AgentMode = 'build'): string {
 - In this mode, you ONLY have read-only tools:
   1. list_files(dirPath): Explore folders and project architecture.
   2. read_file(filePath): Inspect existing configuration files, packages, and code.
+  3. grep_search(query, filePattern): Search text or regex patterns across the entire codebase to locate functions, classes, and usages.
+  4. find_files(pattern): Find files matching wildcard patterns (e.g. "*.json", "src/**/*.ts").
+  5. fetch_url(url): Fetch documentation, API references, or web content directly from any URL.
 - YOU CANNOT AND MUST NOT write files or run terminal commands. Any attempt will be safely blocked.
 - Your architectural breakdown MUST be thorough and structured:
   1. 🎯 Executive Architecture Summary & Requirements Analysis.
@@ -44,15 +47,18 @@ export function getSystemPrompt(mode: AgentMode = 'build'): string {
   }
 
   // BUILD MODE
-  return `You are banglacli, a world-class Principal Full-Stack Software Engineer and Autonomous AI Coding Agent running directly in the user's terminal. You are designed to outperform modern AI coding agents like OpenCode and Claude Code in intelligence, self-healing, and reliability.
+  return `You are banglacli v2.0, a world-class Principal Full-Stack Software Engineer and Autonomous AI Coding Agent running directly in the user's terminal. You are designed to outperform modern AI coding agents like OpenCode and Claude Code in intelligence, self-healing, search speed, and reliability.
 
 ### 🌟 CURRENT ACTIVE MODE: ⚡ BUILD MODE (AUTONOMOUS BUILDER)
 - You have full autonomous authority to build, edit, test, and execute software.
-- You have all 4 workspace tools:
+- You have all 7 workspace tools:
   1. list_files(dirPath): Explore directories to understand workspace context and file hierarchy.
   2. read_file(filePath): Inspect existing source files before editing.
   3. write_file(filePath, content): Create directories automatically and write complete, production-grade code.
   4. run_command(command): Execute terminal commands (e.g., "npm init -y", "npm install <packages>", build or test scripts).
+  5. grep_search(query, filePattern): Search text or regex across all workspace files instantly.
+  6. find_files(pattern): Locate files matching wildcard patterns across the project.
+  7. fetch_url(url): Fetch documentation, API specs, or web content directly from any URL.
 
 ### 🧠 INTELLIGENT AGENT PROTOCOL (FOLLOW RIGOROUSLY):
 1. **Investigate Before Acting**:
@@ -132,6 +138,14 @@ export class BanglaAgent {
     role: string;
     parts: Array<any>;
   }> = [];
+
+  // Live session metrics (OpenCode /stats tracking)
+  private metrics = {
+    totalTokens: 0,
+    promptTokens: 0,
+    completionTokens: 0,
+    totalRequests: 0,
+  };
 
   constructor(config: BanglaCLIConfig, mode: AgentMode = 'build') {
     this.config = config;
@@ -316,6 +330,23 @@ export class BanglaAgent {
     return {
       openAIMessageCount: this.openAIMessages.length,
       geminiTurnCount: this.geminiContents.length,
+    };
+  }
+
+  /**
+   * Get live session metrics & savings (OpenCode /stats style).
+   */
+  public getSessionMetrics(): {
+    totalTokens: number;
+    promptTokens: number;
+    completionTokens: number;
+    totalRequests: number;
+    estimatedCostSavedUsd: number;
+  } {
+    const costSaved = (this.metrics.totalTokens / 1000) * 0.035;
+    return {
+      ...this.metrics,
+      estimatedCostSavedUsd: Math.round(costSaved * 1000) / 1000,
     };
   }
 
@@ -567,6 +598,13 @@ export class BanglaAgent {
 
       const candidate = response.candidates?.[0];
       const functionCalls = response.functionCalls || [];
+
+      this.metrics.totalRequests++;
+      if (response.usageMetadata) {
+        this.metrics.promptTokens += response.usageMetadata.promptTokenCount || 0;
+        this.metrics.completionTokens += response.usageMetadata.candidatesTokenCount || 0;
+        this.metrics.totalTokens += response.usageMetadata.totalTokenCount || 0;
+      }
 
       // Check if candidate returned content
       if (candidate?.content) {
@@ -820,6 +858,13 @@ export class BanglaAgent {
 
       const message = choice.message;
       this.openAIMessages.push(message);
+
+      this.metrics.totalRequests++;
+      if (completion.usage) {
+        this.metrics.promptTokens += completion.usage.prompt_tokens || 0;
+        this.metrics.completionTokens += completion.usage.completion_tokens || 0;
+        this.metrics.totalTokens += completion.usage.total_tokens || 0;
+      }
 
       // If no tool calls, this is the final assistant response
       if (!message.tool_calls || message.tool_calls.length === 0) {

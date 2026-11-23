@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import fs from 'node:fs';
+import path from 'node:path';
 import readline from 'node:readline';
 import { Command } from 'commander';
 import chalk from 'chalk';
@@ -22,6 +24,8 @@ import {
   renderStatusBar,
   renderPriorityTaskBanner,
   renderInterruptedNotice,
+  renderDoctorReport,
+  renderSessionStats,
 } from './ui.js';
 import { safetySession, getSessionChanges, undoLastChange } from './tools.js';
 import { selectAgentModelInteractive } from './models.js';
@@ -70,8 +74,8 @@ const program = new Command();
 
 program
   .name('banglacli')
-  .description('Autonomous BYOK terminal coding agent that speaks Bangla, Banglish & English.')
-  .version('1.4.0', '-v, --version', 'Output the current version')
+  .description('Next-Gen Autonomous BYOK terminal coding agent that speaks Bangla, Banglish & English.')
+  .version('2.0.0', '-v, --version', 'Output the current version')
   .option('-m, --model <model>', 'Override model for this session')
   .option('-M, --mode <mode>', 'Execution mode: "build" (default) or "plan"', 'build')
   .option('-p, --prompt <prompt>', 'Run a single prompt and exit')
@@ -236,8 +240,74 @@ program
         continue;
       }
 
-      if (trimmed === '/limits' || trimmed === '/tokens' || trimmed === '/cost') {
+      if (trimmed === '/limits' || trimmed === '/tokens') {
         showTokenLimitsGuide();
+        continue;
+      }
+
+      if (trimmed === '/stats' || trimmed === '/cost') {
+        const metrics = agent.getSessionMetrics();
+        const changes = getSessionChanges();
+        renderSessionStats({
+          model: config.model,
+          provider: PROVIDER_LABELS[config.provider] || config.provider,
+          mode: agent.getMode(),
+          totalTokens: metrics.totalTokens,
+          promptTokens: metrics.promptTokens,
+          completionTokens: metrics.completionTokens,
+          totalRequests: metrics.totalRequests,
+          estimatedCostSavedUsd: metrics.estimatedCostSavedUsd,
+          filesTouched: changes.length,
+        });
+        continue;
+      }
+
+      if (trimmed === '/doctor' || trimmed === '/check') {
+        const checks: { name: string; status: 'ok' | 'warn' | 'error'; detail: string }[] = [];
+
+        // 1. Node runtime
+        const nodeVer = process.version;
+        const major = parseInt(nodeVer.replace('v', '').split('.')[0], 10);
+        checks.push({
+          name: 'Node.js Runtime',
+          status: major >= 18 ? 'ok' : 'error',
+          detail: `${nodeVer} (Node 18+ required for modern async streams)`,
+        });
+
+        // 2. Active Provider & Model
+        const hasKey = Boolean(config.apiKey && config.apiKey.trim().length > 5);
+        checks.push({
+          name: 'AI Provider & Key',
+          status: hasKey ? 'ok' : 'error',
+          detail: `${PROVIDER_LABELS[config.provider]} with model "${config.model}" (${hasKey ? 'Configured' : 'Missing API Key'})`,
+        });
+
+        // 3. Workspace access
+        try {
+          const testFile = path.resolve(process.cwd(), '.banglacli_check.tmp');
+          fs.writeFileSync(testFile, 'ok', 'utf8');
+          fs.unlinkSync(testFile);
+          checks.push({
+            name: 'Workspace Read/Write',
+            status: 'ok',
+            detail: `${process.cwd()} (Read/Write verified)`,
+          });
+        } catch (e: any) {
+          checks.push({
+            name: 'Workspace Read/Write',
+            status: 'error',
+            detail: `Cannot write to ${process.cwd()}: ${e.message}`,
+          });
+        }
+
+        // 4. Operating System & Shell
+        checks.push({
+          name: 'OS & Execution Shell',
+          status: 'ok',
+          detail: `${process.platform} (${process.arch}) with non-interactive child process safety`,
+        });
+
+        renderDoctorReport(checks);
         continue;
       }
 
@@ -429,6 +499,85 @@ program
     console.log(`  ${chalk.green.bold('⚡ BUILD Mode:')} Autonomous full-stack coder. Inspects, writes files & runs terminal commands.`);
     console.log(`  ${chalk.yellow.bold('📋 PLAN Mode:')} Senior Architect. Read-only codebase investigation & architectural planning.\n`);
     console.log(chalk.gray('Use "/mode", "/plan", or "/build" inside interactive chat or launch with "banglacli -M plan".\n'));
+  });
+
+// Explicit doctor subcommand (OpenCode style)
+program
+  .command('doctor')
+  .alias('check')
+  .description('Run automated diagnostic check of Node.js runtime, workspace, shell, and provider')
+  .action(() => {
+    let config = getConfig() || {
+      provider: 'openrouter',
+      apiKey: '',
+      model: 'tencent/hy4-flash',
+    };
+
+    const checks: { name: string; status: 'ok' | 'warn' | 'error'; detail: string }[] = [];
+    const nodeVer = process.version;
+    const major = parseInt(nodeVer.replace('v', '').split('.')[0], 10);
+    checks.push({
+      name: 'Node.js Runtime',
+      status: major >= 18 ? 'ok' : 'error',
+      detail: `${nodeVer} (Node 18+ required for modern async streams)`,
+    });
+
+    const hasKey = Boolean(config.apiKey && config.apiKey.trim().length > 5);
+    checks.push({
+      name: 'AI Provider & Key',
+      status: hasKey ? 'ok' : 'error',
+      detail: `${PROVIDER_LABELS[config.provider] || config.provider} with model "${config.model}" (${hasKey ? 'Configured' : 'Missing API Key'})`,
+    });
+
+    try {
+      const testFile = path.resolve(process.cwd(), '.banglacli_check.tmp');
+      fs.writeFileSync(testFile, 'ok', 'utf8');
+      fs.unlinkSync(testFile);
+      checks.push({
+        name: 'Workspace Read/Write',
+        status: 'ok',
+        detail: `${process.cwd()} (Read/Write verified)`,
+      });
+    } catch (e: any) {
+      checks.push({
+        name: 'Workspace Read/Write',
+        status: 'error',
+        detail: `Cannot write to ${process.cwd()}: ${e.message}`,
+      });
+    }
+
+    checks.push({
+      name: 'OS & Execution Shell',
+      status: 'ok',
+      detail: `${process.platform} (${process.arch}) with non-interactive child process safety`,
+    });
+
+    renderDoctorReport(checks);
+  });
+
+// Explicit stats subcommand
+program
+  .command('stats')
+  .alias('cost')
+  .description('Display token limits, pricing, and live cost calculation')
+  .action(() => {
+    let config = getConfig() || {
+      provider: 'openrouter',
+      apiKey: '',
+      model: 'tencent/hy4-flash',
+    };
+
+    renderSessionStats({
+      model: config.model,
+      provider: PROVIDER_LABELS[config.provider] || config.provider,
+      mode: 'build',
+      totalTokens: 0,
+      promptTokens: 0,
+      completionTokens: 0,
+      totalRequests: 0,
+      estimatedCostSavedUsd: 0,
+      filesTouched: 0,
+    });
   });
 
 /**

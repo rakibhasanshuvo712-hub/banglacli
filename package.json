@@ -1,7 +1,7 @@
 {
   "name": "banglacli",
-  "version": "1.4.0",
-  "description": "Production-ready, lightweight BYOK AI coding agent CLI that speaks Bangla, Banglish & English with full-lifecycle language install protocols, auto-cascade resilience and OpenCode-style Build & Plan modes.",
+  "version": "2.0.0",
+  "description": "Production-grade, next-generation BYOK autonomous terminal coding agent that speaks Bangla, Banglish & English with codebase grep search, web ingestion, bracketed paste protection, auto-cascade resilience and OpenCode-style Build & Plan modes.",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {

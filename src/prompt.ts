@@ -238,62 +238,123 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
 }
 
 /**
- * OpenCode @ File Reference Ingestion
+ * OpenCode @ File Reference & Web URL Ingestion
  * 
- * Detects file mentions like @src/agent.ts, @package.json, @config.ts in user prompt,
- * reads the file content from current workspace, and automatically appends it to the context.
+ * Detects file mentions like @src/agent.ts, directory mentions like @src/,
+ * and web URLs like https://... or @https://...
+ * Automatically ingests them into the agent's context.
  */
 export async function expandOpenCodeMentions(rawPrompt: string): Promise<{
   expandedPrompt: string;
   attachedFiles: string[];
 }> {
-  const fileRegex = /@([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9]+)/g;
-  const matches = Array.from(rawPrompt.matchAll(fileRegex));
   const attachedFiles: string[] = [];
-  const fileContexts: string[] = [];
+  const contexts: string[] = [];
 
-  for (const match of matches) {
-    const rawPath = match[1];
-    const resolvedPath = path.resolve(process.cwd(), rawPath);
+  // 1. Web URL Auto-Ingestion (e.g. https://... or @https://...)
+  const urlRegex = /(?:@)?(https?:\/\/[^\s"'<>]+)/g;
+  const urlMatches = Array.from(rawPrompt.matchAll(urlRegex));
 
-    // Ensure target exists and is a regular file
-    if (fs.existsSync(resolvedPath) && fs.statSync(resolvedPath).isFile()) {
-      try {
-        let content = fs.readFileSync(resolvedPath, 'utf-8');
-        const lineCount = content.split('\n').length;
-        const fileSize = fs.statSync(resolvedPath).size;
+  for (const match of urlMatches) {
+    const targetUrl = match[1];
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 6000);
 
-        // Truncate overly large files (> 60KB) to preserve context
-        if (content.length > 60000) {
-          content = content.slice(0, 60000) + '\n\n... [Content truncated to preserve context window] ...';
+      const res = await fetch(targetUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) banglacli/2.0',
+          'Accept': 'text/html,application/xhtml+xml,application/json,text/plain;q=0.9',
+        },
+      });
+
+      clearTimeout(timeout);
+
+      if (res.ok) {
+        const contentType = res.headers.get('content-type') || '';
+        const rawBody = await res.text();
+        let clean = rawBody;
+
+        if (!contentType.includes('application/json')) {
+          clean = rawBody
+            .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+            .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
         }
 
-        const ext = path.extname(resolvedPath).replace('.', '') || 'text';
-        fileContexts.push(
-          `\n--- [Attached Workspace File: @${rawPath} (${lineCount} lines, ${fileSize} bytes)] ---\n` +
-            '```' +
-            ext +
-            '\n' +
-            content +
-            '\n```'
+        const snippet = clean.slice(0, 15000);
+        contexts.push(
+          `\n--- [Attached Web Resource: ${targetUrl} (${snippet.length} chars)] ---\n` +
+            snippet +
+            '\n'
         );
+        attachedFiles.push(`web:${targetUrl.slice(0, 45)}...`);
+      }
+    } catch {}
+  }
 
-        attachedFiles.push(`@${rawPath}`);
-      } catch {}
+  // 2. Workspace File / Directory Ingestion (@path)
+  const fileRegex = /@([a-zA-Z0-9_\-\./\\]+)/g;
+  const fileMatches = Array.from(rawPrompt.matchAll(fileRegex));
+
+  for (const match of fileMatches) {
+    const rawPath = match[1];
+    if (rawPath.startsWith('http://') || rawPath.startsWith('https://')) continue;
+
+    const resolvedPath = path.resolve(process.cwd(), rawPath);
+
+    if (fs.existsSync(resolvedPath)) {
+      const stat = fs.statSync(resolvedPath);
+      if (stat.isFile()) {
+        try {
+          let content = fs.readFileSync(resolvedPath, 'utf-8');
+          const lineCount = content.split('\n').length;
+          const fileSize = stat.size;
+
+          if (content.length > 60000) {
+            content = content.slice(0, 60000) + '\n\n... [Content truncated to preserve context window] ...';
+          }
+
+          const ext = path.extname(resolvedPath).replace('.', '') || 'text';
+          contexts.push(
+            `\n--- [Attached Workspace File: @${rawPath} (${lineCount} lines, ${fileSize} bytes)] ---\n` +
+              '```' +
+              ext +
+              '\n' +
+              content +
+              '\n```'
+          );
+
+          attachedFiles.push(`@${rawPath}`);
+        } catch {}
+      } else if (stat.isDirectory()) {
+        try {
+          const files = fs.readdirSync(resolvedPath).slice(0, 40);
+          contexts.push(
+            `\n--- [Attached Directory Listing: @${rawPath}/ (${files.length} items)] ---\n` +
+              files.join('\n') +
+              '\n'
+          );
+          attachedFiles.push(`@${rawPath}/`);
+        } catch {}
+      }
     }
   }
 
   if (attachedFiles.length > 0) {
     console.log(
-      chalk.bgHex('#004D40').hex('#00FF7F').bold(' 📎 OpenCode File Ingestion: ') +
-        chalk.white(` Attached ${attachedFiles.length} file(s): `) +
+      chalk.bgHex('#004D40').hex('#00FF7F').bold(' 📎 OpenCode Resource Ingestion: ') +
+        chalk.white(` Attached ${attachedFiles.length} item(s): `) +
         chalk.cyan.bold(attachedFiles.join(', '))
     );
   }
 
   let finalPrompt = rawPrompt;
-  if (fileContexts.length > 0) {
-    finalPrompt += '\n\n' + fileContexts.join('\n');
+  if (contexts.length > 0) {
+    finalPrompt += '\n\n' + contexts.join('\n');
   }
 
   return {

@@ -336,6 +336,165 @@ export async function runCommand(command: string, signal?: AbortSignal): Promise
 }
 
 /**
+ * 5. grep_search: Search text or regex across workspace files (ignoring node_modules/.git)
+ */
+export async function grepSearch(query: string, filePattern?: string, maxMatches = 50): Promise<string> {
+  const rootDir = process.cwd();
+  const matches: string[] = [];
+  let re: RegExp;
+
+  try {
+    re = new RegExp(query, 'i');
+  } catch {
+    re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+  }
+
+  const patternFilter = filePattern
+    ? new RegExp(filePattern.replace(/\./g, '\\.').replace(/\*/g, '.*'), 'i')
+    : null;
+
+  function walk(dir: string) {
+    if (matches.length >= maxMatches) return;
+    let entries: fs.Dirent[] = [];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      if (matches.length >= maxMatches) break;
+      if (IGNORED_DIRS.has(entry.name) || entry.name.startsWith('.')) continue;
+
+      const fullPath = path.join(dir, entry.name);
+      const relPath = path.relative(rootDir, fullPath).replace(/\\/g, '/');
+
+      if (entry.isDirectory()) {
+        walk(fullPath);
+      } else if (entry.isFile()) {
+        if (patternFilter && !patternFilter.test(relPath)) continue;
+
+        const ext = path.extname(entry.name).toLowerCase();
+        if (['.png', '.jpg', '.jpeg', '.gif', '.zip', '.tar', '.gz', '.ico', '.pdf', '.exe', '.dll', '.bin'].includes(ext)) {
+          continue;
+        }
+
+        try {
+          const stat = fs.statSync(fullPath);
+          if (stat.size > 500000) continue;
+
+          const content = fs.readFileSync(fullPath, 'utf8');
+          const lines = content.split('\n');
+
+          for (let i = 0; i < lines.length; i++) {
+            if (matches.length >= maxMatches) break;
+            if (re.test(lines[i])) {
+              const preview = lines[i].trim().slice(0, 160);
+              matches.push(`${relPath}:${i + 1}: ${preview}`);
+            }
+          }
+        } catch {}
+      }
+    }
+  }
+
+  walk(rootDir);
+
+  if (matches.length === 0) {
+    return `No matches found for query "${query}".`;
+  }
+
+  return `Found ${matches.length} match(es) for "${query}":\n` + matches.join('\n');
+}
+
+/**
+ * 6. find_files: Find files matching wildcard pattern across workspace
+ */
+export async function findFiles(pattern: string, maxResults = 50): Promise<string> {
+  const rootDir = process.cwd();
+  const results: string[] = [];
+  const regex = new RegExp(pattern.replace(/\./g, '\\.').replace(/\*/g, '.*'), 'i');
+
+  function walk(dir: string) {
+    if (results.length >= maxResults) return;
+    let entries: fs.Dirent[] = [];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      if (results.length >= maxResults) break;
+      if (IGNORED_DIRS.has(entry.name) || entry.name.startsWith('.')) continue;
+
+      const fullPath = path.join(dir, entry.name);
+      const relPath = path.relative(rootDir, fullPath).replace(/\\/g, '/');
+
+      if (entry.isDirectory()) {
+        walk(fullPath);
+      } else if (entry.isFile()) {
+        if (regex.test(entry.name) || regex.test(relPath)) {
+          results.push(relPath);
+        }
+      }
+    }
+  }
+
+  walk(rootDir);
+
+  if (results.length === 0) {
+    return `No files found matching pattern "${pattern}".`;
+  }
+
+  return `Found ${results.length} file(s) matching "${pattern}":\n` + results.join('\n');
+}
+
+/**
+ * 7. fetch_url: Fetch documentation or webpage text from HTTP/HTTPS URL
+ */
+export async function fetchUrl(targetUrl: string): Promise<string> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
+    const res = await fetch(targetUrl, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) banglacli/2.0',
+        'Accept': 'text/html,application/xhtml+xml,application/json,text/plain;q=0.9',
+      },
+    });
+
+    clearTimeout(timeout);
+
+    if (!res.ok) {
+      return `HTTP error ${res.status}: ${res.statusText}`;
+    }
+
+    const contentType = res.headers.get('content-type') || '';
+    const rawText = await res.text();
+
+    if (contentType.includes('application/json')) {
+      return rawText.slice(0, 30000);
+    }
+
+    // Strip HTML and script/style tags for clean readable text
+    const cleanText = rawText
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const truncated = cleanText.slice(0, 25000);
+    return `[Fetched Content from ${targetUrl} (${truncated.length} chars)]:\n\n${truncated}`;
+  } catch (err: any) {
+    return `Failed to fetch URL "${targetUrl}": ${err.message}`;
+  }
+}
+
+/**
  * Tool dispatcher
  */
 export async function executeTool(
@@ -374,6 +533,15 @@ export async function executeTool(
         break;
       case 'run_command':
         result = await runCommand(args.command, signal);
+        break;
+      case 'grep_search':
+        result = await grepSearch(args.query, args.filePattern);
+        break;
+      case 'find_files':
+        result = await findFiles(args.pattern);
+        break;
+      case 'fetch_url':
+        result = await fetchUrl(args.url);
         break;
       default:
         result = `Error: Unknown tool "${name}".`;
@@ -467,6 +635,61 @@ export const OPENAI_TOOLS = [
       },
     },
   },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'grep_search',
+      description: 'Searches text or regex patterns across all files in the workspace (ignoring node_modules, .git). Returns line numbers and matches.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'The text or regex to search for in files.',
+          },
+          filePattern: {
+            type: 'string',
+            description: 'Optional file path or wildcard filter (e.g., "*.ts", "src/*").',
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'find_files',
+      description: 'Finds files across workspace matching wildcard pattern (e.g., "*.json", "*config*", "src/**/*.ts").',
+      parameters: {
+        type: 'object',
+        properties: {
+          pattern: {
+            type: 'string',
+            description: 'Wildcard or file pattern to find.',
+          },
+        },
+        required: ['pattern'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'fetch_url',
+      description: 'Fetches content or API reference from a public HTTP/HTTPS URL and returns clean readable text or JSON.',
+      parameters: {
+        type: 'object',
+        properties: {
+          url: {
+            type: 'string',
+            description: 'The full HTTP or HTTPS URL to fetch.',
+          },
+        },
+        required: ['url'],
+      },
+    },
+  },
 ];
 
 /**
@@ -534,6 +757,52 @@ export const GEMINI_TOOLS = [
           required: ['command'],
         },
       },
+      {
+        name: 'grep_search',
+        description: 'Searches text or regex patterns across all files in the workspace (ignoring node_modules, .git). Returns line numbers and matches.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            query: {
+              type: Type.STRING,
+              description: 'The text or regex to search for in files.',
+            },
+            filePattern: {
+              type: Type.STRING,
+              description: 'Optional file path or wildcard filter (e.g., "*.ts", "src/*").',
+            },
+          },
+          required: ['query'],
+        },
+      },
+      {
+        name: 'find_files',
+        description: 'Finds files across workspace matching wildcard pattern (e.g., "*.json", "*config*", "src/**/*.ts").',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            pattern: {
+              type: Type.STRING,
+              description: 'Wildcard or file pattern to find.',
+            },
+          },
+          required: ['pattern'],
+        },
+      },
+      {
+        name: 'fetch_url',
+        description: 'Fetches content or API reference from a public HTTP/HTTPS URL and returns clean readable text or JSON.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            url: {
+              type: Type.STRING,
+              description: 'The full HTTP or HTTPS URL to fetch.',
+            },
+          },
+          required: ['url'],
+        },
+      },
     ],
   },
 ];
@@ -543,14 +812,14 @@ export const GEMINI_TOOLS = [
  */
 export const BUILD_OPENAI_TOOLS = OPENAI_TOOLS;
 export const PLAN_OPENAI_TOOLS = OPENAI_TOOLS.filter((t) =>
-  ['list_files', 'read_file'].includes(t.function.name)
+  ['list_files', 'read_file', 'grep_search', 'find_files', 'fetch_url'].includes(t.function.name)
 );
 
 export const BUILD_GEMINI_TOOLS = GEMINI_TOOLS;
 export const PLAN_GEMINI_TOOLS = [
   {
     functionDeclarations: GEMINI_TOOLS[0].functionDeclarations.filter((t) =>
-      ['list_files', 'read_file'].includes(t.name)
+      ['list_files', 'read_file', 'grep_search', 'find_files', 'fetch_url'].includes(t.name)
     ),
   },
 ];
