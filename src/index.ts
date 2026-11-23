@@ -415,11 +415,23 @@ program
         continue;
       }
 
-      if (trimmed === '/model' || trimmed === '/agent') {
+      if (
+        trimmed === '/model' ||
+        trimmed === '/models' ||
+        trimmed === '/agent' ||
+        trimmed === '/agents' ||
+        trimmed === '/select-model' ||
+        trimmed === '/choose-model'
+      ) {
         const newConfig = await selectAgentModelInteractive(config);
         if (newConfig) {
           config = newConfig;
           agent.updateConfig(newConfig);
+          console.log(
+            chalk.green(
+              `\n✔ Active Model switched to: ${chalk.bold(config.model)} (${PROVIDER_LABELS[config.provider]})\n`
+            )
+          );
         }
         continue;
       }

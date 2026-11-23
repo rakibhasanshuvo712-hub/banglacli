@@ -98,16 +98,27 @@ async function selectModelForProvider(
   currentModel?: string
 ): Promise<string | null> {
   if (provider === 'gemini') {
+    const geminiOptions = [
+      { value: 'gemini-2.0-flash', label: 'gemini-2.0-flash (🌟 Google Flagship Free Coder - 1M Tokens, 1,500 RPD)' },
+      { value: 'gemini-2.0-flash-lite', label: 'gemini-2.0-flash-lite (Ultra-Fast 30 RPM Free)' },
+      { value: 'gemini-2.5-flash', label: 'gemini-2.5-flash (Next-Gen Flash Preview)' },
+      { value: 'gemini-2.5-pro', label: 'gemini-2.5-pro (2M Context Frontier Preview)' },
+      { value: 'gemini-3.5-flash-lite', label: 'gemini-3.5-flash-lite (100% Free & Active, 1M Tokens)' },
+      { value: 'gemini-3.1-flash-lite', label: 'gemini-3.1-flash-lite (Free, Low Latency)' },
+      { value: 'gemini-3.5-flash', label: 'gemini-3.5-flash (Next-Gen Free Flash)' },
+      { value: 'gemini-1.5-flash', label: 'gemini-1.5-flash (Battle-Tested Stable, 1M Tokens)' },
+      { value: 'gemini-1.5-pro', label: 'gemini-1.5-pro (2M Context Long-Form)' },
+      { value: 'gemini-3.8-flash', label: 'gemini-3.8-flash (Latest Preview)' },
+      { value: 'custom_input', label: 'Enter custom model name manually...' },
+    ];
+
+    const hasMatch = geminiOptions.some((o) => o.value === currentModel);
+    const initialVal = hasMatch ? currentModel : geminiOptions[0].value;
+
     const modelChoice = (await p.select({
       message: chalk.cyan('Select Gemini Model:'),
-      initialValue: currentModel || 'gemini-3.5-flash-lite',
-      options: [
-        { value: 'gemini-3.5-flash-lite', label: 'gemini-3.5-flash-lite (🌟 Recommended - 100% Free, High Speed & 1M Tokens)' },
-        { value: 'gemini-3.1-flash-lite', label: 'gemini-3.1-flash-lite (Free, Low Latency)' },
-        { value: 'gemini-3.5-flash', label: 'gemini-3.5-flash (Next-Gen Free Flash)' },
-        { value: 'gemini-3.8-flash', label: 'gemini-3.8-flash (Latest Preview)' },
-        { value: 'custom_input', label: 'Enter custom model name manually...' },
-      ],
+      initialValue: initialVal,
+      options: geminiOptions,
     })) as string;
 
     if (p.isCancel(modelChoice)) return null;
@@ -115,23 +126,37 @@ async function selectModelForProvider(
     if (modelChoice === 'custom_input') {
       const customModel = (await p.text({
         message: 'Enter Gemini model ID:',
-        initialValue: 'gemini-3.5-flash-lite',
+        initialValue: 'gemini-2.0-flash',
       })) as string;
       if (p.isCancel(customModel)) return null;
       return customModel.trim();
     }
     return modelChoice;
   } else if (provider === 'openrouter') {
+    const openrouterOptions = [
+      { value: 'openrouter/free', label: 'openrouter/free (🌟 Recommended - Best Free Model with Tools)' },
+      { value: 'google/lyria-3-pro-preview', label: 'google/lyria-3-pro-preview (1M Context Free)' },
+      { value: 'google/lyria-3-clip-preview', label: 'google/lyria-3-clip-preview (1M Context Free)' },
+      { value: 'meta-llama/llama-3.3-70b-instruct:free', label: 'meta-llama/llama-3.3-70b-instruct:free (Free 70B Model)' },
+      { value: 'qwen/qwen-2.5-coder-32b-instruct:free', label: 'qwen/qwen-2.5-coder-32b-instruct:free (Free 32B Coder)' },
+      { value: 'deepseek/deepseek-r1:free', label: 'deepseek/deepseek-r1:free (Free Reasoning Model)' },
+      { value: 'deepseek/deepseek-chat:free', label: 'deepseek/deepseek-chat:free (Free 671B Chat/Code)' },
+      { value: 'particle-ai/particle-1:free', label: 'particle-ai/particle-1:free (1M Context Free Coder)' },
+      { value: 'nvidia/nemotron-3-ultra-550b-a55b:free', label: 'nvidia/nemotron-3-ultra-550b-a55b:free (550B MoE 1M)' },
+      { value: 'google/gemma-4-31b-it:free', label: 'google/gemma-4-31b-it:free (Free 31B Coding & Chat)' },
+      { value: 'nvidia/nemotron-3.5-lightning:free', label: 'nvidia/nemotron-3.5-lightning:free (Free Fast Model)' },
+      { value: 'tencent/hy4-flash', label: 'tencent/hy4-flash (Tencent HY4 Free Tokens)' },
+      { value: 'z-ai/glm-5.3-flash', label: 'z-ai/glm-5.3-flash (GLM 5.3 1M Free Tokens)' },
+      { value: 'custom_input', label: 'Enter custom OpenRouter model name...' },
+    ];
+
+    const hasMatch = openrouterOptions.some((o) => o.value === currentModel);
+    const initialVal = hasMatch ? currentModel : openrouterOptions[0].value;
+
     const modelChoice = (await p.select({
       message: chalk.cyan('Select OpenRouter Model:'),
-      initialValue: currentModel || 'openrouter/free',
-      options: [
-        { value: 'openrouter/free', label: 'openrouter/free (Recommended - Best Free Model with Tools)' },
-        { value: 'google/gemma-4-31b-it:free', label: 'google/gemma-4-31b-it:free (Free 31B Coding & Chat)' },
-        { value: 'nvidia/nemotron-3.5-lightning:free', label: 'nvidia/nemotron-3.5-lightning:free (Free Fast Model)' },
-        { value: 'inclusionai/ling-3.2-flash:free', label: 'inclusionai/ling-3.2-flash:free (Free Flash Model)' },
-        { value: 'custom_input', label: 'Enter custom OpenRouter model name...' },
-      ],
+      initialValue: initialVal,
+      options: openrouterOptions,
     })) as string;
 
     if (p.isCancel(modelChoice)) return null;

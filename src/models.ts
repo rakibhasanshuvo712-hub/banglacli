@@ -168,6 +168,56 @@ export const AGENT_MODELS: AgentModelPreset[] = [
     contextLength: '1,048,576',
     baseURL: 'https://openrouter.ai/api/v1',
   },
+  {
+    id: 'meta-llama/llama-3.3-70b-instruct:free',
+    name: 'Meta Llama 3.3 70B Instruct (Free)',
+    provider: 'openrouter',
+    category: 'free',
+    description: "Meta's flagship open-weights 70B model with 128k context on OpenRouter free tier.",
+    badge: '70B Free',
+    contextLength: '128,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'qwen/qwen-2.5-coder-32b-instruct:free',
+    name: 'Qwen 2.5 Coder 32B Instruct (Free)',
+    provider: 'openrouter',
+    category: 'free',
+    description: 'Specialized 32B programming model tuned for full-stack autonomous building.',
+    badge: 'Coder Free',
+    contextLength: '32,768',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'mistralai/mistral-small-24b-instruct-2501:free',
+    name: 'Mistral Small 24B Instruct (Free)',
+    provider: 'openrouter',
+    category: 'free',
+    description: 'Compact, fast reasoning and code generation model from Mistral AI on free tier.',
+    badge: '24B Free',
+    contextLength: '32,768',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'deepseek/deepseek-r1:free',
+    name: 'DeepSeek R1 Reasoner (Free on OpenRouter)',
+    provider: 'openrouter',
+    category: 'free',
+    description: 'Frontier reasoning chain-of-thought model served for free on OpenRouter.',
+    badge: 'R1 Free',
+    contextLength: '64,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'deepseek/deepseek-chat:free',
+    name: 'DeepSeek V3 Chat (Free on OpenRouter)',
+    provider: 'openrouter',
+    category: 'free',
+    description: 'Leading 671B parameter coding and instruction model served for free on OpenRouter.',
+    badge: 'V3 Free',
+    contextLength: '64,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
 
   // ==========================================
   // 🔷 Google Gemini Suite (100% Free Tier: 1M Tokens, 1,500 Req/Day)
@@ -621,6 +671,11 @@ export const OPENROUTER_FREE_CASCADE_CHAIN = [
   'openrouter/free',
   'google/lyria-3-pro-preview',
   'google/lyria-3-clip-preview',
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'qwen/qwen-2.5-coder-32b-instruct:free',
+  'deepseek/deepseek-r1:free',
+  'deepseek/deepseek-chat:free',
+  'mistralai/mistral-small-24b-instruct-2501:free',
   'tencent/hy4-flash',
   'z-ai/glm-5.3-flash',
   'particle-ai/particle-1:free',
@@ -708,8 +763,8 @@ export async function selectAgentModelInteractive(
       },
       {
         value: 'gemini',
-        label: `${chalk.bold.yellow('🔷 Google Gemini Free Suite')} ${chalk.dim('(Gemini 3.5/3.1 Flash-Lite, 3.5/3.8 Flash)')}`,
-        hint: '1M tokens, 1,500 req/day free tier',
+        label: `${chalk.bold.yellow('🔷 Google Gemini Free Suite')} ${chalk.dim('(Gemini 2.0/2.5/3.5 Flash & Pro, 1.5 Flash)')}`,
+        hint: '1M - 2M tokens context, 1,500 req/day 100% free',
       },
       {
         value: 'deepseek',
@@ -800,13 +855,18 @@ export async function selectAgentModelInteractive(
     hint: m.description,
   }));
 
+  // CRITICAL FIX: Ensure initialValue exists in modelOptions!
+  // If initialValue is not in options, @clack/core fails to set focus/cursor, breaking Enter selection.
+  const hasMatch = modelOptions.some((m) => m.value === currentConfig.model);
+  const safeInitialValue = hasMatch ? currentConfig.model : modelOptions[0]?.value;
+
   const selectedModelId = (await p.select({
     message: chalk.cyan('Select AI Model:'),
-    initialValue: currentConfig.model,
+    initialValue: safeInitialValue,
     options: modelOptions,
   })) as string;
 
-  if (p.isCancel(selectedModelId)) return null;
+  if (p.isCancel(selectedModelId) || !selectedModelId) return null;
 
   const preset =
     modelsToShow.find((m) => m.id === selectedModelId) ||
@@ -818,28 +878,51 @@ export async function selectAgentModelInteractive(
   let targetApiKey = currentConfig.apiKey;
   let targetBaseURL = preset.baseURL || currentConfig.baseURL;
 
-  // Check if provider switch is required
-  if (targetProvider !== currentConfig.provider) {
+  // Check if provider switch is required or if custom base URL changed (e.g. Groq vs DeepSeek vs Cerebras)
+  const isCustomBaseUrlChange =
+    targetProvider === 'custom' &&
+    preset.baseURL &&
+    currentConfig.baseURL &&
+    preset.baseURL !== currentConfig.baseURL;
+
+  if (targetProvider !== currentConfig.provider || isCustomBaseUrlChange) {
     const saved = currentConfig.savedProviders?.[targetProvider];
 
-    if (saved && saved.apiKey) {
+    if (saved && saved.apiKey && !isCustomBaseUrlChange) {
       targetApiKey = saved.apiKey;
       targetBaseURL = preset.baseURL || saved.baseURL;
     } else {
       // Need API key for the new provider
+      const serviceName = preset.baseURL?.includes('groq.com')
+        ? 'Groq Cloud'
+        : preset.baseURL?.includes('deepseek.com')
+        ? 'DeepSeek'
+        : preset.baseURL?.includes('cerebras.ai')
+        ? 'Cerebras'
+        : PROVIDER_LABELS[targetProvider];
+
+      const serviceUrl = preset.baseURL?.includes('groq.com')
+        ? 'https://console.groq.com/keys'
+        : preset.baseURL?.includes('deepseek.com')
+        ? 'https://platform.deepseek.com/api_keys'
+        : preset.baseURL?.includes('cerebras.ai')
+        ? 'https://cloud.cerebras.ai'
+        : PROVIDER_KEY_URLS[targetProvider];
+
       p.note(
-        `${chalk.white('Get key for ' + PROVIDER_LABELS[targetProvider] + ':')}\n` +
-          `${chalk.bold.underline.cyan(PROVIDER_KEY_URLS[targetProvider])}\n`,
+        `${chalk.white('Get API key for ' + serviceName + ':')}\n` +
+          `${chalk.bold.underline.cyan(serviceUrl)}\n`,
         chalk.bold('API Key Required')
       );
 
       const enteredKey = (await p.password({
-        message: chalk.cyan(`Enter API Key for ${PROVIDER_LABELS[targetProvider]}:`),
+        message: chalk.cyan(`Enter API Key for ${serviceName}:`),
         validate: (v) => (!v || v.trim().length === 0 ? 'Key cannot be empty!' : undefined),
       })) as string;
 
       if (p.isCancel(enteredKey)) return null;
       targetApiKey = enteredKey.trim();
+      targetBaseURL = preset.baseURL;
     }
   }
 
