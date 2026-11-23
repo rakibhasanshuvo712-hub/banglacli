@@ -20,7 +20,7 @@ import {
   showTokenLimitsGuide,
   renderStatusBar,
 } from './ui.js';
-import { safetySession } from './tools.js';
+import { safetySession, getSessionChanges, undoLastChange } from './tools.js';
 import { selectAgentModelInteractive } from './models.js';
 
 const program = new Command();
@@ -188,8 +188,63 @@ program
         continue;
       }
 
-      if (trimmed === '/limits' || trimmed === '/tokens') {
+      if (trimmed === '/limits' || trimmed === '/tokens' || trimmed === '/cost') {
         showTokenLimitsGuide();
+        continue;
+      }
+
+      if (trimmed === '/diff' || trimmed === '/changes') {
+        const changes = getSessionChanges();
+        if (changes.length === 0) {
+          console.log(chalk.yellow('\nℹ️  No file modifications or creations recorded in this session.\n'));
+        } else {
+          console.log('\n' + chalk.bold.hex('#00FF7F')('📁 Files Modified / Created in this Session:'));
+          console.log(chalk.dim('─'.repeat(60)));
+          changes.forEach((c, idx) => {
+            const status = c.isNew ? chalk.green('[NEW]') : chalk.yellow('[MODIFIED]');
+            const lineCount = c.newContent.split('\n').length;
+            console.log(`  ${idx + 1}. ${status} ${chalk.cyan.bold(c.filePath)} ${chalk.dim(`(${lineCount} lines, ${c.newContent.length} bytes)`)}`);
+          });
+          console.log(chalk.dim('─'.repeat(60)) + '\n');
+        }
+        continue;
+      }
+
+      if (trimmed === '/undo') {
+        const result = undoLastChange();
+        if (result.success) {
+          console.log(chalk.green(`\n${result.message}\n`));
+        } else {
+          console.log(chalk.yellow(`\nℹ️  ${result.message}\n`));
+        }
+        continue;
+      }
+
+      if (trimmed === '/compact') {
+        const result = agent.compactHistory();
+        console.log(
+          chalk.green(
+            `\n✔ Conversation history compacted!\n` +
+              `Turns before: ${chalk.yellow(result.turnsBefore)} ➔ Turns after: ${chalk.green(result.turnsAfter)}\n` +
+              `Context window optimized for faster responses and lower token load.\n`
+          )
+        );
+        continue;
+      }
+
+      if (trimmed === '/session' || trimmed === '/status') {
+        const changes = getSessionChanges();
+        const mem = agent.getHistoryStats();
+        console.log('\n' + chalk.bold.hex('#00FF7F')('📊 Active Session Status (OpenCode Style)'));
+        console.log(chalk.dim('─'.repeat(60)));
+        console.log(`  ${chalk.gray('Provider:')}       ${chalk.bold(PROVIDER_LABELS[config.provider])}`);
+        console.log(`  ${chalk.gray('Active Model:')}   ${chalk.cyan.bold(config.model)}`);
+        console.log(`  ${chalk.gray('Active Mode:')}    ${agent.getMode() === 'build' ? chalk.green.bold('⚡ BUILD') : chalk.yellow.bold('📋 PLAN')}`);
+        console.log(`  ${chalk.gray('Working Dir:')}    ${chalk.white(process.cwd())}`);
+        console.log(`  ${chalk.gray('Files Touched:')}  ${chalk.yellow(changes.length)} files`);
+        console.log(`  ${chalk.gray('Auto-Approve:')}   ${safetySession.autoApproveAll ? chalk.green('Enabled (-y)') : chalk.gray('Confirm per action')}`);
+        console.log(`  ${chalk.gray('Memory Turns:')}   ${chalk.cyan(mem.openAIMessageCount + mem.geminiTurnCount)} turns`);
+        console.log(chalk.dim('─'.repeat(60)) + '\n');
         continue;
       }
 

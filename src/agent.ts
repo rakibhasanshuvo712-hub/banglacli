@@ -275,6 +275,51 @@ export class BanglaAgent {
   }
 
   /**
+   * Compact conversation memory (OpenCode style /compact).
+   * Summarizes earlier tool calls & outputs into an optimized memory context.
+   */
+  public compactHistory(): { turnsBefore: number; turnsAfter: number } {
+    const turnsBefore = this.openAIMessages.length + this.geminiContents.length;
+
+    if (this.openAIMessages.length > 5) {
+      const systemMsg = this.openAIMessages[0];
+      const recent = this.openAIMessages.slice(-4);
+      const intermediateUserQueries: string[] = [];
+
+      for (let i = 1; i < this.openAIMessages.length - 4; i++) {
+        const msg = this.openAIMessages[i];
+        if (msg.role === 'user' && typeof msg.content === 'string') {
+          intermediateUserQueries.push(msg.content.slice(0, 100));
+        }
+      }
+
+      const summaryNote: OpenAI.Chat.Completions.ChatCompletionMessageParam = {
+        role: 'system',
+        content: `[CONTEXT COMPACTED]: Earlier conversation covered ${intermediateUserQueries.length} user queries including: ${intermediateUserQueries.join('; ')}. Tool details archived to optimize token context.`,
+      };
+
+      this.openAIMessages = [systemMsg, summaryNote, ...recent];
+    }
+
+    if (this.geminiContents.length > 4) {
+      this.geminiContents = this.geminiContents.slice(-4);
+    }
+
+    const turnsAfter = this.openAIMessages.length + this.geminiContents.length;
+    return { turnsBefore, turnsAfter };
+  }
+
+  /**
+   * Get stats about active conversation memory.
+   */
+  public getHistoryStats(): { openAIMessageCount: number; geminiTurnCount: number } {
+    return {
+      openAIMessageCount: this.openAIMessages.length,
+      geminiTurnCount: this.geminiContents.length,
+    };
+  }
+
+  /**
    * Main chat turn loop with automatic tool execution and cross-provider failover.
    */
   public async chat(userInput: string): Promise<string> {

@@ -14,6 +14,60 @@ export const safetySession: SafetySession = {
   autoApproveAll: false,
 };
 
+export interface FileChangeRecord {
+  filePath: string;
+  isNew: boolean;
+  previousContent: string | null;
+  newContent: string;
+  timestamp: Date;
+}
+
+// Track file modifications in the current session (OpenCode style)
+export const sessionFileHistory: FileChangeRecord[] = [];
+
+/**
+ * Get all files modified or created during the active session.
+ */
+export function getSessionChanges(): FileChangeRecord[] {
+  return [...sessionFileHistory];
+}
+
+/**
+ * Revert the most recent file change made in this session (OpenCode /undo).
+ */
+export function undoLastChange(): { success: boolean; message: string } {
+  if (sessionFileHistory.length === 0) {
+    return { success: false, message: 'No file changes recorded in this session to undo.' };
+  }
+
+  const lastChange = sessionFileHistory.pop()!;
+  const rootDir = process.cwd();
+  const targetFile = path.resolve(rootDir, lastChange.filePath);
+
+  try {
+    if (lastChange.isNew) {
+      if (fs.existsSync(targetFile)) {
+        fs.unlinkSync(targetFile);
+        return {
+          success: true,
+          message: `✔ Undid creation of "${lastChange.filePath}" (file removed).`,
+        };
+      }
+    } else {
+      if (lastChange.previousContent !== null) {
+        fs.writeFileSync(targetFile, lastChange.previousContent, 'utf8');
+        return {
+          success: true,
+          message: `✔ Reverted "${lastChange.filePath}" to its previous version (${lastChange.previousContent.length} bytes).`,
+        };
+      }
+    }
+    return { success: true, message: `✔ Reverted "${lastChange.filePath}".` };
+  } catch (err: any) {
+    return { success: false, message: `Failed to undo "${lastChange.filePath}": ${err.message}` };
+  }
+}
+
 const IGNORED_DIRS = new Set([
   'node_modules',
   '.git',
@@ -132,10 +186,22 @@ export async function writeFile(filePath: string, content: string): Promise<stri
   }
 
   try {
+    const isNew = !fs.existsSync(targetFile);
+    const previousContent = isNew ? null : fs.readFileSync(targetFile, 'utf8');
+
     if (!fs.existsSync(dirName)) {
       fs.mkdirSync(dirName, { recursive: true });
     }
     fs.writeFileSync(targetFile, content, 'utf8');
+
+    sessionFileHistory.push({
+      filePath: path.relative(rootDir, targetFile).replace(/\\/g, '/'),
+      isNew,
+      previousContent,
+      newContent: content,
+      timestamp: new Date(),
+    });
+
     return `Successfully wrote to "${filePath}" (${content.length} bytes).`;
   } catch (error: any) {
     return `Error writing file "${filePath}": ${error.message}`;
