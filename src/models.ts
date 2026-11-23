@@ -7,7 +7,7 @@ export interface AgentModelPreset {
   id: string;
   name: string;
   provider: ProviderType;
-  category: 'free' | 'gemini' | 'deepseek' | 'groq' | 'local';
+  category: 'free' | 'gemini' | 'deepseek' | 'hy4' | 'glm' | 'groq' | 'local';
   description: string;
   badge: string;
   baseURL?: string;
@@ -254,6 +254,84 @@ export const AGENT_MODELS: AgentModelPreset[] = [
   },
 
   // ==========================================
+  // ⚡ Tencent HY4 Suite (1M Token Context - Free Promotional Tokens)
+  // ==========================================
+  {
+    id: 'tencent/hy4-flash',
+    name: 'Tencent Hy4 Flash (🌟 1M Context - Free Promo)',
+    provider: 'openrouter',
+    category: 'hy4',
+    description: 'Tencent frontier Hy4 Flash model with 1,048,576 token context and ultra-fast generation.',
+    badge: 'Hy4 1M Flash',
+    contextLength: '1,048,576',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'tencent/hy4',
+    name: 'Tencent Hy4 (1M Context Frontier Reasoning)',
+    provider: 'openrouter',
+    category: 'hy4',
+    description: 'Tencent flagship Hy4 architecture optimized for deep reasoning and code generation.',
+    badge: 'Hy4 1M Frontier',
+    contextLength: '1,048,576',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'tencent/hy4-preview',
+    name: 'Tencent Hy4 Preview (Latest Checkpoint)',
+    provider: 'openrouter',
+    category: 'hy4',
+    description: 'Cutting-edge preview checkpoint of Tencent Hy4 with 1 Million token context.',
+    badge: 'Hy4 Preview',
+    contextLength: '1,048,576',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+
+  // ==========================================
+  // 🚀 Zhipu AI GLM 5.3 Suite (Daily Free Tokens - 1M Context)
+  // ==========================================
+  {
+    id: 'z-ai/glm-5.3-flash',
+    name: 'GLM 5.3 Flash (🌟 Daily Free Tokens & 1M Context)',
+    provider: 'openrouter',
+    category: 'glm',
+    description: 'Z.ai latest GLM 5.3 Flash with 1,048,576 token context and daily free tokens on BigModel.',
+    badge: 'GLM 5.3 Flash',
+    contextLength: '1,048,576',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'z-ai/glm-5.3',
+    name: 'GLM 5.3 Frontier (1M Context Full-Stack Coding)',
+    provider: 'openrouter',
+    category: 'glm',
+    description: 'Z.ai frontier GLM 5.3 model for complex coding, system design and architecture.',
+    badge: 'GLM 5.3 Frontier',
+    contextLength: '1,048,576',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'z-ai/glm-5.3-flashx',
+    name: 'GLM 5.3 FlashX (High-Speed Throughput)',
+    provider: 'openrouter',
+    category: 'glm',
+    description: 'Optimized high-throughput version of GLM 5.3 with 1 Million token context.',
+    badge: 'GLM 5.3 FlashX',
+    contextLength: '1,048,576',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'z-ai/glm-5.3-prime',
+    name: 'GLM 5.3 Prime (Maximum Reasoning)',
+    provider: 'openrouter',
+    category: 'glm',
+    description: 'Prime tier GLM 5.3 reasoning agent for difficult algorithms and complex tasks.',
+    badge: 'GLM 5.3 Prime',
+    contextLength: '1,000,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+
+  // ==========================================
   // ⚡ Groq Cloud Free Tier (14,400 Req/Day Free)
   // ==========================================
   {
@@ -363,6 +441,8 @@ export const AGENT_MODELS: AgentModelPreset[] = [
  */
 export const OPENROUTER_FREE_CASCADE_CHAIN = [
   'openrouter/free',
+  'tencent/hy4-flash',
+  'z-ai/glm-5.3-flash',
   'particle-ai/particle-1:free',
   'nvidia/nemotron-3-ultra-550b-a55b:free',
   'google/gemma-4-31b-it:free',
@@ -449,6 +529,16 @@ export async function selectAgentModelInteractive(
         value: 'deepseek',
         label: `${chalk.bold.hex('#00D2FF')('🧠 DeepSeek Frontier Models')} ${chalk.dim('(DeepSeek V4.1, R1 Reasoner, Distill 70B)')}`,
         hint: '5M free tokens on DeepSeek platform, Groq & OpenRouter',
+      },
+      {
+        value: 'hy4',
+        label: `${chalk.bold.hex('#FF6D00')('⚡ Tencent HY4 Suite')} ${chalk.dim('(Hy4 Flash, Hy4 1M Frontier, Hy4 Preview)')}`,
+        hint: '1M tokens context, free promotional tokens',
+      },
+      {
+        value: 'glm',
+        label: `${chalk.bold.hex('#7C4DFF')('🚀 Zhipu AI GLM 5.3 Suite')} ${chalk.dim('(GLM 5.3 Flash, GLM 5.3 1M, FlashX, Prime)')}`,
+        hint: '1M tokens, daily free tokens on BigModel & OpenRouter',
       },
       {
         value: 'groq',

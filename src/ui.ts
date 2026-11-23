@@ -250,8 +250,19 @@ export function showFreeApiKeyGuide(): void {
   console.log(`     • ${chalk.yellow('inclusionai/ling-3.2-flash:free')} (1M token context hybrid reasoning)`);
   console.log(`   ${chalk.gray('Quota:')} 100% Free with zero payment or credit card needed!\n`);
 
-  // 3. DeepSeek Platform
-  console.log(chalk.bold.hex('#00D2FF')('3. DeepSeek Platform (5,000,000 Free Tokens - 🌟 SOTA Coding)'));
+  // 3. Tencent HY4 Suite
+  console.log(chalk.bold.hex('#FF6D00')('3. Tencent HY4 Suite (1M Token Context - Free Promotional Tokens)'));
+  console.log(`   ${chalk.gray('Models:')} ${chalk.yellow('tencent/hy4-flash')} (1M Context), ${chalk.yellow('tencent/hy4')} (1M Frontier), ${chalk.yellow('tencent/hy4-preview')}`);
+  console.log(`   ${chalk.gray('Highlights:')} 1,048,576 token context window, high-throughput code generation & reasoning.\n`);
+
+  // 4. Zhipu AI GLM 5.3 Suite
+  console.log(chalk.bold.hex('#7C4DFF')('4. Zhipu AI GLM 5.3 Suite (Daily Free Tokens - 1M Context)'));
+  console.log(`   ${chalk.gray('Direct Link:')} ${chalk.bold.underline.cyan('https://open.bigmodel.cn')}`);
+  console.log(`   ${chalk.gray('Models:')} ${chalk.yellow('z-ai/glm-5.3-flash')} (1M Context), ${chalk.yellow('z-ai/glm-5.3')}, ${chalk.yellow('z-ai/glm-5.3-flashx')}, ${chalk.yellow('z-ai/glm-5.3-prime')}`);
+  console.log(`   ${chalk.gray('Highlights:')} Daily free tokens refreshed every day on Zhipu AI platform & OpenRouter.\n`);
+
+  // 5. DeepSeek Platform
+  console.log(chalk.bold.hex('#00D2FF')('5. DeepSeek Platform (5,000,000 Free Tokens - 🌟 SOTA Coding)'));
   console.log(`   ${chalk.gray('Direct Link:')} ${chalk.bold.underline.cyan('https://platform.deepseek.com')}`);
   console.log(`   ${chalk.gray('Steps:')} Sign up with Email/Google ➔ Create API Key ➔ 5 Million free tokens credited.`);
   console.log(`   ${chalk.gray('In banglacli:')} Select "${chalk.white('Custom OpenAI-Compatible')}"`);
@@ -259,23 +270,23 @@ export function showFreeApiKeyGuide(): void {
   console.log(`   ${chalk.gray('Models:')} ${chalk.yellow('deepseek-chat')} (V4.1 / V3.2 Coding), ${chalk.yellow('deepseek-reasoner')} (R1 Chain-of-Thought)`);
   console.log(`   ${chalk.gray('Quota:')} 5,000,000 free tokens upon registration!\n`);
 
-  // 4. Groq (Blazing Fast Inference)
-  console.log(chalk.bold.hex('#00FF7F')('4. Groq Cloud (Ultra-Fast 500+ tokens/sec - Free Tier)'));
+  // 6. Groq (Blazing Fast Inference)
+  console.log(chalk.bold.hex('#00FF7F')('6. Groq Cloud (Ultra-Fast 500+ tokens/sec - Free Tier)'));
   console.log(`   ${chalk.gray('Direct Link:')} ${chalk.bold.underline.cyan('https://console.groq.com/keys')}`);
   console.log(`   ${chalk.gray('Steps:')} Select "${chalk.white('Custom OpenAI-Compatible')}" in banglacli.`);
   console.log(`   ${chalk.gray('Base URL:')} ${chalk.cyan('https://api.groq.com/openai/v1')}`);
   console.log(`   ${chalk.gray('Free Models:')} ${chalk.yellow('deepseek-r1-distill-llama-70b')}, ${chalk.yellow('deepseek-r1-distill-qwen-32b')}, ${chalk.yellow('llama-3.3-70b-versatile')}, ${chalk.yellow('qwen-2.5-coder-32b')}`);
   console.log(`   ${chalk.gray('Quota:')} 14,400 Requests per day free!\n`);
 
-  // 5. Cerebras Cloud (1,800+ tokens/sec - Free Tier)
-  console.log(chalk.bold.hex('#00FF7F')('5. Cerebras Cloud (World\'s Fastest 1,800+ tokens/sec - Free Tier)'));
+  // 7. Cerebras Cloud (1,800+ tokens/sec - Free Tier)
+  console.log(chalk.bold.hex('#00FF7F')('7. Cerebras Cloud (World\'s Fastest 1,800+ tokens/sec - Free Tier)'));
   console.log(`   ${chalk.gray('Direct Link:')} ${chalk.bold.underline.cyan('https://cloud.cerebras.ai')}`);
   console.log(`   ${chalk.gray('Base URL:')} ${chalk.cyan('https://api.cerebras.ai/v1')}`);
   console.log(`   ${chalk.gray('Free Models:')} ${chalk.yellow('llama3.3-70b')}, ${chalk.yellow('llama3.1-8b')} (128k Context)`);
   console.log(`   ${chalk.gray('Quota:')} Free tier available with ultra-low latency!\n`);
 
-  // 6. Local Offline Models (Ollama)
-  console.log(chalk.bold.hex('#00FF7F')('6. Local Offline (100% Private, Free & Offline via Ollama)'));
+  // 8. Local Offline Models (Ollama)
+  console.log(chalk.bold.hex('#00FF7F')('8. Local Offline (100% Private, Free & Offline via Ollama)'));
   console.log(`   ${chalk.gray('Download:')} ${chalk.bold.underline.cyan('https://ollama.com')}`);
   console.log(`   ${chalk.gray('Run in Terminal:')} ${chalk.white('ollama run qwen2.5-coder')}`);
   console.log(`   ${chalk.gray('In banglacli:')} Choose "${chalk.white('Custom OpenAI-Compatible')}"`);

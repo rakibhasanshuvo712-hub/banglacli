@@ -52,8 +52,11 @@ It is 100% **BYOK (Bring Your Own Key)** — you don't need costly subscriptions
 - ⚡ **100% BYOK & Serverless**:
   - No middleman backend. Your API keys are stored locally on your machine via `conf`.
   - Supports **Google Gemini** (`gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`, `gemini-3.5-flash`, `gemini-3.8-flash`).
-  - Supports **OpenRouter** (`openrouter/free`, `particle-ai/particle-1:free`, `nvidia/nemotron-3-ultra-550b-a55b:free`, `google/gemma-4-31b-it:free`, `dots-studio/dots-3-note-preview:free`).
-  - Supports **Custom OpenAI-Compatible** endpoints (Groq Cloud, Ollama, DeepSeek API).
+  - Supports **Tencent HY4** (`tencent/hy4-flash`, `tencent/hy4`, `tencent/hy4-preview` - 1M token context).
+  - Supports **Zhipu AI GLM 5.3** (`z-ai/glm-5.3-flash`, `z-ai/glm-5.3`, `z-ai/glm-5.3-flashx`, `z-ai/glm-5.3-prime`).
+  - Supports **DeepSeek Frontier** (`deepseek-chat` [5M free tokens], `deepseek-reasoner` [R1], `deepseek/deepseek-v4.1-flash`).
+  - Supports **OpenRouter Free Tier** (`openrouter/free`, `particle-ai/particle-1:free`, `nvidia/nemotron-3-ultra-550b-a55b:free`, `google/gemma-4-31b-it:free`, `dots-studio/dots-3-note-preview:free`).
+  - Supports **Custom OpenAI-Compatible** endpoints (Groq Cloud, Ollama, DeepSeek API, BigModel).
 - 🛠️ **Autonomous Project Builder (4 Native Tools)**:
   - `list_files(dirPath)`: Explores workspace directory hierarchy (auto-ignoring `node_modules` and `.git`).
   - `read_file(filePath)`: Inspects existing source code before editing.
@@ -218,9 +221,9 @@ You don't need to spend any money or enter credit cards to use `banglaCLI`. Here
 | Provider | Model | Context Window | Req / Min (RPM) | Tokens / Min (TPM) | Req / Day (RPD) |
 |---|---|---|---|---|---|
 | **Google Gemini** | `gemini-3.5-flash-lite` | **1,048,576** tokens | 15 RPM | **1,000,000** TPM | **1,500** RPD |
-| **Google Gemini** | `gemini-3.1-flash-lite` | **1,048,576** tokens | 15 RPM | **1,000,000** TPM | **1,500** RPD |
-| **Google Gemini** | `gemini-3.5-flash` | **1,048,576** tokens | 15 RPM | **1,000,000** TPM | **1,500** RPD |
-| **Google Gemini** | `gemini-3.8-flash` | **1,048,576** tokens | 15 RPM | **1,000,000** TPM | **1,500** RPD |
+| **Tencent HY4** | `tencent/hy4-flash` | **1,048,576** tokens | 20 RPM | Generous Free | Promo Tokens |
+| **Zhipu AI GLM 5.3** | `z-ai/glm-5.3-flash` | **1,048,576** tokens | 20 RPM | Generous Free | Daily Refreshed |
+| **DeepSeek Platform**| `deepseek-chat` (V4.1) | 128,000 tokens | High Speed | 5M Free Tokens | Free Signup |
 | **OpenRouter** | `openrouter/free` | 200,000 tokens | 20 RPM | Generous Free | ~200 RPD |
 | **OpenRouter** | `particle-ai/particle-1:free` | **1,048,576** tokens | 20 RPM | Generous Free | ~200 RPD |
 | **Groq Cloud** | `llama-3.3-70b-versatile` | 128,000 tokens | 30 RPM | 6,000 TPM | **14,400** RPD |
