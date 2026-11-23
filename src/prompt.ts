@@ -119,18 +119,22 @@ function renderContentLine(
 /**
  * OpenCode & Antigravity Style Interactive Boxed Prompt
  * 
- * Features:
- * 1. Terminal Bottom Framed Box Widget (╭──╮, │  │, ╰──╯):
- *    Provides an elegant, dedicated input container at the downside of the CLI,
- *    displaying active Mode, selected Model badge, and shortcut hints.
- * 2. Zero Duplication / No Header Stacking:
- *    Renders frame with adaptive responsive width so borders NEVER wrap
- *    regardless of terminal size or split-pane width.
- *    Single-line typing updates in-place without re-rendering outer borders.
- * 3. Bracketed paste mode (\x1b[?2004h) + Burst paste protection:
- *    When pasting multi-line text, logs, or code, it captures the entire paste cleanly.
- * 4. Multi-line typing (Shift+Enter / Alt+Enter / Ctrl+J).
- * 5. Esc to clear / cancel, Enter to submit.
+ * Architecture:
+ * 1. Single Top Border Render:
+ *    The top border (╭── ⚡ BUILD ── 🤖 model ──╮) is rendered and printed EXACTLY ONCE
+ *    at prompt startup. It is NEVER redrawn or cleared during keystrokes or pastes.
+ *    This completely eliminates any header duplication or vertical stacking.
+ * 2. In-Place Active Line Updates:
+ *    Typing and backspacing on the active input line updates in-place (\r│ ❯ <text> │),
+ *    never touching or moving above the top border.
+ * 3. Safe Multi-Line & Paste Expansion:
+ *    When multi-line text is pasted or inserted (Shift+Enter), the new lines stream
+ *    downward and the bottom border (╰── hints ──╯) is drawn cleanly underneath.
+ * 4. Bracketed Paste & Burst Paste Safety:
+ *    Captures pasted code / terminal logs safely without premature execution.
+ * 5. Strictly Bounded Width:
+ *    Guaranteed <= (termCols - 4) with Unicode/emoji-aware cell width calculation,
+ *    preventing any auto-wrap margin bugs on Windows terminals.
  */
 export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promise<string | null> {
   const isBuildMode = options.mode === 'build';
@@ -155,7 +159,9 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
     }
 
     // Enable Bracketed Paste Mode in terminal
-    process.stdout.write('\x1b[?2004h');
+    try {
+      process.stdout.write('\x1b[?2004h');
+    } catch {}
 
     const wasRaw = process.stdin.isRaw;
     try {
@@ -168,48 +174,57 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
     let cursorCol = 0;
     let inBracketedPaste = false;
     let pasteBuffer = '';
-    let hasRendered = false;
 
-    // Full Box Redraw (used on initial render, multiline expand, paste, or resize)
-    const renderFullBox = () => {
-      const boxWidth = getSafeBoxWidth();
-      const top = renderTopBorder(boxWidth, isBuildMode, options.model, borderColor);
-      const bottom = renderBottomBorder(boxWidth, borderColor);
-      const contents = bufferLines.map((line, idx) =>
-        renderContentLine(boxWidth, line, idx === 0, isBuildMode, borderColor)
-      );
+    const boxWidth = getSafeBoxWidth();
 
-      if (hasRendered) {
-        // Move cursor up to top border and clear down
-        process.stdout.write(`\r\x1b[${1 + cursorLine}A\x1b[J`);
-      } else {
-        process.stdout.write('\n');
-      }
+    // 1. Print the top border ONCE
+    const top = renderTopBorder(boxWidth, isBuildMode, options.model, borderColor);
+    process.stdout.write(top + '\n');
 
-      // Output complete framed box
-      process.stdout.write([top, ...contents, bottom].join('\n') + '\n');
-      hasRendered = true;
+    // 2. Print initial empty content line and bottom border
+    const line0 = renderContentLine(boxWidth, '', true, isBuildMode, borderColor);
+    const bottom = renderBottomBorder(boxWidth, borderColor);
+    process.stdout.write(line0 + '\n');
+    process.stdout.write(bottom);
 
-      // Position cursor at exact active typing position inside the box
-      const linesUp = (bufferLines.length - cursorLine);
-      const activeCol = (cursorLine === 0 ? 5 : 7) + Math.min(cursorCol, boxWidth - 8);
-      process.stdout.write(`\x1b[${linesUp}A\x1b[${activeCol}G`);
-    };
+    // Place cursor on line 0 at column 5 (directly after "│ ❯ ")
+    process.stdout.write('\x1b[1A\x1b[5G');
 
-    // Fast In-Place Line Update (used for typing & backspacing within a single line)
+    // Update active line in-place without touching any other line
     const updateActiveLineInPlace = () => {
-      if (bufferLines.length > 1) {
-        renderFullBox();
-        return;
-      }
-      const boxWidth = getSafeBoxWidth();
-      const lineStr = renderContentLine(boxWidth, bufferLines[0], true, isBuildMode, borderColor);
-      const activeCol = 5 + Math.min(cursorCol, boxWidth - 8);
+      const curWidth = getSafeBoxWidth();
+      const lineStr = renderContentLine(
+        curWidth,
+        bufferLines[cursorLine],
+        cursorLine === 0,
+        isBuildMode,
+        borderColor
+      );
+      const activeCol = (cursorLine === 0 ? 5 : 7) + Math.min(cursorCol, curWidth - 8);
       process.stdout.write(`\r${lineStr}\r\x1b[${activeCol}G`);
     };
 
-    // Initial render of empty box
-    renderFullBox();
+    // Redraw content lines and bottom border from startLine down
+    const redrawContentFrom = (startLine: number) => {
+      const curWidth = getSafeBoxWidth();
+      const linesToDraw: string[] = [];
+
+      for (let i = startLine; i < bufferLines.length; i++) {
+        linesToDraw.push(
+          renderContentLine(curWidth, bufferLines[i], i === 0, isBuildMode, borderColor)
+        );
+      }
+      linesToDraw.push(renderBottomBorder(curWidth, borderColor));
+
+      // Overwrite from startLine down and clear any leftovers
+      process.stdout.write('\r\x1b[J');
+      process.stdout.write(linesToDraw.join('\n'));
+
+      // Move cursor back up from bottom border to cursorLine
+      const linesUpFromBottom = (bufferLines.length - cursorLine);
+      const activeCol = (cursorLine === 0 ? 5 : 7) + Math.min(cursorCol, curWidth - 8);
+      process.stdout.write(`\x1b[${linesUpFromBottom}A\x1b[${activeCol}G`);
+    };
 
     const cleanup = () => {
       try {
@@ -217,7 +232,6 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
       } catch {}
 
       process.stdin.removeListener('data', onData);
-      process.stdout.removeListener('resize', onResize);
 
       try {
         if (!wasRaw) {
@@ -229,7 +243,7 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
 
     const submit = () => {
       cleanup();
-      // Move cursor cleanly below the box
+      // Move cursor down past bottom border
       const downLines = (bufferLines.length - cursorLine);
       process.stdout.write(`\x1b[${downLines}B\r\n`);
       resolve(bufferLines.join('\n').trim());
@@ -242,11 +256,6 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
       resolve(null);
     };
 
-    const onResize = () => {
-      renderFullBox();
-    };
-    process.stdout.on('resize', onResize);
-
     const handlePastedText = (pasted: string) => {
       const normalized = pasted.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
       const pastedLines = normalized.split('\n');
@@ -255,11 +264,7 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
         const cur = bufferLines[cursorLine];
         bufferLines[cursorLine] = cur.slice(0, cursorCol) + pastedLines[0] + cur.slice(cursorCol);
         cursorCol += pastedLines[0].length;
-        if (bufferLines.length === 1) {
-          updateActiveLineInPlace();
-        } else {
-          renderFullBox();
-        }
+        updateActiveLineInPlace();
       } else {
         const cur = bufferLines[cursorLine];
         const before = cur.slice(0, cursorCol);
@@ -269,10 +274,13 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
         const middle = pastedLines.slice(1, -1);
         const last = pastedLines[pastedLines.length - 1];
 
+        const prevLine = cursorLine;
         bufferLines.splice(cursorLine + 1, 0, ...middle, last + after);
         cursorLine += pastedLines.length - 1;
         cursorCol = last.length;
-        renderFullBox();
+
+        // Redraw from the line that was modified down to bottom border
+        redrawContentFrom(prevLine);
       }
     };
 
@@ -335,26 +343,37 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
       // Escape
       if (str === '\x1b') {
         if (bufferLines.join('').length > 0) {
+          // If multiline, move cursor back up to line 0 first
+          if (cursorLine > 0) {
+            process.stdout.write(`\x1b[${cursorLine}A`);
+          }
           bufferLines = [''];
           cursorLine = 0;
           cursorCol = 0;
-          updateActiveLineInPlace();
+          redrawContentFrom(0);
         } else {
           cancel();
         }
         return;
       }
 
-      // Shift+Enter / Alt+Enter / Ctrl+J: Insert newline inside box
-      if (str === '\x0a' || str === '\x1b\x0d' || str === '\x1b\r') {
+      // Shift+Enter / Alt+Enter / Ctrl+J / modern terminal modified enter: Insert newline inside box
+      if (
+        str === '\x0a' ||
+        str === '\x1b\x0d' ||
+        str === '\x1b\r' ||
+        str === '\x1b[13;2u' ||
+        str === '\x1b[13;5u'
+      ) {
         const cur = bufferLines[cursorLine];
         const before = cur.slice(0, cursorCol);
         const after = cur.slice(cursorCol);
+        const prevLine = cursorLine;
         bufferLines[cursorLine] = before;
         bufferLines.splice(cursorLine + 1, 0, after);
         cursorLine++;
         cursorCol = 0;
-        renderFullBox();
+        redrawContentFrom(prevLine);
         return;
       }
 
@@ -374,19 +393,18 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
           const cur = bufferLines[cursorLine];
           bufferLines[cursorLine] = cur.slice(0, cursorCol - 1) + cur.slice(cursorCol);
           cursorCol--;
-          if (bufferLines.length === 1) {
-            updateActiveLineInPlace();
-          } else {
-            renderFullBox();
-          }
+          updateActiveLineInPlace();
         } else if (cursorLine > 0) {
+          // Merge current line into previous line
           const cur = bufferLines[cursorLine];
           const prev = bufferLines[cursorLine - 1];
           cursorCol = prev.length;
           bufferLines[cursorLine - 1] = prev + cur;
           bufferLines.splice(cursorLine, 1);
           cursorLine--;
-          renderFullBox();
+          // Move cursor up 1 line and redraw from cursorLine down
+          process.stdout.write('\x1b[1A');
+          redrawContentFrom(cursorLine);
         }
         return;
       }
@@ -396,15 +414,15 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
         // Left arrow
         if (cursorCol > 0) {
           cursorCol--;
-          if (bufferLines.length === 1) {
-            updateActiveLineInPlace();
-          } else {
-            renderFullBox();
-          }
+          const curWidth = getSafeBoxWidth();
+          const activeCol = (cursorLine === 0 ? 5 : 7) + Math.min(cursorCol, curWidth - 8);
+          process.stdout.write(`\x1b[${activeCol}G`);
         } else if (cursorLine > 0) {
           cursorLine--;
           cursorCol = bufferLines[cursorLine].length;
-          renderFullBox();
+          const curWidth = getSafeBoxWidth();
+          const activeCol = (cursorLine === 0 ? 5 : 7) + Math.min(cursorCol, curWidth - 8);
+          process.stdout.write(`\x1b[1A\x1b[${activeCol}G`);
         }
         return;
       }
@@ -412,15 +430,15 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
         // Right arrow
         if (cursorCol < bufferLines[cursorLine].length) {
           cursorCol++;
-          if (bufferLines.length === 1) {
-            updateActiveLineInPlace();
-          } else {
-            renderFullBox();
-          }
+          const curWidth = getSafeBoxWidth();
+          const activeCol = (cursorLine === 0 ? 5 : 7) + Math.min(cursorCol, curWidth - 8);
+          process.stdout.write(`\x1b[${activeCol}G`);
         } else if (cursorLine < bufferLines.length - 1) {
           cursorLine++;
           cursorCol = 0;
-          renderFullBox();
+          const curWidth = getSafeBoxWidth();
+          const activeCol = 7;
+          process.stdout.write(`\x1b[1B\x1b[${activeCol}G`);
         }
         return;
       }
@@ -429,7 +447,9 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
         if (cursorLine > 0) {
           cursorLine--;
           cursorCol = Math.min(cursorCol, bufferLines[cursorLine].length);
-          renderFullBox();
+          const curWidth = getSafeBoxWidth();
+          const activeCol = (cursorLine === 0 ? 5 : 7) + Math.min(cursorCol, curWidth - 8);
+          process.stdout.write(`\x1b[1A\x1b[${activeCol}G`);
         }
         return;
       }
@@ -438,7 +458,9 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
         if (cursorLine < bufferLines.length - 1) {
           cursorLine++;
           cursorCol = Math.min(cursorCol, bufferLines[cursorLine].length);
-          renderFullBox();
+          const curWidth = getSafeBoxWidth();
+          const activeCol = (cursorLine === 0 ? 5 : 7) + Math.min(cursorCol, curWidth - 8);
+          process.stdout.write(`\x1b[1B\x1b[${activeCol}G`);
         }
         return;
       }
@@ -453,11 +475,7 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
         const cur = bufferLines[cursorLine];
         bufferLines[cursorLine] = cur.slice(0, cursorCol) + str + cur.slice(cursorCol);
         cursorCol++;
-        if (bufferLines.length === 1) {
-          updateActiveLineInPlace();
-        } else {
-          renderFullBox();
-        }
+        updateActiveLineInPlace();
         return;
       }
 
@@ -466,11 +484,7 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
         const cur = bufferLines[cursorLine];
         bufferLines[cursorLine] = cur.slice(0, cursorCol) + str + cur.slice(cursorCol);
         cursorCol += str.length;
-        if (bufferLines.length === 1) {
-          updateActiveLineInPlace();
-        } else {
-          renderFullBox();
-        }
+        updateActiveLineInPlace();
         return;
       }
     };
