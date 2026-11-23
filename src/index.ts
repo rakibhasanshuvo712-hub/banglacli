@@ -152,12 +152,9 @@ program
 
     let running = true;
     while (running) {
-      // Show bottom status bar showing active mode and model (like OpenCode)
-      renderStatusBar(agent.getMode(), config.model, config.provider);
-
-      // OpenCode & Antigravity Interactive Prompt
-      // Features: Bracketed paste protection (multi-line pastes never auto-submit),
-      // Shift+Enter / Alt+Enter for newlines, Esc to cancel/abort, model badge.
+      // OpenCode & Antigravity Interactive Boxed Prompt
+      // Features: Terminal Bottom Framed Box with Mode & Model badges,
+      // Bracketed paste protection, multiline Shift+Enter, Esc to abort.
       const input = await readOpenCodePrompt({
         mode: agent.getMode(),
         model: config.model,

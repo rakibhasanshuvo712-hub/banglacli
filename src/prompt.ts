@@ -9,30 +9,23 @@ export interface OpenCodePromptOptions {
 }
 
 /**
- * OpenCode & Antigravity Style Interactive Prompt
+ * OpenCode & Antigravity Style Interactive Boxed Prompt
  * 
  * Features:
- * 1. Bracketed paste mode (\x1b[?2004h) + Burst paste protection:
+ * 1. Terminal Bottom Framed Box Widget (╭──╮, │  │, ╰──╯):
+ *    Provides an elegant, dedicated input container at the downside of the CLI,
+ *    displaying active Mode, selected Model badge, and shortcut hints.
+ * 2. Bracketed paste mode (\x1b[?2004h) + Burst paste protection:
  *    When pasting multi-line text, logs, or code, it NEVER auto-submits on newlines.
- *    Instead, it captures the entire paste cleanly, displays a multi-line preview,
+ *    Instead, it cleanly captures the entire paste inside the box,
  *    and waits for the user to explicitly press Enter!
- * 2. Shift+Enter / Alt+Enter / Ctrl+J: Inserts a newline for multiline typing.
- * 3. Enter: Submits prompt to the agent.
- * 4. Esc: Clears input buffer (or exits if buffer is empty).
- * 5. Ctrl+C: Clean exit.
- * 6. Visual status indicators showing active mode and model like Antigravity.
+ * 3. Multi-line typing (Shift+Enter / Alt+Enter / Ctrl+J):
+ *    Adds new lines inside the boxed container with smart indentation.
+ * 4. Arrow navigation (Left, Right, Up, Down), Backspace, and Esc to clear/abort.
+ * 5. Enter: Submits prompt to the agent.
  */
 export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promise<string | null> {
   const isBuildMode = options.mode === 'build';
-  const modeTag = isBuildMode
-    ? chalk.bgHex('#00C853').black.bold(' ⚡ BUILD ')
-    : chalk.bgHex('#FFB300').black.bold(' 📋 PLAN ');
-  const modelTag = chalk.bgHex('#1A237E').white.bold(` 🤖 ${options.model} `);
-  const cancelHint = chalk.gray('(Esc to cancel • Shift+Enter for newline)');
-  const promptArrow = isBuildMode ? chalk.hex('#00FF7F').bold('❯ ') : chalk.hex('#FFB300').bold('❯ ');
-
-  // Print prompt header line
-  process.stdout.write(`\n${modeTag} ${modelTag} ${cancelHint}\n${promptArrow}`);
 
   return new Promise((resolve) => {
     if (!process.stdin.isTTY) {
@@ -61,19 +54,83 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
       process.stdin.resume();
     } catch {}
 
-    let buffer = '';
+    let bufferLines = [''];
+    let cursorLine = 0;
+    let cursorCol = 0;
     let inBracketedPaste = false;
-    let pasteTimeout: NodeJS.Timeout | null = null;
     let pasteBuffer = '';
+    let hasRendered = false;
+
+    const renderBox = () => {
+      const termWidth = Math.max(60, Math.min(process.stdout.columns || 80, 96));
+      const innerWidth = termWidth - 4;
+      const borderColor = isBuildMode ? chalk.hex('#00FF7F') : chalk.hex('#FFB300');
+
+      const modeBadge = isBuildMode
+        ? chalk.bgHex('#00C853').black.bold(' ⚡ BUILD ')
+        : chalk.bgHex('#FFB300').black.bold(' 📋 PLAN ');
+      const modelBadge = chalk.bgHex('#1A237E').white.bold(` 🤖 ${options.model} `);
+      const escHint = chalk.gray('(Esc to cancel)');
+
+      // Top border
+      const rawPrefixLen = 4 + 9 + 3 + (options.model.length + 4) + 2;
+      const rawSuffixLen = 18;
+      const dashesCount = Math.max(2, termWidth - rawPrefixLen - rawSuffixLen);
+      const topBorder =
+        borderColor('╭─ ') +
+        modeBadge +
+        borderColor(' ─ ') +
+        modelBadge +
+        borderColor(' ' + '─'.repeat(dashesCount) + ' ') +
+        escHint +
+        borderColor(' ─╮');
+
+      // Content lines inside the box
+      const contentLines: string[] = [];
+      for (let i = 0; i < bufferLines.length; i++) {
+        const isFirst = i === 0;
+        const prefixStr = isFirst
+          ? borderColor('│ ') + (isBuildMode ? chalk.hex('#00FF7F').bold('❯ ') : chalk.hex('#FFB300').bold('❯ '))
+          : borderColor('│ ') + chalk.dim('  ↳ ');
+        const lineText = bufferLines[i];
+        const visibleLen = 4 + lineText.length;
+        const padding = Math.max(0, innerWidth - visibleLen + 2);
+        contentLines.push(prefixStr + chalk.white(lineText) + ' '.repeat(padding) + borderColor(' │'));
+      }
+
+      // Bottom border
+      const hintText = ' Enter: send • Shift+Enter: newline • @file mention • /help ';
+      const bottomDashes = Math.max(2, termWidth - hintText.length - 4);
+      const bottomBorder = borderColor('╰─') + chalk.dim(hintText) + borderColor('─'.repeat(bottomDashes) + '╯');
+
+      const allBoxLines = [topBorder, ...contentLines, bottomBorder];
+
+      if (hasRendered) {
+        // Move cursor up to the top border of the previously rendered box and clear
+        process.stdout.write(`\r\x1b[${1 + cursorLine}A\x1b[J`);
+      } else {
+        process.stdout.write('\n');
+      }
+
+      // Output complete box
+      process.stdout.write(allBoxLines.join('\n') + '\n');
+      hasRendered = true;
+
+      // Position cursor at exact active typing position inside the box
+      const upLines = (bufferLines.length - 1 - cursorLine) + 2;
+      const colPos = 5 + cursorCol;
+      process.stdout.write(`\x1b[${upLines}A\x1b[${colPos}G`);
+    };
+
+    // Initial render of empty box
+    renderBox();
 
     const cleanup = () => {
-      // Disable Bracketed Paste Mode in terminal
       try {
         process.stdout.write('\x1b[?2004l');
       } catch {}
 
       process.stdin.removeListener('data', onData);
-      if (pasteTimeout) clearTimeout(pasteTimeout);
 
       try {
         if (!wasRaw) {
@@ -85,25 +142,51 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
 
     const submit = () => {
       cleanup();
-      process.stdout.write('\n');
-      resolve(buffer.trim());
+      // Move cursor cleanly below the box
+      const downLines = (bufferLines.length - 1 - cursorLine) + 2;
+      process.stdout.write(`\x1b[${downLines}B\r\n`);
+      resolve(bufferLines.join('\n').trim());
     };
 
     const cancel = () => {
       cleanup();
-      process.stdout.write('\n');
+      const downLines = (bufferLines.length - 1 - cursorLine) + 2;
+      process.stdout.write(`\x1b[${downLines}B\r\n`);
       resolve(null);
+    };
+
+    const handlePastedText = (pasted: string) => {
+      const normalized = pasted.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      const pastedLines = normalized.split('\n');
+
+      if (pastedLines.length === 1) {
+        const cur = bufferLines[cursorLine];
+        bufferLines[cursorLine] = cur.slice(0, cursorCol) + pastedLines[0] + cur.slice(cursorCol);
+        cursorCol += pastedLines[0].length;
+      } else {
+        const cur = bufferLines[cursorLine];
+        const before = cur.slice(0, cursorCol);
+        const after = cur.slice(cursorCol);
+
+        bufferLines[cursorLine] = before + pastedLines[0];
+        const middle = pastedLines.slice(1, -1);
+        const last = pastedLines[pastedLines.length - 1];
+
+        bufferLines.splice(cursorLine + 1, 0, ...middle, last + after);
+        cursorLine += pastedLines.length - 1;
+        cursorCol = last.length;
+      }
+      renderBox();
     };
 
     const onData = (data: Buffer) => {
       const str = data.toString('utf-8');
 
-      // 1. Bracketed Paste Handling (\x1b[200~ ... \x1b[201~)
+      // 1. Bracketed paste handling
       if (str.includes('\x1b[200~')) {
         inBracketedPaste = true;
         const afterStart = str.split('\x1b[200~')[1] || '';
         if (afterStart.includes('\x1b[201~')) {
-          // Entire paste was in this single chunk
           const [pastedContent] = afterStart.split('\x1b[201~');
           inBracketedPaste = false;
           handlePastedText(pastedContent);
@@ -129,107 +212,147 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
         }
       }
 
-      // 2. Burst Paste Detection for terminals that don't support bracketed paste
-      // If incoming data contains newlines and is longer than a single keystroke,
-      // it is a paste burst! Never auto-submit on internal newlines.
+      // 2. Burst paste detection
       if (str.length > 2 && (str.includes('\n') || str.includes('\r'))) {
         handlePastedText(str);
         return;
       }
 
-      // 3. Special Keys Handling
-      // Ctrl+C (Interrupt)
+      // 3. Ctrl+C
       if (str === '\x03') {
         cleanup();
         process.stdout.write('\n' + chalk.yellow('Exiting banglacli...\n'));
         process.exit(0);
       }
 
-      // Ctrl+D (EOF)
+      // Ctrl+D
       if (str === '\x04') {
-        if (buffer.length === 0) {
+        if (bufferLines.join('').length === 0) {
           cancel();
           return;
         }
       }
 
-      // Escape key (\x1b)
+      // Escape
       if (str === '\x1b') {
-        if (buffer.length > 0) {
-          // Clear current typed line
-          buffer = '';
-          process.stdout.write('\r\x1b[K' + promptArrow + chalk.gray('(cleared)'));
-          setTimeout(() => {
-            process.stdout.write('\r\x1b[K' + promptArrow);
-          }, 350);
+        if (bufferLines.join('').length > 0) {
+          bufferLines = [''];
+          cursorLine = 0;
+          cursorCol = 0;
+          renderBox();
         } else {
           cancel();
         }
         return;
       }
 
-      // Shift+Enter / Alt+Enter / Ctrl+J (\x0a or \x1b\x0d or \x1b\n): Insert newline
+      // Shift+Enter / Alt+Enter / Ctrl+J: Insert newline inside box
       if (str === '\x0a' || str === '\x1b\x0d' || str === '\x1b\r') {
-        buffer += '\n';
-        process.stdout.write('\n  ' + chalk.dim('↳ '));
+        const cur = bufferLines[cursorLine];
+        const before = cur.slice(0, cursorCol);
+        const after = cur.slice(cursorCol);
+        bufferLines[cursorLine] = before;
+        bufferLines.splice(cursorLine + 1, 0, after);
+        cursorLine++;
+        cursorCol = 0;
+        renderBox();
         return;
       }
 
-      // Enter key (\r or \r\n or \n)
+      // Enter key: Submit
       if (str === '\r' || str === '\n' || str === '\r\n') {
-        if (buffer.trim().length === 0) {
-          // Empty enter, keep prompt waiting
+        const fullContent = bufferLines.join('\n').trim();
+        if (fullContent.length === 0) {
           return;
         }
         submit();
         return;
       }
 
-      // Backspace (\x08 or \x7f)
+      // Backspace
       if (str === '\x08' || str === '\x7f') {
-        if (buffer.length > 0) {
-          buffer = buffer.slice(0, -1);
-          process.stdout.write('\b \b');
+        if (cursorCol > 0) {
+          const cur = bufferLines[cursorLine];
+          bufferLines[cursorLine] = cur.slice(0, cursorCol - 1) + cur.slice(cursorCol);
+          cursorCol--;
+          renderBox();
+        } else if (cursorLine > 0) {
+          const cur = bufferLines[cursorLine];
+          const prev = bufferLines[cursorLine - 1];
+          cursorCol = prev.length;
+          bufferLines[cursorLine - 1] = prev + cur;
+          bufferLines.splice(cursorLine, 1);
+          cursorLine--;
+          renderBox();
         }
         return;
       }
 
-      // Arrow keys and escape sequences (ignore navigation noise)
+      // Arrow navigation
+      if (str === '\x1b[D') {
+        // Left arrow
+        if (cursorCol > 0) {
+          cursorCol--;
+          renderBox();
+        } else if (cursorLine > 0) {
+          cursorLine--;
+          cursorCol = bufferLines[cursorLine].length;
+          renderBox();
+        }
+        return;
+      }
+      if (str === '\x1b[C') {
+        // Right arrow
+        if (cursorCol < bufferLines[cursorLine].length) {
+          cursorCol++;
+          renderBox();
+        } else if (cursorLine < bufferLines.length - 1) {
+          cursorLine++;
+          cursorCol = 0;
+          renderBox();
+        }
+        return;
+      }
+      if (str === '\x1b[A') {
+        // Up arrow
+        if (cursorLine > 0) {
+          cursorLine--;
+          cursorCol = Math.min(cursorCol, bufferLines[cursorLine].length);
+          renderBox();
+        }
+        return;
+      }
+      if (str === '\x1b[B') {
+        // Down arrow
+        if (cursorLine < bufferLines.length - 1) {
+          cursorLine++;
+          cursorCol = Math.min(cursorCol, bufferLines[cursorLine].length);
+          renderBox();
+        }
+        return;
+      }
+
+      // Ignore unhandled escape sequences
       if (str.startsWith('\x1b[')) {
         return;
       }
 
-      // Normal typing: append character
-      buffer += str;
-      process.stdout.write(str);
-    };
+      // Printable character
+      if (str.length === 1 && str.charCodeAt(0) >= 32) {
+        const cur = bufferLines[cursorLine];
+        bufferLines[cursorLine] = cur.slice(0, cursorCol) + str + cur.slice(cursorCol);
+        cursorCol++;
+        renderBox();
+        return;
+      }
 
-    /**
-     * Safely format and incorporate pasted text without triggering auto-submission.
-     */
-    const handlePastedText = (pasted: string) => {
-      // Normalize line breaks
-      const normalized = pasted.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-      buffer += normalized;
-
-      const lines = normalized.split('\n');
-      if (lines.length > 1) {
-        // Multi-line paste! Render sleek OpenCode paste preview notice
-        process.stdout.write(
-          '\n' +
-            chalk.bgHex('#0047AB').white.bold(' 📋 PASTED CONTENT ') +
-            ' ' +
-            chalk.cyan(`(${lines.length} lines, ${normalized.length} chars)`) +
-            '\n' +
-            chalk.gray('  Press ') +
-            chalk.yellow.bold('Enter') +
-            chalk.gray(' to submit to agent, or type more instructions...\n') +
-            promptArrow +
-            chalk.dim(`[...${lines.length} lines ready in buffer...] `)
-        );
-      } else {
-        // Single line paste: print directly
-        process.stdout.write(normalized);
+      // Multi-character text (e.g. fast typing or unicode)
+      if (str.length > 0 && !str.includes('\x1b')) {
+        const cur = bufferLines[cursorLine];
+        bufferLines[cursorLine] = cur.slice(0, cursorCol) + str + cur.slice(cursorCol);
+        cursorCol += str.length;
+        renderBox();
+        return;
       }
     };
 
