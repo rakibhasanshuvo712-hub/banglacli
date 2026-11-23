@@ -81,13 +81,34 @@ export function renderStatusBar(mode: 'build' | 'plan', model: string, provider?
     : chalk.bgHex('#FFB300').black.bold(' 📋 PLAN MODE ');
 
   const modeText = isBuild
-    ? chalk.green.bold('Autonomous Coder (Full Execution)')
-    : chalk.yellow.bold('Architect & Planner (Read-Only)');
+    ? chalk.green.bold('Autonomous Coder')
+    : chalk.yellow.bold('Architect (Read-Only)');
 
   const modelBadge = chalk.bgHex('#1A237E').white.bold(` 🤖 ${model} `);
-  const helpHint = chalk.dim('• /mode to switch • /agent for models');
+  const cascadeBadge = chalk.bgHex('#004D40').hex('#00FF7F').bold(' 🔄 Auto-Cascade Active ');
+  const helpHint = chalk.dim('• /mode • /agent • /limits • /help');
 
-  console.log(`\n${modeBadge} ${modeText}  ${modelBadge}  ${helpHint}`);
+  console.log(`\n${modeBadge} ${modeText}  ${modelBadge}  ${cascadeBadge}  ${helpHint}`);
+}
+
+/**
+ * Render sleek auto-cascade notification when a model token limit is reached.
+ */
+export function renderCascadeNotice(fromModel: string, toModel: string, reason: string): void {
+  const border = chalk.hex('#FF9900')('─'.repeat(74));
+  console.log('\n' + border);
+  console.log(
+    chalk.bgHex('#FF9900').black.bold(' 🔄 AUTO-CASCADE ACTIVATED ') +
+      ' ' +
+      chalk.white.bold(`Token / Rate limit reached on: ${chalk.yellow(fromModel)}`)
+  );
+  console.log(
+    chalk.hex('#00FF7F').bold('✔ Seamlessly continuing with: ') +
+      chalk.bold.cyan(toModel) +
+      chalk.gray(` (${reason})`)
+  );
+  console.log(chalk.gray('Your task and conversation continue without any loss of context.'));
+  console.log(border + '\n');
 }
 
 /**

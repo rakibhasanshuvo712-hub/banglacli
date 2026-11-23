@@ -23,9 +23,10 @@
 **banglacli** is an open-source, serverless terminal coding assistant designed from the ground up for developers who think, speak, and code in **বাংলা (Bangla)**, **Banglish**, or **English**.
 
 It brings the best of modern agent design (like OpenCode):
+- **🔄 Smart Auto-Cascade Resilience:** If a model's free token quota or rate limit (429/503) is reached, it seamlessly rotates to the next available intelligent free model in the chain without dropping conversation context!
 - **⚡ BUILD Mode:** Full autonomous development — reads and writes code, builds packages, runs tests and shell commands.
 - **📋 PLAN Mode:** Senior architect mode — read-only codebase exploration, architecture analysis, and concrete step-by-step implementation plans.
-- **Live Status Bar:** Always displays the currently active model and mode directly above your prompt.
+- **Live Status Bar:** Displays the currently active model, mode, and cascade indicator directly above your prompt.
 
 It is 100% **BYOK (Bring Your Own Key)** — you don't need costly subscriptions. Connect your free **Google Gemini** API key or **OpenRouter** free models (Particle-1, Nemotron, Gemma 4, ERNIE, Groq) and start building software right inside your terminal.
 
@@ -33,6 +34,11 @@ It is 100% **BYOK (Bring Your Own Key)** — you don't need costly subscriptions
 
 ## ✨ Features
 
+- 🧠 **Superior Autonomous AI Brain (Outperforming Legacy Agents)**:
+  - **Self-Healing Codebase:** If a build command or test fails, the agent inspects compiler logs and stack traces, edits the files, and verifies the fix autonomously.
+  - **Zero Placeholder Code Rule:** Writes 100% complete, production-grade files. No `// TODO`, no skipped code.
+- 🔄 **Intelligent Multi-Model Auto-Cascade**:
+  - Automatically cascades when tokens run out or rate limits hit (`openrouter/free` ➔ `particle-ai/particle-1:free` ➔ `nvidia/nemotron-3-ultra-550b:free` ➔ `google/gemma-4-31b-it:free` ➔ Gemini 2.0 Flash).
 - 🇧🇩 **Trilingual Native Fluency**:
   - **Bangla (বাংলা লিপি):** *"একটি Express.js REST API বানাও JWT auth সহ"*
   - **Banglish:** *"Ekta React counter app banaye dao Tailwind CSS diye"*
@@ -42,7 +48,7 @@ It is 100% **BYOK (Bring Your Own Key)** — you don't need costly subscriptions
   - `📋 PLAN Mode`: Safe read-only mode to analyze codebase, design architecture, and formulate plans without modifying files.
   - Switch anytime with `/mode`, `/plan`, or `/build`.
 - 📊 **Real-Time Model & Mode Status Indicator**:
-  - Displays `[⚡ BUILD MODE] [🤖 openrouter/free]` right above the prompt so you always know what model you are running.
+  - Displays `[⚡ BUILD MODE] [🤖 openrouter/free] [🔄 Auto-Cascade Active]` right above the prompt so you always know what model you are running.
 - ⚡ **100% BYOK & Serverless**:
   - No middleman backend. Your API keys are stored locally on your machine via `conf`.
   - Supports **Google Gemini** (`gemini-2.0-flash`, `gemini-1.5-flash`, `gemini-3.8-flash`).

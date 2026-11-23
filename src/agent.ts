@@ -1,6 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
-import { BanglaCLIConfig } from './config.js';
+import { BanglaCLIConfig, updateModel } from './config.js';
 import {
   BUILD_GEMINI_TOOLS,
   PLAN_GEMINI_TOOLS,
@@ -8,28 +8,31 @@ import {
   PLAN_OPENAI_TOOLS,
   executeTool,
 } from './tools.js';
-import { createSpinner, renderMarkdown } from './ui.js';
+import { createSpinner, renderMarkdown, renderCascadeNotice } from './ui.js';
+import { OPENROUTER_FREE_CASCADE_CHAIN, GEMINI_CASCADE_CHAIN } from './models.js';
 import chalk from 'chalk';
 
 export type AgentMode = 'build' | 'plan';
 
 export function getSystemPrompt(mode: AgentMode = 'build'): string {
   if (mode === 'plan') {
-    return `You are banglacli, a world-class Senior Software Architect running directly in the user's terminal.
+    return `You are banglacli, a world-class Principal Software Architect and Systems Designer running directly in the user's terminal. You are designed to be more intelligent, thorough, and reliable than other agents like OpenCode or FreeBuf.
 
 ### 🌟 CURRENT ACTIVE MODE: 📋 PLAN MODE (ARCHITECT & PLANNING ONLY)
-- You are strictly in PLAN MODE.
-- Your goal is to inspect the workspace, analyze requirements, explore existing code, and formulate a clear, detailed, numbered step-by-step architectural implementation plan.
+- You are strictly in PLAN MODE. You act as an expert senior software architect.
+- Your primary duty is to deeply investigate the workspace, analyze requirements, explore existing code, and formulate a comprehensive, battle-tested, numbered step-by-step architectural plan.
 - In this mode, you ONLY have read-only tools:
-  1. list_files(dirPath): Explore folders and project structure.
-  2. read_file(filePath): Inspect existing configuration and code files.
+  1. list_files(dirPath): Explore folders and project architecture.
+  2. read_file(filePath): Inspect existing configuration files, packages, and code.
 - YOU CANNOT AND MUST NOT write files or run terminal commands. Any attempt will be safely blocked.
-- Break down your architectural plan logically:
-  1. Overview & Architecture breakdown.
-  2. File structure & components to create or modify.
-  3. Dependencies or packages to be installed later.
-  4. Step-by-step implementation order.
-- At the end of your plan, remind the user: "When you are ready to execute this plan and generate code, type /build or /mode to switch to BUILD mode."
+- Your architectural breakdown MUST be thorough and structured:
+  1. 🎯 Executive Architecture Summary & Requirements Analysis.
+  2. 📂 Proposed Project & Directory Structure.
+  3. 📦 Dependencies, Libraries & Versions needed.
+  4. 🧩 Core Components, Modules, Data Models & API Contracts.
+  5. 🛠️ Step-by-Step Implementation Roadmap (ordered sequence of files to create/edit).
+  6. 🧪 Verification & Testing Strategy.
+- At the end of your plan, remind the user: "When you are satisfied with this plan, type /build or /mode to switch to BUILD mode to execute it!"
 
 ### 1. LANGUAGE & COMMUNICATION RULES (CRITICAL):
 - You possess native fluency in Bangla (বাংলা), Banglish (Romanized Bengali, e.g. "amake ekta Express auth backend banaye dao"), and English.
@@ -40,21 +43,38 @@ export function getSystemPrompt(mode: AgentMode = 'build'): string {
   * If the user mixes languages, mirror their style naturally.`;
   }
 
-  return `You are banglacli, a world-class Senior Full-Stack Software Architect and Autonomous AI Coding Agent running directly in the user's terminal.
+  // BUILD MODE
+  return `You are banglacli, a world-class Principal Full-Stack Software Engineer and Autonomous AI Coding Agent running directly in the user's terminal. You are designed to outperform modern AI coding agents like OpenCode and Claude Code in intelligence, self-healing, and reliability.
 
 ### 🌟 CURRENT ACTIVE MODE: ⚡ BUILD MODE (AUTONOMOUS BUILDER)
-- You are in BUILD MODE with full autonomous authority to build, edit, and run code.
+- You have full autonomous authority to build, edit, test, and execute software.
 - You have all 4 workspace tools:
-  1. list_files(dirPath): Explore directories to understand workspace context.
-  2. read_file(filePath): Inspect existing files before editing.
-  3. write_file(filePath, content): Create directories and write complete, fully-functional, production-grade code.
+  1. list_files(dirPath): Explore directories to understand workspace context and file hierarchy.
+  2. read_file(filePath): Inspect existing source files before editing.
+  3. write_file(filePath, content): Create directories automatically and write complete, production-grade code.
   4. run_command(command): Execute terminal commands (e.g., "npm init -y", "npm install <packages>", build or test scripts).
-- When asked to build or modify an app:
-  * Proactively execute tools step-by-step.
-  * NEVER output placeholder code (e.g., "// TODO: implement", "// add rest here"). Always write complete, tested code.
-  * Create necessary configuration files (package.json, tsconfig.json, .gitignore, README.md, etc.) as needed.
-  * Install dependencies using run_command when required.
-  * Keep code modular, clean, well-commented, and robust.
+
+### 🧠 INTELLIGENT AGENT PROTOCOL (FOLLOW RIGOROUSLY):
+1. **Investigate Before Acting**:
+   - Always explore the workspace with list_files or read_file first. Never code blindly without understanding existing dependencies and architecture.
+2. **Autonomous Self-Correction & Self-Healing**:
+   - If a terminal command fails (e.g. build failure, TypeScript error, missing dependency, runtime crash):
+     * DO NOT give up or ask the user to fix it!
+     * Read the compiler error or stack trace carefully.
+     * Identify the exact line and file causing the issue.
+     * Fix the problem with write_file or install missing modules with run_command.
+     * Re-run the command to confirm the fix works!
+3. **Zero Placeholder Code Rule (Strictly Enforced)**:
+   - NEVER output incomplete snippets, "// TODO: implement rest", "// add logic here", or dummy mocks.
+   - Every function, handler, UI component, CSS rule, and utility must be 100% complete, fully implemented, robust, and working out of the box.
+4. **Modern Production Standards**:
+   - Use clean, modern, idiomatic code (TypeScript, ESM, strict types, async/await, proper error boundaries).
+   - Write clean, modular architectures (SOLID, DRY, separated concerns).
+   - For web apps: Modern responsive UI, semantic HTML5, modern CSS / Tailwind, clean typography.
+   - For backend/APIs: Proper status codes, error handling, input validation, clean routing.
+5. **Clear User Feedback**:
+   - Briefly explain your actions and strategy before and after tool calls.
+   - When a project build is finished, provide clear commands for the user to run or preview the project (e.g. "npm run dev").
 
 ### 1. LANGUAGE & COMMUNICATION RULES (CRITICAL):
 - You possess native fluency in Bangla (বাংলা), Banglish (Romanized Bengali, e.g. "amake ekta Express auth backend banaye dao"), and English.
@@ -62,11 +82,7 @@ export function getSystemPrompt(mode: AgentMode = 'build'): string {
   * If the user writes in Bangla (বাংলা লিপি), respond in natural, friendly, accurate Bangla.
   * If the user writes in Banglish, respond in natural Banglish with Bengali developer slang/enthusiasm.
   * If the user writes in English, respond in clear, professional English.
-  * If the user mixes languages, mirror their style naturally.
-
-### 2. INTERACTIVE FEEDBACK:
-- Before and after tool actions, provide concise explanations in the user's language.
-- At the end of a build, provide clear instructions on how the user can test or start the application (e.g., "npm run dev").`;
+  * If the user mixes languages, mirror their style naturally.`;
 }
 
 export const SYSTEM_PROMPT = getSystemPrompt('build');
@@ -151,6 +167,74 @@ export class BanglaAgent {
     this.resetHistory();
   }
 
+  private onModelChangeCallback?: (newModel: string, newProvider?: string) => void;
+
+  public setOnModelChange(cb: (newModel: string, newProvider?: string) => void): void {
+    this.onModelChangeCallback = cb;
+  }
+
+  /**
+   * Intelligently cascade to the next available model when token quota or rate limit is reached.
+   */
+  public async cascadeModel(currentModel: string, reason: string): Promise<string | null> {
+    if (this.config.provider === 'openrouter' || this.config.provider === 'custom') {
+      const chain = OPENROUTER_FREE_CASCADE_CHAIN;
+      const currentIndex = chain.indexOf(currentModel);
+      const nextIndex = currentIndex !== -1 ? (currentIndex + 1) % chain.length : 0;
+      const nextModel = chain[nextIndex];
+
+      if (nextModel && nextModel !== currentModel) {
+        renderCascadeNotice(currentModel, nextModel, reason);
+        this.config.model = nextModel;
+        updateModel(nextModel);
+        this.onModelChangeCallback?.(nextModel, this.config.provider);
+        return nextModel;
+      }
+
+      // If user has Gemini saved, cross-provider cascade to Gemini
+      const geminiSaved = this.config.savedProviders?.gemini;
+      if (geminiSaved && geminiSaved.apiKey) {
+        renderCascadeNotice(currentModel, 'gemini-2.0-flash', 'Cross-provider cascade to Google Gemini Free');
+        this.config.provider = 'gemini';
+        this.config.apiKey = geminiSaved.apiKey;
+        this.config.model = 'gemini-2.0-flash';
+        this.initClients();
+        updateModel('gemini-2.0-flash');
+        this.onModelChangeCallback?.('gemini-2.0-flash', 'gemini');
+        return 'gemini-2.0-flash';
+      }
+    } else if (this.config.provider === 'gemini') {
+      const chain = GEMINI_CASCADE_CHAIN;
+      const currentIndex = chain.indexOf(currentModel);
+      const nextIndex = currentIndex !== -1 ? currentIndex + 1 : 0;
+
+      if (nextIndex < chain.length) {
+        const nextModel = chain[nextIndex];
+        renderCascadeNotice(currentModel, nextModel, reason);
+        this.config.model = nextModel;
+        updateModel(nextModel);
+        this.onModelChangeCallback?.(nextModel, 'gemini');
+        return nextModel;
+      }
+
+      // If all Gemini models exhausted, switch to OpenRouter if saved
+      const openRouterSaved = this.config.savedProviders?.openrouter;
+      if (openRouterSaved && openRouterSaved.apiKey) {
+        renderCascadeNotice(currentModel, 'openrouter/free', 'Cross-provider cascade to OpenRouter Free');
+        this.config.provider = 'openrouter';
+        this.config.apiKey = openRouterSaved.apiKey;
+        this.config.model = 'openrouter/free';
+        this.config.baseURL = 'https://openrouter.ai/api/v1';
+        this.initClients();
+        updateModel('openrouter/free');
+        this.onModelChangeCallback?.('openrouter/free', 'openrouter');
+        return 'openrouter/free';
+      }
+    }
+
+    return null;
+  }
+
   /**
    * Switch the model dynamically.
    */
@@ -178,28 +262,31 @@ export class BanglaAgent {
     try {
       if (this.config.provider === 'gemini') {
         const reply = await this.chatGemini(userInput);
-        // Check if Gemini failed with 503 or server overload message
+        // Check if Gemini failed with 503, 429, or server overload message
         if (
           typeof reply === 'string' &&
           (reply.includes('503') ||
             reply.includes('UNAVAILABLE') ||
             reply.includes('high demand') ||
-            reply.includes('Unavailable') ||
+            reply.includes('RESOURCE_EXHAUSTED') ||
+            reply.includes('429') ||
+            reply.includes('Rate Limit Exceeded') ||
             reply.includes('Server Overload'))
         ) {
           const openRouterSaved = this.config.savedProviders?.openrouter;
           if (openRouterSaved && openRouterSaved.apiKey) {
-            console.log(
-              chalk.bold.hex('#00FF7F')(
-                `\n⚡ [Auto-Recovery]: Google Gemini free servers are currently overloaded (503).\n` +
-                  `Seamlessly switched to OpenRouter (openrouter/free) to complete your request!\n`
-              )
+            renderCascadeNotice(
+              this.config.model,
+              'openrouter/free',
+              'Gemini limit reached; cascading to OpenRouter'
             );
             this.config.provider = 'openrouter';
             this.config.apiKey = openRouterSaved.apiKey;
             this.config.model = 'openrouter/free';
             this.config.baseURL = 'https://openrouter.ai/api/v1';
             this.initClients();
+            updateModel('openrouter/free');
+            this.onModelChangeCallback?.('openrouter/free', 'openrouter');
             return await this.chatOpenAI(userInput);
           }
         }
@@ -211,16 +298,18 @@ export class BanglaAgent {
       if (this.config.provider === 'gemini') {
         const openRouterSaved = this.config.savedProviders?.openrouter;
         if (openRouterSaved && openRouterSaved.apiKey) {
-          console.log(
-            chalk.bold.hex('#00FF7F')(
-              `\n⚡ [Auto-Recovery]: Google Gemini server error. Seamlessly switching to OpenRouter (openrouter/free)...\n`
-            )
+          renderCascadeNotice(
+            this.config.model,
+            'openrouter/free',
+            'Gemini server error; cascading to OpenRouter'
           );
           this.config.provider = 'openrouter';
           this.config.apiKey = openRouterSaved.apiKey;
           this.config.model = 'openrouter/free';
           this.config.baseURL = 'https://openrouter.ai/api/v1';
           this.initClients();
+          updateModel('openrouter/free');
+          this.onModelChangeCallback?.('openrouter/free', 'openrouter');
           return await this.chatOpenAI(userInput);
         }
       }
@@ -276,12 +365,10 @@ export class BanglaAgent {
             });
 
             if (candidateModel !== this.config.model) {
-              console.log(
-                chalk.yellow(
-                  `\n⚡ [Auto-Failover]: "${this.config.model}" experienced high demand (503). Automatically rerouted request to "${candidateModel}"!`
-                )
-              );
+              renderCascadeNotice(this.config.model, candidateModel, 'Gemini high demand / 503 failover');
               this.config.model = candidateModel;
+              updateModel(candidateModel);
+              this.onModelChangeCallback?.(candidateModel, 'gemini');
             }
 
             lastError = null;
@@ -412,34 +499,77 @@ export class BanglaAgent {
     while (turnCount < maxTurns) {
       turnCount++;
       const spinner = createSpinner(
-        turnCount === 1 ? 'banglacli thinking...' : `banglacli executing (step ${turnCount})...`
+        turnCount === 1
+          ? `banglacli thinking with [${this.config.model}]...`
+          : `banglacli executing with [${this.config.model}] (step ${turnCount})...`
       );
       spinner.start();
 
-      let completion: OpenAI.Chat.Completions.ChatCompletion;
-      try {
-        completion = await this.openAIClient.chat.completions.create({
-          model: this.config.model,
-          messages: this.openAIMessages,
-          tools: this.mode === 'plan' ? PLAN_OPENAI_TOOLS : BUILD_OPENAI_TOOLS,
-          tool_choice: 'auto',
-        });
-        spinner.stop();
-      } catch (err: any) {
-        spinner.stop();
-        const errMsg = err?.message || String(err);
-        if (errMsg.includes('401') || errMsg.includes('Incorrect API key') || errMsg.includes('invalid_api_key')) {
-          return chalk.red(
-            `\n✖ API Key Error: Authentication failed for ${this.config.provider}.\n` +
-              `Please run ${chalk.yellow('/config')} to enter a valid API key.`
-          );
-        } else if (errMsg.includes('429') || errMsg.includes('rate limit')) {
-          return chalk.red(
-            `\n✖ Rate Limit Exceeded (429).\n` +
-              `Please wait a moment, switch models with ${chalk.yellow('/model')}, or run ${chalk.yellow('/config')}.`
-          );
+      let completion: OpenAI.Chat.Completions.ChatCompletion | null = null;
+      let cascadeAttempts = 0;
+      const maxCascadeAttempts = 6;
+
+      while (cascadeAttempts < maxCascadeAttempts) {
+        try {
+          completion = await this.openAIClient.chat.completions.create({
+            model: this.config.model,
+            messages: this.openAIMessages,
+            tools: this.mode === 'plan' ? PLAN_OPENAI_TOOLS : BUILD_OPENAI_TOOLS,
+            tool_choice: 'auto',
+          });
+          break;
+        } catch (err: any) {
+          const errMsg = err?.message || String(err);
+          const isLimitOrOverload =
+            errMsg.includes('429') ||
+            errMsg.includes('rate limit') ||
+            errMsg.includes('quota') ||
+            errMsg.includes('RESOURCE_EXHAUSTED') ||
+            errMsg.includes('insufficient_quota') ||
+            errMsg.includes('503') ||
+            errMsg.includes('UNAVAILABLE') ||
+            errMsg.includes('high demand') ||
+            errMsg.includes('502') ||
+            errMsg.includes('500') ||
+            errMsg.includes('404') ||
+            errMsg.includes('no longer available') ||
+            errMsg.includes('not found') ||
+            errMsg.includes('402');
+
+          if (isLimitOrOverload && (this.config.provider === 'openrouter' || this.config.provider === 'custom')) {
+            cascadeAttempts++;
+            spinner.stop();
+            const nextModel = await this.cascadeModel(
+              this.config.model,
+              errMsg.includes('429') ? 'Token quota / Rate limit reached' : 'Server load / Unavailable'
+            );
+            if (nextModel) {
+              spinner.text = chalk.cyan(`banglacli continuing with [${nextModel}]...`);
+              spinner.start();
+              continue;
+            }
+          }
+
+          spinner.stop();
+          if (errMsg.includes('401') || errMsg.includes('Incorrect API key') || errMsg.includes('invalid_api_key')) {
+            return chalk.red(
+              `\n✖ API Key Error: Authentication failed for ${this.config.provider}.\n` +
+                `Please run ${chalk.yellow('/config')} to enter a valid API key.`
+            );
+          } else if (errMsg.includes('429') || errMsg.includes('rate limit')) {
+            return chalk.red(
+              `\n✖ Rate Limit Exceeded (429).\n` +
+                `All models in the cascade chain were rate-limited. Please wait a moment or run ${chalk.yellow('/provider')}.`
+            );
+          }
+          throw new Error(`Provider Error (${this.config.provider}): ${errMsg}`);
         }
-        throw new Error(`Provider Error (${this.config.provider}): ${errMsg}`);
+      }
+
+      spinner.stop();
+
+      if (!completion) {
+        throw new Error('All model attempts failed or tokens exhausted across providers.');
       }
 
       const choice = completion.choices[0];

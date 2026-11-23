@@ -138,6 +138,16 @@ export const AGENT_MODELS: AgentModelPreset[] = [
     contextLength: '262,144',
     baseURL: 'https://openrouter.ai/api/v1',
   },
+  {
+    id: 'dots-studio/dots-3-note-preview:free',
+    name: 'Dots3 Note Preview (512k Context)',
+    provider: 'openrouter',
+    category: 'free',
+    description: 'Specialized 512,000 token context reasoning and code preview model.',
+    badge: '512k Free',
+    contextLength: '512,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
 
   // ==========================================
   // 🔷 Google Gemini Suite (Free Tier: 1M Tokens)
@@ -337,6 +347,33 @@ export const AGENT_MODELS: AgentModelPreset[] = [
     contextLength: 'Local RAM',
     baseURL: 'http://localhost:11434/v1',
   },
+];
+
+/**
+ * Intelligent Auto-Cascade Chains:
+ * If tokens run out (429) or high demand (503) occurs, the agent automatically
+ * cascades to the next best intelligent free model seamlessly.
+ */
+export const OPENROUTER_FREE_CASCADE_CHAIN = [
+  'openrouter/free',
+  'particle-ai/particle-1:free',
+  'nvidia/nemotron-3-ultra-550b-a55b:free',
+  'google/gemma-4-31b-it:free',
+  'nvidia/nemotron-3.5-lightning:free',
+  'baidu/ernie-5.5-flash-preview:free',
+  'inclusionai/ling-3.2-flash:free',
+  'dots-studio/dots-3-note-preview:free',
+  'google/gemma-4-26b-a4b-it:free',
+  'liquid/lfm-3-1.7b:free',
+  'recursive/flint-v1.0:free',
+];
+
+export const GEMINI_CASCADE_CHAIN = [
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+  'gemini-3.8-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-1.5-pro',
 ];
 
 /**
