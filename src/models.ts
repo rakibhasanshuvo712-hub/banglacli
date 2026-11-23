@@ -271,6 +271,30 @@ export const AGENT_MODELS: AgentModelPreset[] = [
   },
 
   // ==========================================
+  // ⚡ Cerebras Cloud Free Tier (1,800+ Tokens/Sec)
+  // ==========================================
+  {
+    id: 'llama3.3-70b',
+    name: 'Cerebras: Llama 3.3 70B (Free Tier)',
+    provider: 'custom',
+    category: 'groq',
+    description: "World's fastest inference (1,000+ tokens/sec) on Cerebras Cloud free tier.",
+    badge: 'Cerebras Free',
+    contextLength: '128,000',
+    baseURL: 'https://api.cerebras.ai/v1',
+  },
+  {
+    id: 'llama3.1-8b',
+    name: 'Cerebras: Llama 3.1 8B (Free Tier)',
+    provider: 'custom',
+    category: 'groq',
+    description: 'Ultra-high speed 1,800+ tokens/sec on Cerebras Cloud free tier.',
+    badge: 'Cerebras Free',
+    contextLength: '128,000',
+    baseURL: 'https://api.cerebras.ai/v1',
+  },
+
+  // ==========================================
   // 🚀 Pro Flagship Coding Models (OpenRouter BYOK)
   // ==========================================
   {

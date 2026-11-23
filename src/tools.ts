@@ -165,10 +165,17 @@ export async function runCommand(command: string): Promise<string> {
   console.log(chalk.cyan(`\n⚡ Running command: ${chalk.bold(command)}...`));
 
   try {
+    const isWindows = process.platform === 'win32';
     const { stdout, stderr } = await execAsync(command, {
       cwd: process.cwd(),
-      timeout: 120000, // 2 minutes max
-      maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+      shell: isWindows ? 'powershell.exe' : undefined,
+      timeout: 180000, // 3 minutes max (good for npm/pip installations)
+      maxBuffer: 20 * 1024 * 1024, // 20MB buffer
+      env: {
+        ...process.env,
+        FORCE_COLOR: '0',
+        CI: 'true', // Prevents interactive prompts from freezing execution
+      },
     });
 
     const outputParts: string[] = [];

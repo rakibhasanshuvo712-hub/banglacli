@@ -57,22 +57,35 @@ export function getSystemPrompt(mode: AgentMode = 'build'): string {
 ### 🧠 INTELLIGENT AGENT PROTOCOL (FOLLOW RIGOROUSLY):
 1. **Investigate Before Acting**:
    - Always explore the workspace with list_files or read_file first. Never code blindly without understanding existing dependencies and architecture.
-2. **Autonomous Self-Correction & Self-Healing**:
-   - If a terminal command fails (e.g. build failure, TypeScript error, missing dependency, runtime crash):
+2. **Mandatory Language & Full Dependency Installation (CRITICAL)**:
+   - When requested to build an app in ANY language or stack (Node.js, React, Next.js, Express, TypeScript, Python, etc.):
+     * **Node.js / TypeScript / React**:
+       - Write a complete "package.json" with all required dependencies and devDependencies (including @types/*, scripts, build tools).
+       - IMMEDIATELY run "npm install" using run_command so all packages are physically installed in node_modules!
+       - Create configuration files (tsconfig.json, vite.config.ts, .gitignore, etc.).
+       - Run "npm run build" or "npx tsc --noEmit" to verify 0 missing dependency or compiler errors.
+     * **Python**:
+       - Write "requirements.txt" with all required packages.
+       - Run "pip install -r requirements.txt" (or install packages via run_command).
+       - Test import or syntax with "python -m py_compile" or 'python -c "import ..."'.
+     * **HTML / Web UI**:
+       - Ensure all assets, scripts, and Tailwind CSS links work out of the box with zero broken references.
+3. **Autonomous Self-Correction & Self-Healing**:
+   - If any command fails (e.g. build failure, TypeScript error, missing module, syntax error):
      * DO NOT give up or ask the user to fix it!
      * Read the compiler error or stack trace carefully.
-     * Identify the exact line and file causing the issue.
+     * Identify the exact file, missing package, or syntax problem.
      * Fix the problem with write_file or install missing modules with run_command.
      * Re-run the command to confirm the fix works!
-3. **Zero Placeholder Code Rule (Strictly Enforced)**:
+4. **Zero Placeholder Code Rule (Strictly Enforced)**:
    - NEVER output incomplete snippets, "// TODO: implement rest", "// add logic here", or dummy mocks.
    - Every function, handler, UI component, CSS rule, and utility must be 100% complete, fully implemented, robust, and working out of the box.
-4. **Modern Production Standards**:
+5. **Modern Production Standards**:
    - Use clean, modern, idiomatic code (TypeScript, ESM, strict types, async/await, proper error boundaries).
    - Write clean, modular architectures (SOLID, DRY, separated concerns).
    - For web apps: Modern responsive UI, semantic HTML5, modern CSS / Tailwind, clean typography.
    - For backend/APIs: Proper status codes, error handling, input validation, clean routing.
-5. **Clear User Feedback**:
+6. **Clear User Feedback & Launch Command**:
    - Briefly explain your actions and strategy before and after tool calls.
    - When a project build is finished, provide clear commands for the user to run or preview the project (e.g. "npm run dev").
 
@@ -331,7 +344,7 @@ export class BanglaAgent {
       parts: [{ text: userInput }],
     });
 
-    const maxTurns = 25;
+    const maxTurns = 40;
     let turnCount = 0;
 
     while (turnCount < maxTurns) {
@@ -493,7 +506,7 @@ export class BanglaAgent {
       content: userInput,
     });
 
-    const maxTurns = 25;
+    const maxTurns = 40;
     let turnCount = 0;
 
     while (turnCount < maxTurns) {

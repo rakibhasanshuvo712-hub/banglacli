@@ -251,17 +251,25 @@ export function showFreeApiKeyGuide(): void {
   console.log(`   ${chalk.gray('Quota:')} 100% Free with zero payment or credit card needed!\n`);
 
   // 3. Groq (Blazing Fast Inference)
-  console.log(chalk.bold.hex('#00FF7F')('3. Groq Cloud (Ultra-Fast 500+ tokens/sec)'));
+  console.log(chalk.bold.hex('#00FF7F')('3. Groq Cloud (Ultra-Fast 500+ tokens/sec - Free Tier)'));
   console.log(`   ${chalk.gray('Direct Link:')} ${chalk.bold.underline.cyan('https://console.groq.com/keys')}`);
-  console.log(`   ${chalk.gray('Steps:')} Select "${chalk.white('Custom OpenAI-Compatible')}" in banglaCLI.`);
+  console.log(`   ${chalk.gray('Steps:')} Select "${chalk.white('Custom OpenAI-Compatible')}" in banglacli.`);
   console.log(`   ${chalk.gray('Base URL:')} ${chalk.cyan('https://api.groq.com/openai/v1')}`);
-  console.log(`   ${chalk.gray('Free Models:')} ${chalk.yellow('llama-3.3-70b-versatile')}, ${chalk.yellow('qwen-2.5-coder-32b')}\n`);
+  console.log(`   ${chalk.gray('Free Models:')} ${chalk.yellow('llama-3.3-70b-versatile')}, ${chalk.yellow('qwen-2.5-coder-32b')}, ${chalk.yellow('deepseek-r1-distill-llama-70b')}`);
+  console.log(`   ${chalk.gray('Quota:')} 14,400 Requests per day free!\n`);
 
-  // 4. Local Offline Models (Ollama)
-  console.log(chalk.bold.hex('#00FF7F')('4. Local Offline (100% Private, Free & Offline via Ollama)'));
+  // 4. Cerebras Cloud (1,800+ tokens/sec - Free Tier)
+  console.log(chalk.bold.hex('#00FF7F')('4. Cerebras Cloud (World\'s Fastest 1,800+ tokens/sec - Free Tier)'));
+  console.log(`   ${chalk.gray('Direct Link:')} ${chalk.bold.underline.cyan('https://cloud.cerebras.ai')}`);
+  console.log(`   ${chalk.gray('Base URL:')} ${chalk.cyan('https://api.cerebras.ai/v1')}`);
+  console.log(`   ${chalk.gray('Free Models:')} ${chalk.yellow('llama3.3-70b')}, ${chalk.yellow('llama3.1-8b')} (128k Context)`);
+  console.log(`   ${chalk.gray('Quota:')} Free tier available with ultra-low latency!\n`);
+
+  // 5. Local Offline Models (Ollama)
+  console.log(chalk.bold.hex('#00FF7F')('5. Local Offline (100% Private, Free & Offline via Ollama)'));
   console.log(`   ${chalk.gray('Download:')} ${chalk.bold.underline.cyan('https://ollama.com')}`);
   console.log(`   ${chalk.gray('Run in Terminal:')} ${chalk.white('ollama run qwen2.5-coder')}`);
-  console.log(`   ${chalk.gray('In banglaCLI:')} Choose "${chalk.white('Custom OpenAI-Compatible')}"`);
+  console.log(`   ${chalk.gray('In banglacli:')} Choose "${chalk.white('Custom OpenAI-Compatible')}"`);
   console.log(`   ${chalk.gray('Base URL:')} ${chalk.cyan('http://localhost:11434/v1')}`);
   console.log(`   ${chalk.gray('API Key:')} Any text (e.g. ${chalk.white('ollama')})\n`);
 
