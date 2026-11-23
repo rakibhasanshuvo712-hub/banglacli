@@ -148,10 +148,84 @@ export const AGENT_MODELS: AgentModelPreset[] = [
     contextLength: '512,000',
     baseURL: 'https://openrouter.ai/api/v1',
   },
+  {
+    id: 'google/lyria-3-pro-preview',
+    name: 'Google Lyria 3 Pro Preview (1M Context)',
+    provider: 'openrouter',
+    category: 'free',
+    description: "Google DeepMind's ultra-long context multimodal reasoning model, 100% free on OpenRouter.",
+    badge: '1M Free',
+    contextLength: '1,048,576',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'google/lyria-3-clip-preview',
+    name: 'Google Lyria 3 Clip Preview (1M Context)',
+    provider: 'openrouter',
+    category: 'free',
+    description: 'High-speed long-context preview model from Google DeepMind with 1M token context.',
+    badge: '1M Free',
+    contextLength: '1,048,576',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
 
   // ==========================================
   // 🔷 Google Gemini Suite (100% Free Tier: 1M Tokens, 1,500 Req/Day)
   // ==========================================
+  {
+    id: 'gemini-2.0-flash',
+    name: 'Gemini 2.0 Flash (🌟 Google Flagship Free Coder)',
+    provider: 'gemini',
+    category: 'gemini',
+    description: "Google's flagship multimodal model with tool calling, high reasoning, and 1,500 req/day free.",
+    badge: '100% Free',
+    contextLength: '1,048,576',
+  },
+  {
+    id: 'gemini-2.0-flash-lite',
+    name: 'Gemini 2.0 Flash-Lite (Ultra-Fast 30 RPM)',
+    provider: 'gemini',
+    category: 'gemini',
+    description: 'Ultra-low latency Gemini model with 30 requests/minute and 1M context.',
+    badge: '30 RPM Free',
+    contextLength: '1,048,576',
+  },
+  {
+    id: 'gemini-2.5-flash',
+    name: 'Gemini 2.5 Flash Preview (Next-Gen Flash)',
+    provider: 'gemini',
+    category: 'gemini',
+    description: 'Latest 2.5 generation preview model from Google DeepMind with enhanced coding logic.',
+    badge: '2.5 Preview',
+    contextLength: '1,048,576',
+  },
+  {
+    id: 'gemini-2.5-pro',
+    name: 'Gemini 2.5 Pro Preview (2M Context Frontier)',
+    provider: 'gemini',
+    category: 'gemini',
+    description: 'Deep architectural reasoning model with massive 2 Million token context window.',
+    badge: '2M Context',
+    contextLength: '2,097,152',
+  },
+  {
+    id: 'gemini-1.5-flash',
+    name: 'Gemini 1.5 Flash (Battle-Tested Stable)',
+    provider: 'gemini',
+    category: 'gemini',
+    description: 'Rock-solid stable Google Flash model with 1M context and 0% downtime.',
+    badge: '100% Free',
+    contextLength: '1,048,576',
+  },
+  {
+    id: 'gemini-1.5-pro',
+    name: 'Gemini 1.5 Pro (2M Context Long-Form)',
+    provider: 'gemini',
+    category: 'gemini',
+    description: 'Massive 2,097,152 token context window for large repo analysis.',
+    badge: '2M Free',
+    contextLength: '2,097,152',
+  },
   {
     id: 'gemini-3.5-flash-lite',
     name: 'Gemini 3.5 Flash-Lite (🌟 100% Free & Active)',
@@ -545,6 +619,8 @@ export const AGENT_MODELS: AgentModelPreset[] = [
  */
 export const OPENROUTER_FREE_CASCADE_CHAIN = [
   'openrouter/free',
+  'google/lyria-3-pro-preview',
+  'google/lyria-3-clip-preview',
   'tencent/hy4-flash',
   'z-ai/glm-5.3-flash',
   'particle-ai/particle-1:free',
@@ -560,9 +636,15 @@ export const OPENROUTER_FREE_CASCADE_CHAIN = [
 ];
 
 export const GEMINI_CASCADE_CHAIN = [
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-2.5-flash',
+  'gemini-2.5-pro',
   'gemini-3.5-flash-lite',
   'gemini-3.1-flash-lite',
   'gemini-3.5-flash',
+  'gemini-1.5-flash',
+  'gemini-1.5-pro',
   'gemini-3.8-flash',
 ];
 
