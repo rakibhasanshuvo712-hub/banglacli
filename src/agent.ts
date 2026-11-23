@@ -322,10 +322,17 @@ export class BanglaAgent {
   /**
    * Main chat turn loop with automatic tool execution and cross-provider failover.
    */
-  public async chat(userInput: string): Promise<string> {
+  public async chat(userInput: string, options?: { signal?: AbortSignal }): Promise<string> {
+    if (options?.signal?.aborted) {
+      return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
+    }
+
     try {
       if (this.config.provider === 'gemini') {
-        const reply = await this.chatGemini(userInput);
+        const reply = await this.chatGemini(userInput, options);
+        if (options?.signal?.aborted) {
+          return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
+        }
         // Check if Gemini failed with 503, 429, or server overload message
         if (
           typeof reply === 'string' &&
@@ -351,12 +358,15 @@ export class BanglaAgent {
             this.initClients();
             updateModel('openrouter/free');
             this.onModelChangeCallback?.('openrouter/free', 'openrouter');
-            return await this.chatOpenAI(userInput);
+            return await this.chatOpenAI(userInput, options);
           }
         }
         return reply;
       } else {
-        const reply = await this.chatOpenAI(userInput);
+        const reply = await this.chatOpenAI(userInput, options);
+        if (options?.signal?.aborted) {
+          return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
+        }
         // Check if OpenAI/OpenRouter/Custom failed with auth or rate-limit message
         if (
           typeof reply === 'string' &&
@@ -378,12 +388,15 @@ export class BanglaAgent {
             this.initClients();
             updateModel('gemini-3.5-flash-lite');
             this.onModelChangeCallback?.('gemini-3.5-flash-lite', 'gemini');
-            return await this.chatGemini(userInput);
+            return await this.chatGemini(userInput, options);
           }
         }
         return reply;
       }
     } catch (err: any) {
+      if (options?.signal?.aborted) {
+        return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
+      }
       if (this.config.provider === 'gemini') {
         const openRouterSaved = this.config.savedProviders?.openrouter;
         if (openRouterSaved && openRouterSaved.apiKey) {
@@ -399,7 +412,7 @@ export class BanglaAgent {
           this.initClients();
           updateModel('openrouter/free');
           this.onModelChangeCallback?.('openrouter/free', 'openrouter');
-          return await this.chatOpenAI(userInput);
+          return await this.chatOpenAI(userInput, options);
         }
       } else {
         const geminiSaved = this.config.savedProviders?.gemini;
@@ -415,7 +428,7 @@ export class BanglaAgent {
           this.initClients();
           updateModel('gemini-3.5-flash-lite');
           this.onModelChangeCallback?.('gemini-3.5-flash-lite', 'gemini');
-          return await this.chatGemini(userInput);
+          return await this.chatGemini(userInput, options);
         }
       }
       throw err;
@@ -425,7 +438,11 @@ export class BanglaAgent {
   /**
    * Google Gemini Tool-Calling Loop using @google/genai
    */
-  private async chatGemini(userInput: string): Promise<string> {
+  private async chatGemini(userInput: string, options?: { signal?: AbortSignal }): Promise<string> {
+    if (options?.signal?.aborted) {
+      return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
+    }
+
     if (!this.geminiClient) {
       throw new Error('Gemini client is not initialized.');
     }
@@ -440,6 +457,10 @@ export class BanglaAgent {
     let turnCount = 0;
 
     while (turnCount < maxTurns) {
+      if (options?.signal?.aborted) {
+        return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
+      }
+
       turnCount++;
       const spinner = createSpinner(
         turnCount === 1 ? 'banglacli thinking...' : `banglacli working (step ${turnCount})...`
@@ -561,10 +582,18 @@ export class BanglaAgent {
       // Execute each function call
       const toolResponseParts: Array<any> = [];
       for (const call of functionCalls) {
+        if (options?.signal?.aborted) {
+          return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
+        }
+
         const toolName = call.name;
         const toolArgs = call.args || {};
 
-        const output = await executeTool(toolName, toolArgs, this.mode);
+        const output = await executeTool(toolName, toolArgs, this.mode, options?.signal);
+
+        if (options?.signal?.aborted) {
+          return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
+        }
 
         toolResponseParts.push({
           functionResponse: {
@@ -588,7 +617,11 @@ export class BanglaAgent {
   /**
    * OpenAI / OpenRouter / Custom Provider Tool-Calling Loop
    */
-  private async chatOpenAI(userInput: string): Promise<string> {
+  private async chatOpenAI(userInput: string, options?: { signal?: AbortSignal }): Promise<string> {
+    if (options?.signal?.aborted) {
+      return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
+    }
+
     if (!this.openAIClient) {
       throw new Error('OpenAI client is not initialized.');
     }
@@ -602,6 +635,10 @@ export class BanglaAgent {
     let turnCount = 0;
 
     while (turnCount < maxTurns) {
+      if (options?.signal?.aborted) {
+        return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
+      }
+
       turnCount++;
       const spinner = createSpinner(
         turnCount === 1
@@ -615,15 +652,29 @@ export class BanglaAgent {
       const maxCascadeAttempts = 6;
 
       while (cascadeAttempts < maxCascadeAttempts) {
+        if (options?.signal?.aborted) {
+          spinner.stop();
+          return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
+        }
+
         try {
-          completion = await this.openAIClient.chat.completions.create({
-            model: this.config.model,
-            messages: this.openAIMessages,
-            tools: this.mode === 'plan' ? PLAN_OPENAI_TOOLS : BUILD_OPENAI_TOOLS,
-            tool_choice: 'auto',
-          });
+          completion = await this.openAIClient.chat.completions.create(
+            {
+              model: this.config.model,
+              messages: this.openAIMessages,
+              tools: this.mode === 'plan' ? PLAN_OPENAI_TOOLS : BUILD_OPENAI_TOOLS,
+              tool_choice: 'auto',
+            },
+            {
+              signal: options?.signal,
+            }
+          );
           break;
         } catch (err: any) {
+          if (options?.signal?.aborted) {
+            spinner.stop();
+            return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
+          }
           const errMsg = err?.message || String(err);
           const isDailyQuotaExhausted =
             errMsg.includes('free-models-per-day') ||
@@ -645,7 +696,7 @@ export class BanglaAgent {
               this.initClients();
               saveConfig(this.config);
               this.onModelChangeCallback?.('gemini-3.5-flash-lite', 'gemini');
-              return await this.chatGemini(userInput);
+              return await this.chatGemini(userInput, options);
             }
           }
 
@@ -676,7 +727,7 @@ export class BanglaAgent {
             );
             if (nextModel) {
               if ((this.config.provider as string) === 'gemini') {
-                return await this.chatGemini(userInput);
+                return await this.chatGemini(userInput, options);
               }
               spinner.text = chalk.cyan(`banglacli continuing with [${nextModel}]...`);
               spinner.start();
@@ -704,7 +755,7 @@ export class BanglaAgent {
               this.initClients();
               updateModel('gemini-3.5-flash-lite');
               this.onModelChangeCallback?.('gemini-3.5-flash-lite', 'gemini');
-              return await this.chatGemini(userInput);
+              return await this.chatGemini(userInput, options);
             }
 
             return chalk.red(
@@ -725,7 +776,7 @@ export class BanglaAgent {
               this.initClients();
               updateModel('gemini-3.5-flash-lite');
               this.onModelChangeCallback?.('gemini-3.5-flash-lite', 'gemini');
-              return await this.chatGemini(userInput);
+              return await this.chatGemini(userInput, options);
             }
 
             return chalk.red(
@@ -738,6 +789,10 @@ export class BanglaAgent {
       }
 
       spinner.stop();
+
+      if (options?.signal?.aborted) {
+        return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
+      }
 
       if (!completion) {
         const geminiSaved = this.config.savedProviders?.gemini;
@@ -753,7 +808,7 @@ export class BanglaAgent {
           this.initClients();
           updateModel('gemini-3.5-flash-lite');
           this.onModelChangeCallback?.('gemini-3.5-flash-lite', 'gemini');
-          return await this.chatGemini(userInput);
+          return await this.chatGemini(userInput, options);
         }
         throw new Error('All model attempts failed or tokens exhausted across providers.');
       }
@@ -773,6 +828,10 @@ export class BanglaAgent {
 
       // Process tool calls
       for (const toolCall of message.tool_calls) {
+        if (options?.signal?.aborted) {
+          return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
+        }
+
         if (toolCall.type !== 'function') continue;
 
         const fnName = toolCall.function.name;
@@ -784,7 +843,11 @@ export class BanglaAgent {
           fnArgs = {};
         }
 
-        const toolResult = await executeTool(fnName, fnArgs, this.mode);
+        const toolResult = await executeTool(fnName, fnArgs, this.mode, options?.signal);
+
+        if (options?.signal?.aborted) {
+          return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
+        }
 
         this.openAIMessages.push({
           role: 'tool',

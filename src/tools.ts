@@ -211,7 +211,7 @@ export async function writeFile(filePath: string, content: string): Promise<stri
 /**
  * 4. run_command: Run a shell command non-interactively (with safety confirmation)
  */
-export async function runCommand(command: string): Promise<string> {
+export async function runCommand(command: string, signal?: AbortSignal): Promise<string> {
   // Safety confirmation check
   if (!safetySession.autoApproveAll) {
     const summary = `${chalk.gray('Shell Command:')} ${chalk.magenta.bold(command)}\n${chalk.gray('Working Directory:')} ${process.cwd()}`;
@@ -223,6 +223,10 @@ export async function runCommand(command: string): Promise<string> {
       safetySession.autoApproveAll = true;
       console.log(chalk.cyan('⚡ Auto-approve enabled for this session.'));
     }
+  }
+
+  if (signal?.aborted) {
+    return 'Action aborted by user (Escape).';
   }
 
   console.log(chalk.cyan(`\n⚡ Running command: ${chalk.bold(command)}...`));
@@ -262,6 +266,15 @@ export async function runCommand(command: string): Promise<string> {
         DEBIAN_FRONTEND: 'noninteractive',
       },
     });
+
+    if (signal) {
+      signal.addEventListener('abort', () => {
+        try {
+          child.kill('SIGTERM');
+        } catch {}
+        resolve('Command aborted by user (Escape).');
+      });
+    }
 
     let stdout = '';
     let stderr = '';
@@ -328,8 +341,13 @@ export async function runCommand(command: string): Promise<string> {
 export async function executeTool(
   name: string,
   args: Record<string, any>,
-  mode: 'build' | 'plan' = 'build'
+  mode: 'build' | 'plan' = 'build',
+  signal?: AbortSignal
 ): Promise<string> {
+  if (signal?.aborted) {
+    return 'Action aborted by user (Escape).';
+  }
+
   // If in PLAN mode, block write and command execution
   if (mode === 'plan' && (name === 'write_file' || name === 'run_command')) {
     const errorMsg = `⚠️ Action blocked: banglacli is currently in PLAN MODE. File modifications and terminal commands are disabled. Switch to BUILD mode (/build or /mode) to execute changes.`;
@@ -355,7 +373,7 @@ export async function executeTool(
         result = await writeFile(args.filePath, args.content);
         break;
       case 'run_command':
-        result = await runCommand(args.command);
+        result = await runCommand(args.command, signal);
         break;
       default:
         result = `Error: Unknown tool "${name}".`;

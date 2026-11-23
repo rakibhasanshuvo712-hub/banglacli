@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import readline from 'node:readline';
 import { Command } from 'commander';
 import chalk from 'chalk';
 import * as p from '@clack/prompts';
@@ -19,9 +20,50 @@ import {
   showFreeApiKeyGuide,
   showTokenLimitsGuide,
   renderStatusBar,
+  renderPriorityTaskBanner,
+  renderInterruptedNotice,
 } from './ui.js';
 import { safetySession, getSessionChanges, undoLastChange } from './tools.js';
 import { selectAgentModelInteractive } from './models.js';
+
+/**
+ * Real-time Escape key listener during agent thinking / tool execution.
+ * When user presses Escape, invokes onEscape() to abort cleanly.
+ */
+function attachEscapeListener(onEscape: () => void): () => void {
+  if (!process.stdin.isTTY) {
+    return () => {};
+  }
+
+  readline.emitKeypressEvents(process.stdin);
+  const wasRaw = process.stdin.isRaw;
+  try {
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+  } catch {}
+
+  const keypressHandler = (_str: string, key: any) => {
+    if (key) {
+      if (key.name === 'escape') {
+        onEscape();
+      } else if (key.ctrl && key.name === 'c') {
+        process.exit(0);
+      }
+    }
+  };
+
+  process.stdin.on('keypress', keypressHandler);
+
+  return () => {
+    process.stdin.removeListener('keypress', keypressHandler);
+    try {
+      if (!wasRaw) {
+        process.stdin.setRawMode(false);
+      }
+      process.stdin.pause();
+    } catch {}
+  };
+}
 
 const program = new Command();
 
@@ -77,12 +119,24 @@ program
         )
       );
       console.log(chalk.white(options.prompt) + '\n');
+      const abortController = new AbortController();
+      const detachEscape = attachEscapeListener(() => abortController.abort());
       try {
-        const reply = await agent.chat(options.prompt);
-        console.log('\n' + renderMarkdown(reply) + '\n');
+        const reply = await agent.chat(options.prompt, { signal: abortController.signal });
+        if (abortController.signal.aborted) {
+          renderInterruptedNotice();
+        } else {
+          console.log('\n' + renderMarkdown(reply) + '\n');
+        }
       } catch (err: any) {
-        console.error(chalk.red(`\n✖ Error: ${err.message}\n`));
-        process.exit(1);
+        if (abortController.signal.aborted) {
+          renderInterruptedNotice();
+        } else {
+          console.error(chalk.red(`\n✖ Error: ${err.message}\n`));
+          process.exit(1);
+        }
+      } finally {
+        detachEscape();
       }
       return;
     }
@@ -95,15 +149,21 @@ program
       // Show bottom status bar showing active mode and model (like OpenCode)
       renderStatusBar(agent.getMode(), config.model, config.provider);
 
-      const promptLabel =
-        agent.getMode() === 'build'
-          ? chalk.bold.hex('#00FF7F')('⚡ banglacli [BUILD] ❯')
-          : chalk.bold.hex('#FFB300')('📋 banglacli [PLAN] ❯');
+      const isBuildMode = agent.getMode() === 'build';
+      const modeTag = isBuildMode
+        ? chalk.bgHex('#00C853').black.bold(' ⚡ BUILD ')
+        : chalk.bgHex('#FFB300').black.bold(' 📋 PLAN ');
+      const modelTag = chalk.bgHex('#1A237E').white.bold(` 🤖 ${config.model} `);
+      const cancelHint = chalk.gray('(Esc to cancel)');
 
-      const placeholderText =
-        agent.getMode() === 'build'
-          ? 'Type what to build, or /plan, /mode, /agent, /help...'
-          : 'Ask for architectural plan or analysis, or /build, /mode...';
+      // Antigravity & OpenCode style model badge + mode prompt
+      const promptLabel = `${modeTag} ${modelTag} ${cancelHint}\n${
+        isBuildMode ? chalk.hex('#00FF7F').bold('❯') : chalk.hex('#FFB300').bold('❯')
+      }`;
+
+      const placeholderText = isBuildMode
+        ? 'Type your task/question, or /task <priority>, /agent, /help...'
+        : 'Ask for architectural plan or analysis, or /build, /mode...';
 
       const input = (await p.text({
         message: promptLabel,
@@ -287,13 +347,45 @@ program
         continue;
       }
 
-      // Agent chat execution
+      // Antigravity-style Priority Task Dispatch
+      // User can execute a specific task first using /task, /urgent, /priority, or "urgent: <task>"
+      let isPriorityTask = false;
+      let taskPrompt = trimmed;
+
+      if (trimmed.startsWith('/task ') || trimmed.startsWith('/urgent ') || trimmed.startsWith('/priority ')) {
+        isPriorityTask = true;
+        taskPrompt = trimmed.replace(/^\/(task|urgent|priority)\s+/i, '').trim();
+      } else if (/^(urgent|priority|task):\s*/i.test(trimmed)) {
+        isPriorityTask = true;
+        taskPrompt = trimmed.replace(/^(urgent|priority|task):\s*/i, '').trim();
+      }
+
+      if (isPriorityTask) {
+        renderPriorityTaskBanner(taskPrompt, config.model, agent.getMode());
+      }
+
+      // Real-time Escape-to-cancel agent chat execution
+      const abortController = new AbortController();
+      const detachEscape = attachEscapeListener(() => {
+        abortController.abort();
+      });
+
       try {
-        const reply = await agent.chat(trimmed);
-        console.log('\n' + chalk.bold.hex('#00FF7F')('banglacli:'));
-        console.log(renderMarkdown(reply) + '\n');
+        const reply = await agent.chat(taskPrompt, { signal: abortController.signal });
+        if (abortController.signal.aborted) {
+          renderInterruptedNotice();
+        } else {
+          console.log('\n' + chalk.bold.hex('#00FF7F')('banglacli:'));
+          console.log(renderMarkdown(reply) + '\n');
+        }
       } catch (err: any) {
-        console.error(chalk.red(`\n✖ Agent Error: ${err.message}\n`));
+        if (abortController.signal.aborted) {
+          renderInterruptedNotice();
+        } else {
+          console.error(chalk.red(`\n✖ Agent Error: ${err.message}\n`));
+        }
+      } finally {
+        detachEscape();
       }
     }
   });

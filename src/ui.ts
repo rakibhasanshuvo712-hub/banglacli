@@ -185,6 +185,40 @@ export function createSpinner(text: string): Ora {
 }
 
 /**
+ * Render Antigravity-style Priority Task Banner
+ */
+export function renderPriorityTaskBanner(task: string, model: string, mode: 'build' | 'plan'): void {
+  const border = chalk.hex('#00FF7F')('═'.repeat(78));
+  console.log('\n' + border);
+  console.log(
+    chalk.bgHex('#00FF7F').black.bold(' ⚡ [PRIORITY TASK DISPATCH] ') +
+      ' ' +
+      chalk.white.bold('Executing specific priority task first (Antigravity mode)')
+  );
+  console.log(
+    `  ${chalk.gray('Selected Model:')} ${chalk.bold.hex('#00FF7F')(model)}  ` +
+      `${chalk.gray('Mode:')} ${mode === 'build' ? chalk.green.bold('⚡ BUILD') : chalk.yellow.bold('📋 PLAN')}  ` +
+      `${chalk.gray('(Press')} ${chalk.yellow.bold('Esc')} ${chalk.gray('anytime to stop)')}`
+  );
+  console.log(`  ${chalk.gray('Task:')} ${chalk.cyan.bold(task)}`);
+  console.log(border + '\n');
+}
+
+/**
+ * Render clean interruption notice when Escape key is pressed.
+ */
+export function renderInterruptedNotice(): void {
+  console.log(
+    '\n' +
+      chalk.bgHex('#FF3366').white.bold(' ⏹️  EXECUTION STOPPED ') +
+      ' ' +
+      chalk.yellow.bold('Model stopped working by user (Escape key pressed).') +
+      '\n' +
+      chalk.gray('Processes terminated cleanly. Returned to banglacli prompt.\n')
+  );
+}
+
+/**
  * Show a styled help manual.
  */
 export function showHelp(): void {
@@ -193,7 +227,9 @@ export function showHelp(): void {
   console.log(`${chalk.yellow.bold('Agent Modes (OpenCode Style):')}`);
   console.log(`  ${chalk.green.bold('⚡ BUILD Mode')}   - Autonomous full-stack coder. Can create/edit files & run terminal commands.`);
   console.log(`  ${chalk.yellow.bold('📋 PLAN Mode')}    - Senior Architect. Read-only codebase investigation & step-by-step planning.`);
-  console.log(`\n${chalk.yellow.bold('Slash Commands in Chat (OpenCode Style):')}`);
+  console.log(`\n${chalk.yellow.bold('Slash Commands in Chat (OpenCode & Antigravity Style):')}`);
+  console.log(`  ${chalk.cyan('/task <query>')} - Push and execute a specific task first with priority (like Antigravity)`);
+  console.log(`  ${chalk.cyan('/urgent <q>')}   - Alias for priority task dispatch (also supports "urgent: <task>")`);
   console.log(`  ${chalk.cyan('/mode')}        - Toggle or select between BUILD mode and PLAN mode`);
   console.log(`  ${chalk.cyan('/plan')}        - Switch instantly to PLAN mode (architectural read-only)`);
   console.log(`  ${chalk.cyan('/build')}       - Switch instantly to BUILD mode (autonomous coding & execution)`);
@@ -209,6 +245,7 @@ export function showHelp(): void {
   console.log(`  ${chalk.cyan('/config')}      - Full interactive configuration wizard`);
   console.log(`  ${chalk.cyan('/clear')}       - Clear conversation history / reset memory`);
   console.log(`  ${chalk.cyan('/exit')}        - Exit banglacli session`);
+  console.log(`  ${chalk.yellow.bold('Escape Key')}   - Press Esc anytime while agent or tool is running to stop immediately`);
 
   console.log(`\n${chalk.yellow.bold('Autonomous Tool Capabilities:')}`);
   console.log(`  1. ${chalk.bold('list_files')}   - Lists workspace files (ignoring node_modules, .git)`);
