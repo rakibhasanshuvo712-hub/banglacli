@@ -25,6 +25,7 @@ import {
 } from './ui.js';
 import { safetySession, getSessionChanges, undoLastChange } from './tools.js';
 import { selectAgentModelInteractive } from './models.js';
+import { readOpenCodePrompt, expandOpenCodeMentions } from './prompt.js';
 
 /**
  * Real-time Escape key listener during agent thinking / tool execution.
@@ -122,7 +123,8 @@ program
       const abortController = new AbortController();
       const detachEscape = attachEscapeListener(() => abortController.abort());
       try {
-        const reply = await agent.chat(options.prompt, { signal: abortController.signal });
+        const { expandedPrompt } = await expandOpenCodeMentions(options.prompt);
+        const reply = await agent.chat(expandedPrompt, { signal: abortController.signal });
         if (abortController.signal.aborted) {
           renderInterruptedNotice();
         } else {
@@ -149,38 +151,24 @@ program
       // Show bottom status bar showing active mode and model (like OpenCode)
       renderStatusBar(agent.getMode(), config.model, config.provider);
 
-      const isBuildMode = agent.getMode() === 'build';
-      const modeTag = isBuildMode
-        ? chalk.bgHex('#00C853').black.bold(' ⚡ BUILD ')
-        : chalk.bgHex('#FFB300').black.bold(' 📋 PLAN ');
-      const modelTag = chalk.bgHex('#1A237E').white.bold(` 🤖 ${config.model} `);
-      const cancelHint = chalk.gray('(Esc to cancel)');
+      // OpenCode & Antigravity Interactive Prompt
+      // Features: Bracketed paste protection (multi-line pastes never auto-submit),
+      // Shift+Enter / Alt+Enter for newlines, Esc to cancel/abort, model badge.
+      const input = await readOpenCodePrompt({
+        mode: agent.getMode(),
+        model: config.model,
+        provider: config.provider,
+      });
 
-      // Antigravity & OpenCode style model badge + mode prompt
-      const promptLabel = `${modeTag} ${modelTag} ${cancelHint}\n${
-        isBuildMode ? chalk.hex('#00FF7F').bold('❯') : chalk.hex('#FFB300').bold('❯')
-      }`;
-
-      const placeholderText = isBuildMode
-        ? 'Type your task/question, or /task <priority>, /agent, /help...'
-        : 'Ask for architectural plan or analysis, or /build, /mode...';
-
-      const input = (await p.text({
-        message: promptLabel,
-        placeholder: placeholderText,
-        validate: (val) => {
-          if (!val || val.trim().length === 0) {
-            return 'Please enter a message or command.';
-          }
-        },
-      })) as string;
-
-      if (p.isCancel(input)) {
+      if (input === null) {
         console.log(chalk.yellow('\nবিদায়! Goodbye! Exiting banglacli.\n'));
         break;
       }
 
       const trimmed = input.trim();
+      if (trimmed.length === 0) {
+        continue;
+      }
 
       // Handle Slash Commands
       if (trimmed === '/exit' || trimmed === '/quit') {
@@ -364,6 +352,9 @@ program
         renderPriorityTaskBanner(taskPrompt, config.model, agent.getMode());
       }
 
+      // OpenCode @ file mentions ingestion (e.g. @src/index.ts, @package.json)
+      const { expandedPrompt } = await expandOpenCodeMentions(taskPrompt);
+
       // Real-time Escape-to-cancel agent chat execution
       const abortController = new AbortController();
       const detachEscape = attachEscapeListener(() => {
@@ -371,7 +362,7 @@ program
       });
 
       try {
-        const reply = await agent.chat(taskPrompt, { signal: abortController.signal });
+        const reply = await agent.chat(expandedPrompt, { signal: abortController.signal });
         if (abortController.signal.aborted) {
           renderInterruptedNotice();
         } else {

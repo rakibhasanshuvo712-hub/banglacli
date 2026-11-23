@@ -245,7 +245,13 @@ export function showHelp(): void {
   console.log(`  ${chalk.cyan('/config')}      - Full interactive configuration wizard`);
   console.log(`  ${chalk.cyan('/clear')}       - Clear conversation history / reset memory`);
   console.log(`  ${chalk.cyan('/exit')}        - Exit banglacli session`);
-  console.log(`  ${chalk.yellow.bold('Escape Key')}   - Press Esc anytime while agent or tool is running to stop immediately`);
+  console.log(`\n${chalk.yellow.bold('OpenCode & Antigravity Interactive Input Controls:')}`);
+  console.log(`  • ${chalk.green.bold('Pasting Safety')} : Bracketed paste protection enabled! Pasting code, JSON or multi-line logs`);
+  console.log(`                     ${chalk.dim('never auto-submits. It captures cleanly and waits for your Enter key.')}`);
+  console.log(`  • ${chalk.green.bold('@ Mentions')}     : Type ${chalk.cyan('@path/to/file')} (e.g. ${chalk.cyan('@package.json')}) to auto-ingest file content.`);
+  console.log(`  • ${chalk.green.bold('Shift + Enter')}  : Insert a new line (${chalk.cyan('Alt+Enter')} or ${chalk.cyan('Ctrl+J')}) for multiline writing.`);
+  console.log(`  • ${chalk.green.bold('Enter')}          : Submit your prompt to the active AI agent.`);
+  console.log(`  • ${chalk.green.bold('Escape')}         : Clear input buffer while typing; stops agent immediately while running.`);
 
   console.log(`\n${chalk.yellow.bold('Autonomous Tool Capabilities:')}`);
   console.log(`  1. ${chalk.bold('list_files')}   - Lists workspace files (ignoring node_modules, .git)`);
