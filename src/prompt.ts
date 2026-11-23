@@ -98,21 +98,26 @@ function renderContentLine(
   borderColor: (str: string) => string
 ): string {
   const promptArrow = isBuild ? chalk.hex('#00FF7F').bold('❯ ') : chalk.hex('#FFB300').bold('❯ ');
+  // Both line 0 ('│ ❯ ') and continuation lines ('│ · ') have identical display width of 4 cells
   const prefix = isFirst
     ? borderColor('│ ') + promptArrow
-    : borderColor('│ ') + chalk.dim('  ↳ ');
+    : borderColor('│ ') + chalk.dim('· ');
   const prefixWidth = 4;
   const rightBorder = borderColor(' │');
   const rightWidth = 2;
   const textCapacity = Math.max(10, width - prefixWidth - rightWidth);
 
-  // If text exceeds textCapacity, show the tail so typing is always visible
+  // Fit text within capacity using display width so emojis or wide chars never break borders
   let visibleText = lineText;
-  if (lineText.length > textCapacity) {
-    visibleText = lineText.slice(lineText.length - textCapacity);
+  let textWidth = getDisplayWidth(visibleText);
+  if (textWidth > textCapacity) {
+    while (visibleText.length > 0 && getDisplayWidth(visibleText) > textCapacity) {
+      visibleText = visibleText.slice(1);
+    }
+    textWidth = getDisplayWidth(visibleText);
   }
 
-  const padding = Math.max(0, textCapacity - visibleText.length);
+  const padding = Math.max(0, textCapacity - textWidth);
   return prefix + chalk.white(visibleText) + ' '.repeat(padding) + rightBorder;
 }
 
@@ -200,7 +205,7 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
         isBuildMode,
         borderColor
       );
-      const activeCol = (cursorLine === 0 ? 5 : 7) + Math.min(cursorCol, curWidth - 8);
+      const activeCol = 5 + Math.min(cursorCol, curWidth - 8);
       process.stdout.write(`\r${lineStr}\r\x1b[${activeCol}G`);
     };
 
@@ -222,7 +227,7 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
 
       // Move cursor back up from bottom border to cursorLine
       const linesUpFromBottom = (bufferLines.length - cursorLine);
-      const activeCol = (cursorLine === 0 ? 5 : 7) + Math.min(cursorCol, curWidth - 8);
+      const activeCol = 5 + Math.min(cursorCol, curWidth - 8);
       process.stdout.write(`\x1b[${linesUpFromBottom}A\x1b[${activeCol}G`);
     };
 
@@ -415,13 +420,13 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
         if (cursorCol > 0) {
           cursorCol--;
           const curWidth = getSafeBoxWidth();
-          const activeCol = (cursorLine === 0 ? 5 : 7) + Math.min(cursorCol, curWidth - 8);
+          const activeCol = 5 + Math.min(cursorCol, curWidth - 8);
           process.stdout.write(`\x1b[${activeCol}G`);
         } else if (cursorLine > 0) {
           cursorLine--;
           cursorCol = bufferLines[cursorLine].length;
           const curWidth = getSafeBoxWidth();
-          const activeCol = (cursorLine === 0 ? 5 : 7) + Math.min(cursorCol, curWidth - 8);
+          const activeCol = 5 + Math.min(cursorCol, curWidth - 8);
           process.stdout.write(`\x1b[1A\x1b[${activeCol}G`);
         }
         return;
@@ -431,14 +436,12 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
         if (cursorCol < bufferLines[cursorLine].length) {
           cursorCol++;
           const curWidth = getSafeBoxWidth();
-          const activeCol = (cursorLine === 0 ? 5 : 7) + Math.min(cursorCol, curWidth - 8);
+          const activeCol = 5 + Math.min(cursorCol, curWidth - 8);
           process.stdout.write(`\x1b[${activeCol}G`);
         } else if (cursorLine < bufferLines.length - 1) {
           cursorLine++;
           cursorCol = 0;
-          const curWidth = getSafeBoxWidth();
-          const activeCol = 7;
-          process.stdout.write(`\x1b[1B\x1b[${activeCol}G`);
+          process.stdout.write('\x1b[1B\x1b[5G');
         }
         return;
       }
@@ -448,7 +451,7 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
           cursorLine--;
           cursorCol = Math.min(cursorCol, bufferLines[cursorLine].length);
           const curWidth = getSafeBoxWidth();
-          const activeCol = (cursorLine === 0 ? 5 : 7) + Math.min(cursorCol, curWidth - 8);
+          const activeCol = 5 + Math.min(cursorCol, curWidth - 8);
           process.stdout.write(`\x1b[1A\x1b[${activeCol}G`);
         }
         return;
@@ -459,7 +462,7 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
           cursorLine++;
           cursorCol = Math.min(cursorCol, bufferLines[cursorLine].length);
           const curWidth = getSafeBoxWidth();
-          const activeCol = (cursorLine === 0 ? 5 : 7) + Math.min(cursorCol, curWidth - 8);
+          const activeCol = 5 + Math.min(cursorCol, curWidth - 8);
           process.stdout.write(`\x1b[1B\x1b[${activeCol}G`);
         }
         return;
