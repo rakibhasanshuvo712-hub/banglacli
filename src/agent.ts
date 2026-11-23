@@ -1,6 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
-import { BanglaCLIConfig, updateModel } from './config.js';
+import { BanglaCLIConfig, updateModel, saveConfig } from './config.js';
 import {
   BUILD_GEMINI_TOOLS,
   PLAN_GEMINI_TOOLS,
@@ -106,10 +106,13 @@ interface ChatMessage {
 }
 
 const GEMINI_FALLBACK_MAP: Record<string, string[]> = {
-  'gemini-3.8-flash': ['gemini-2.0-flash', 'gemini-1.5-flash'],
-  'gemini-2.0-flash': ['gemini-1.5-flash', 'gemini-3.8-flash'],
-  'gemini-1.5-flash': ['gemini-2.0-flash', 'gemini-3.8-flash'],
-  'gemini-1.5-pro': ['gemini-2.0-flash', 'gemini-1.5-flash'],
+  'gemini-3.5-flash-lite': ['gemini-3.1-flash-lite', 'gemini-3.5-flash', 'gemini-3.8-flash'],
+  'gemini-3.1-flash-lite': ['gemini-3.5-flash-lite', 'gemini-3.5-flash'],
+  'gemini-3.5-flash': ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'],
+  'gemini-3.8-flash': ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'],
+  'gemini-2.0-flash': ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'],
+  'gemini-1.5-flash': ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'],
+  'gemini-1.5-pro': ['gemini-3.5-flash-lite', 'gemini-3.5-flash'],
 };
 
 export class BanglaAgent {
@@ -207,14 +210,14 @@ export class BanglaAgent {
       // If user has Gemini saved, cross-provider cascade to Gemini
       const geminiSaved = this.config.savedProviders?.gemini;
       if (geminiSaved && geminiSaved.apiKey) {
-        renderCascadeNotice(currentModel, 'gemini-2.0-flash', 'Cross-provider cascade to Google Gemini Free');
+        renderCascadeNotice(currentModel, 'gemini-3.5-flash-lite', 'Cross-provider cascade to Google Gemini Free (1,500 req/day)');
         this.config.provider = 'gemini';
         this.config.apiKey = geminiSaved.apiKey;
-        this.config.model = 'gemini-2.0-flash';
+        this.config.model = 'gemini-3.5-flash-lite';
         this.initClients();
-        updateModel('gemini-2.0-flash');
-        this.onModelChangeCallback?.('gemini-2.0-flash', 'gemini');
-        return 'gemini-2.0-flash';
+        saveConfig(this.config);
+        this.onModelChangeCallback?.('gemini-3.5-flash-lite', 'gemini');
+        return 'gemini-3.5-flash-lite';
       }
     } else if (this.config.provider === 'gemini') {
       const chain = GEMINI_CASCADE_CHAIN;
@@ -239,7 +242,7 @@ export class BanglaAgent {
         this.config.model = 'openrouter/free';
         this.config.baseURL = 'https://openrouter.ai/api/v1';
         this.initClients();
-        updateModel('openrouter/free');
+        saveConfig(this.config);
         this.onModelChangeCallback?.('openrouter/free', 'openrouter');
         return 'openrouter/free';
       }
@@ -291,7 +294,7 @@ export class BanglaAgent {
             renderCascadeNotice(
               this.config.model,
               'openrouter/free',
-              'Gemini limit reached; cascading to OpenRouter'
+              'Gemini limit reached; cascading to OpenRouter Free'
             );
             this.config.provider = 'openrouter';
             this.config.apiKey = openRouterSaved.apiKey;
@@ -305,7 +308,32 @@ export class BanglaAgent {
         }
         return reply;
       } else {
-        return await this.chatOpenAI(userInput);
+        const reply = await this.chatOpenAI(userInput);
+        // Check if OpenAI/OpenRouter/Custom failed with auth or rate-limit message
+        if (
+          typeof reply === 'string' &&
+          (reply.includes('API Key Error') ||
+            reply.includes('Authentication failed') ||
+            reply.includes('Rate Limit Exceeded') ||
+            reply.includes('free-models-per-day'))
+        ) {
+          const geminiSaved = this.config.savedProviders?.gemini;
+          if (geminiSaved && geminiSaved.apiKey) {
+            renderCascadeNotice(
+              this.config.model,
+              'gemini-3.5-flash-lite',
+              `Provider issue on ${this.config.provider}; auto-recovering with Google Gemini Free (1,500 req/day)`
+            );
+            this.config.provider = 'gemini';
+            this.config.apiKey = geminiSaved.apiKey;
+            this.config.model = 'gemini-3.5-flash-lite';
+            this.initClients();
+            updateModel('gemini-3.5-flash-lite');
+            this.onModelChangeCallback?.('gemini-3.5-flash-lite', 'gemini');
+            return await this.chatGemini(userInput);
+          }
+        }
+        return reply;
       }
     } catch (err: any) {
       if (this.config.provider === 'gemini') {
@@ -314,7 +342,7 @@ export class BanglaAgent {
           renderCascadeNotice(
             this.config.model,
             'openrouter/free',
-            'Gemini server error; cascading to OpenRouter'
+            'Gemini server error; cascading to OpenRouter Free'
           );
           this.config.provider = 'openrouter';
           this.config.apiKey = openRouterSaved.apiKey;
@@ -324,6 +352,22 @@ export class BanglaAgent {
           updateModel('openrouter/free');
           this.onModelChangeCallback?.('openrouter/free', 'openrouter');
           return await this.chatOpenAI(userInput);
+        }
+      } else {
+        const geminiSaved = this.config.savedProviders?.gemini;
+        if (geminiSaved && geminiSaved.apiKey) {
+          renderCascadeNotice(
+            this.config.model,
+            'gemini-3.5-flash-lite',
+            `Provider failure on ${this.config.provider}; auto-recovering with Google Gemini Free (1,500 req/day)`
+          );
+          this.config.provider = 'gemini';
+          this.config.apiKey = geminiSaved.apiKey;
+          this.config.model = 'gemini-3.5-flash-lite';
+          this.initClients();
+          updateModel('gemini-3.5-flash-lite');
+          this.onModelChangeCallback?.('gemini-3.5-flash-lite', 'gemini');
+          return await this.chatGemini(userInput);
         }
       }
       throw err;
@@ -358,7 +402,7 @@ export class BanglaAgent {
       let lastError: any = null;
 
       // Candidate models: requested model first, then fallback models
-      const fallbacks = GEMINI_FALLBACK_MAP[this.config.model] || ['gemini-2.0-flash', 'gemini-1.5-flash'];
+      const fallbacks = GEMINI_FALLBACK_MAP[this.config.model] || ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.5-flash'];
       const modelCandidates = [this.config.model, ...fallbacks.filter((m) => m !== this.config.model)];
 
       for (const candidateModel of modelCandidates) {
@@ -533,6 +577,30 @@ export class BanglaAgent {
           break;
         } catch (err: any) {
           const errMsg = err?.message || String(err);
+          const isDailyQuotaExhausted =
+            errMsg.includes('free-models-per-day') ||
+            errMsg.includes('free_daily_limit');
+
+          // If daily quota across all OpenRouter free models is exhausted, immediately auto-recover to Gemini
+          if (isDailyQuotaExhausted && (this.config.provider === 'openrouter' || this.config.provider === 'custom')) {
+            spinner.stop();
+            const geminiSaved = this.config.savedProviders?.gemini;
+            if (geminiSaved && geminiSaved.apiKey) {
+              renderCascadeNotice(
+                this.config.model,
+                'gemini-3.5-flash-lite',
+                'OpenRouter daily free limit reached; auto-recovering with Google Gemini Free (1,500 req/day)'
+              );
+              this.config.provider = 'gemini';
+              this.config.apiKey = geminiSaved.apiKey;
+              this.config.model = 'gemini-3.5-flash-lite';
+              this.initClients();
+              saveConfig(this.config);
+              this.onModelChangeCallback?.('gemini-3.5-flash-lite', 'gemini');
+              return await this.chatGemini(userInput);
+            }
+          }
+
           const isLimitOrOverload =
             errMsg.includes('429') ||
             errMsg.includes('rate limit') ||
@@ -554,9 +622,14 @@ export class BanglaAgent {
             spinner.stop();
             const nextModel = await this.cascadeModel(
               this.config.model,
-              errMsg.includes('429') ? 'Token quota / Rate limit reached' : 'Server load / Unavailable'
+              errMsg.includes('429') || errMsg.includes('free-models-per-day') || errMsg.includes('free_daily_limit')
+                ? 'Daily free token quota / Rate limit reached'
+                : 'Server load / Unavailable'
             );
             if (nextModel) {
+              if ((this.config.provider as string) === 'gemini') {
+                return await this.chatGemini(userInput);
+              }
               spinner.text = chalk.cyan(`banglacli continuing with [${nextModel}]...`);
               spinner.start();
               continue;
@@ -564,12 +637,49 @@ export class BanglaAgent {
           }
 
           spinner.stop();
-          if (errMsg.includes('401') || errMsg.includes('Incorrect API key') || errMsg.includes('invalid_api_key')) {
+          if (
+            errMsg.includes('401') ||
+            errMsg.includes('Incorrect API key') ||
+            errMsg.includes('invalid_api_key') ||
+            errMsg.includes('Authentication failed')
+          ) {
+            const geminiSaved = this.config.savedProviders?.gemini;
+            if (geminiSaved && geminiSaved.apiKey && this.config.provider !== 'gemini') {
+              renderCascadeNotice(
+                this.config.model,
+                'gemini-3.5-flash-lite',
+                `Auth error on ${this.config.provider}; auto-recovering with Google Gemini Free (1,500 req/day)`
+              );
+              this.config.provider = 'gemini';
+              this.config.apiKey = geminiSaved.apiKey;
+              this.config.model = 'gemini-3.5-flash-lite';
+              this.initClients();
+              updateModel('gemini-3.5-flash-lite');
+              this.onModelChangeCallback?.('gemini-3.5-flash-lite', 'gemini');
+              return await this.chatGemini(userInput);
+            }
+
             return chalk.red(
               `\n✖ API Key Error: Authentication failed for ${this.config.provider}.\n` +
-                `Please run ${chalk.yellow('/config')} to enter a valid API key.`
+                `Please run ${chalk.yellow('/provider')} or ${chalk.yellow('/config')} to select a free model.`
             );
           } else if (errMsg.includes('429') || errMsg.includes('rate limit')) {
+            const geminiSaved = this.config.savedProviders?.gemini;
+            if (geminiSaved && geminiSaved.apiKey && this.config.provider !== 'gemini') {
+              renderCascadeNotice(
+                this.config.model,
+                'gemini-3.5-flash-lite',
+                `Rate limit on ${this.config.provider}; auto-recovering with Google Gemini Free (1,500 req/day)`
+              );
+              this.config.provider = 'gemini';
+              this.config.apiKey = geminiSaved.apiKey;
+              this.config.model = 'gemini-3.5-flash-lite';
+              this.initClients();
+              updateModel('gemini-3.5-flash-lite');
+              this.onModelChangeCallback?.('gemini-3.5-flash-lite', 'gemini');
+              return await this.chatGemini(userInput);
+            }
+
             return chalk.red(
               `\n✖ Rate Limit Exceeded (429).\n` +
                 `All models in the cascade chain were rate-limited. Please wait a moment or run ${chalk.yellow('/provider')}.`
@@ -582,6 +692,21 @@ export class BanglaAgent {
       spinner.stop();
 
       if (!completion) {
+        const geminiSaved = this.config.savedProviders?.gemini;
+        if (geminiSaved && geminiSaved.apiKey && this.config.provider !== 'gemini') {
+          renderCascadeNotice(
+            this.config.model,
+            'gemini-3.5-flash-lite',
+            `Cascade exhausted on ${this.config.provider}; auto-recovering with Google Gemini Free (1,500 req/day)`
+          );
+          this.config.provider = 'gemini';
+          this.config.apiKey = geminiSaved.apiKey;
+          this.config.model = 'gemini-3.5-flash-lite';
+          this.initClients();
+          updateModel('gemini-3.5-flash-lite');
+          this.onModelChangeCallback?.('gemini-3.5-flash-lite', 'gemini');
+          return await this.chatGemini(userInput);
+        }
         throw new Error('All model attempts failed or tokens exhausted across providers.');
       }
 

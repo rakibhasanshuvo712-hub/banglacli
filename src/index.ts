@@ -7,6 +7,7 @@ import {
   promptConfig,
   switchProviderInteractive,
   updateModel,
+  saveConfig,
   PROVIDER_LABELS,
   BanglaCLIConfig,
 } from './config.js';
@@ -58,7 +59,13 @@ program
         config.model = newModel;
         if (newProvider) {
           config.provider = newProvider as any;
+          const saved = config.savedProviders?.[config.provider];
+          if (saved) {
+            config.apiKey = saved.apiKey;
+            config.baseURL = saved.baseURL;
+          }
         }
+        saveConfig(config);
       }
     });
 

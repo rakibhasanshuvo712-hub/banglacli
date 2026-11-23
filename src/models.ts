@@ -7,7 +7,7 @@ export interface AgentModelPreset {
   id: string;
   name: string;
   provider: ProviderType;
-  category: 'free' | 'gemini' | 'groq' | 'flagship' | 'local';
+  category: 'free' | 'gemini' | 'groq' | 'local';
   description: string;
   badge: string;
   baseURL?: string;
@@ -150,33 +150,15 @@ export const AGENT_MODELS: AgentModelPreset[] = [
   },
 
   // ==========================================
-  // 🔷 Google Gemini Suite (Free Tier: 1M Tokens)
+  // 🔷 Google Gemini Suite (100% Free Tier: 1M Tokens, 1,500 Req/Day)
   // ==========================================
   {
-    id: 'gemini-2.0-flash',
-    name: 'Gemini 2.0 Flash (Fast & 1M Tokens)',
+    id: 'gemini-3.5-flash-lite',
+    name: 'Gemini 3.5 Flash-Lite (🌟 100% Free & Active)',
     provider: 'gemini',
     category: 'gemini',
-    description: 'Google flagship free model with 1,048,576 token context and 15 RPM free.',
-    badge: 'Gemini Free',
-    contextLength: '1,048,576',
-  },
-  {
-    id: 'gemini-1.5-flash',
-    name: 'Gemini 1.5 Flash (Ultra-Stable)',
-    provider: 'gemini',
-    category: 'gemini',
-    description: 'Rock-solid stability, massive global server clusters, 1M token context.',
-    badge: 'Gemini Free',
-    contextLength: '1,048,576',
-  },
-  {
-    id: 'gemini-3.5-flash',
-    name: 'Gemini 3.5 Flash (Next-Gen Flash)',
-    provider: 'gemini',
-    category: 'gemini',
-    description: 'Next-generation Gemini Flash model with 1M tokens.',
-    badge: 'Gemini Free',
+    description: 'Active free Google model with 1M context, high speed & 1,500 req/day free.',
+    badge: '100% Free',
     contextLength: '1,048,576',
   },
   {
@@ -185,16 +167,16 @@ export const AGENT_MODELS: AgentModelPreset[] = [
     provider: 'gemini',
     category: 'gemini',
     description: 'Cost-efficient, low-latency Gemini Flash-Lite model.',
-    badge: 'Gemini Free',
+    badge: '100% Free',
     contextLength: '1,048,576',
   },
   {
-    id: 'gemini-2.5-flash-lite',
-    name: 'Gemini 2.5 Flash-Lite (High Speed)',
+    id: 'gemini-3.5-flash',
+    name: 'Gemini 3.5 Flash (Next-Gen Flash)',
     provider: 'gemini',
     category: 'gemini',
-    description: 'Ultra-low latency model for quick scripts and tests.',
-    badge: 'Gemini Free',
+    description: 'Next-generation Gemini Flash model with 1M tokens.',
+    badge: '100% Free',
     contextLength: '1,048,576',
   },
   {
@@ -202,18 +184,9 @@ export const AGENT_MODELS: AgentModelPreset[] = [
     name: 'Gemini 3.8 Flash (Latest Preview)',
     provider: 'gemini',
     category: 'gemini',
-    description: 'Latest Google model (auto-fails over to 2.0-flash if 503 occurs).',
-    badge: 'Gemini Free',
+    description: 'Latest Google model (auto-fails over to 3.5-flash-lite if 503 occurs).',
+    badge: '100% Free',
     contextLength: '1,048,576',
-  },
-  {
-    id: 'gemini-1.5-pro',
-    name: 'Gemini 1.5 Pro (Complex Reasoning)',
-    provider: 'gemini',
-    category: 'gemini',
-    description: '2 Million token context for massive codebases.',
-    badge: 'Gemini Pro',
-    contextLength: '2,097,152',
   },
 
   // ==========================================
@@ -295,60 +268,6 @@ export const AGENT_MODELS: AgentModelPreset[] = [
   },
 
   // ==========================================
-  // 🚀 Pro Flagship Coding Models (OpenRouter BYOK)
-  // ==========================================
-  {
-    id: 'deepseek/deepseek-chat',
-    name: 'DeepSeek V3 (Top Coding Benchmark)',
-    provider: 'openrouter',
-    category: 'flagship',
-    description: 'Leading 671B parameter coding model with unbeatable benchmark results.',
-    badge: 'Pro Coding',
-    contextLength: '128,000',
-    baseURL: 'https://openrouter.ai/api/v1',
-  },
-  {
-    id: 'deepseek/deepseek-r1',
-    name: 'DeepSeek R1 (Chain-of-Thought Reasoning)',
-    provider: 'openrouter',
-    category: 'flagship',
-    description: 'Advanced reasoning model for complex algorithms and deep debugging.',
-    badge: 'Reasoning',
-    contextLength: '128,000',
-    baseURL: 'https://openrouter.ai/api/v1',
-  },
-  {
-    id: 'anthropic/claude-3.5-sonnet',
-    name: 'Claude 3.5 Sonnet (Gold Standard)',
-    provider: 'openrouter',
-    category: 'flagship',
-    description: 'Industry gold standard for autonomous full-stack coding and architecture.',
-    badge: 'Top Tier',
-    contextLength: '200,000',
-    baseURL: 'https://openrouter.ai/api/v1',
-  },
-  {
-    id: 'openai/gpt-4o',
-    name: 'OpenAI GPT-4o Agent',
-    provider: 'openrouter',
-    category: 'flagship',
-    description: "OpenAI's smart multi-modal flagship coding agent.",
-    badge: 'Top Tier',
-    contextLength: '128,000',
-    baseURL: 'https://openrouter.ai/api/v1',
-  },
-  {
-    id: 'qwen/qwen-2.5-coder-32b-instruct',
-    name: 'Qwen 2.5 Coder 32B Instruct',
-    provider: 'openrouter',
-    category: 'flagship',
-    description: 'Specialized programming model optimized for full-stack tasks.',
-    badge: 'Coder SOTA',
-    contextLength: '32,768',
-    baseURL: 'https://openrouter.ai/api/v1',
-  },
-
-  // ==========================================
   // 💻 Local Offline Models (Ollama)
   // ==========================================
   {
@@ -393,11 +312,10 @@ export const OPENROUTER_FREE_CASCADE_CHAIN = [
 ];
 
 export const GEMINI_CASCADE_CHAIN = [
-  'gemini-2.0-flash',
-  'gemini-1.5-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
+  'gemini-3.5-flash',
   'gemini-3.8-flash',
-  'gemini-2.5-flash-lite',
-  'gemini-1.5-pro',
 ];
 
 /**
@@ -451,7 +369,7 @@ export async function selectAgentModelInteractive(
       {
         value: 'free',
         label: `${chalk.bold.green('🌟 100% Free Tier Agents')} ${chalk.dim('(OpenRouter Free, Particle-1, Gemma, Nemotron)')}`,
-        hint: '12+ verified free models, zero cost',
+        hint: '13+ verified zero-plan free models',
       },
       {
         value: 'live_sync',
@@ -460,18 +378,13 @@ export async function selectAgentModelInteractive(
       },
       {
         value: 'gemini',
-        label: `${chalk.bold.yellow('🔷 Google Gemini Free Suite')} ${chalk.dim('(Gemini 2.0/1.5/3.5 Flash, Pro)')}`,
-        hint: '1M tokens, 15 RPM free tier',
+        label: `${chalk.bold.yellow('🔷 Google Gemini Free Suite')} ${chalk.dim('(Gemini 3.5/3.1 Flash-Lite, 3.5/3.8 Flash)')}`,
+        hint: '1M tokens, 1,500 req/day free tier',
       },
       {
         value: 'groq',
         label: `${chalk.bold.hex('#FF9900')('⚡ Groq Cloud Free Tier')} ${chalk.dim('(Llama 3.3 70B, Qwen Coder)')}`,
         hint: '14,400 requests/day, 500+ tokens/sec',
-      },
-      {
-        value: 'flagship',
-        label: `${chalk.bold.cyan('🚀 Flagship Coding Models')} ${chalk.dim('(DeepSeek V3, Claude 3.5, GPT-4o)')}`,
-        hint: 'OpenRouter BYOK with top coding benchmarks',
       },
       {
         value: 'local',
@@ -480,13 +393,13 @@ export async function selectAgentModelInteractive(
       },
       {
         value: 'all',
-        label: `${chalk.bold('📋 Browse All Available Presets')}`,
+        label: `${chalk.bold('📋 Browse All Zero-Plan Free Models')}`,
         hint: 'View complete list of all presets',
       },
       {
         value: 'custom',
         label: `${chalk.bold('✏️  Enter Custom Model ID Manually')}`,
-        hint: 'Type any model slug (e.g. mistralai/mistral-large)',
+        hint: 'Type any model slug (e.g. mistralai/mistral-large:free)',
       },
     ],
   })) as string;

@@ -51,8 +51,8 @@ It is 100% **BYOK (Bring Your Own Key)** — you don't need costly subscriptions
   - Displays `[⚡ BUILD MODE] [🤖 openrouter/free] [🔄 Auto-Cascade Active]` right above the prompt so you always know what model you are running.
 - ⚡ **100% BYOK & Serverless**:
   - No middleman backend. Your API keys are stored locally on your machine via `conf`.
-  - Supports **Google Gemini** (`gemini-2.0-flash`, `gemini-1.5-flash`, `gemini-3.8-flash`).
-  - Supports **OpenRouter** (`openrouter/free`, `particle-ai/particle-1:free`, `nvidia/nemotron-3-ultra-550b-a55b:free`, `google/gemma-4-31b-it:free`).
+  - Supports **Google Gemini** (`gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`, `gemini-3.5-flash`, `gemini-3.8-flash`).
+  - Supports **OpenRouter** (`openrouter/free`, `particle-ai/particle-1:free`, `nvidia/nemotron-3-ultra-550b-a55b:free`, `google/gemma-4-31b-it:free`, `dots-studio/dots-3-note-preview:free`).
   - Supports **Custom OpenAI-Compatible** endpoints (Groq Cloud, Ollama, DeepSeek API).
 - 🛠️ **Autonomous Project Builder (4 Native Tools)**:
   - `list_files(dirPath)`: Explores workspace directory hierarchy (auto-ignoring `node_modules` and `.git`).
@@ -93,7 +93,7 @@ If it's your first time, the interactive setup wizard will guide you to select a
 
 1. **Google Gemini (Free Tier - Recommended)**
    - Get key: [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
-   - Default models: `gemini-2.0-flash` / `gemini-1.5-flash` / `gemini-3.8-flash` (1M token context, 15 RPM free)
+   - Default models: `gemini-3.5-flash-lite` (🌟 100% Free & Active) / `gemini-3.1-flash-lite` / `gemini-3.5-flash` (1M token context, 1,500 RPD free)
 2. **OpenRouter (100% Free Coding Models)**
    - Get key: [openrouter.ai/keys](https://openrouter.ai/keys)
    - Auto-router: `openrouter/free` (zero downtime)
@@ -185,18 +185,19 @@ You don't need to spend any money or enter credit cards to use `banglaCLI`. Here
 ### 1. Google Gemini (Google AI Studio) — 🌟 Recommended
 - **Key URL:** [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
 - **Steps:** Sign in with Google account ➔ Click **Create API Key** ➔ Copy the key.
-- **Recommended Free Model:** `gemini-3.8-flash` (Fast, high rate limits, excels at code generation).
-- **Alternative Free Models:** `gemini-2.0-flash`, `gemini-1.5-pro`.
+- **Recommended Free Model:** `gemini-3.5-flash-lite` (🌟 100% Free, active, fast, high rate limits).
+- **Alternative Free Models:** `gemini-3.1-flash-lite`, `gemini-3.5-flash`, `gemini-3.8-flash`.
 - **Free Limit:** 15 Requests per minute (RPM) and 1,500 Requests per day (RPD) free of charge!
 
-### 2. OpenRouter (Access DeepSeek & Llama for Free)
+### 2. OpenRouter (Access 100% Free Frontier Models)
 - **Key URL:** [openrouter.ai/keys](https://openrouter.ai/keys)
 - **Steps:** Sign in with GitHub or Google ➔ Click **Create Key** ➔ Copy the key.
 - **Top Free Models (`:free`):**
-  - `deepseek/deepseek-chat:free` — Outstanding coding and full-stack software development.
-  - `zhipu/glm-4:free` — Fast, versatile code completions.
-  - `meta-llama/llama-3.3-70b-instruct:free` — High intelligence 70B open model.
-  - `google/gemini-2.0-flash-exp:free` — Experimental free flash model.
+  - `openrouter/free` — Automatic zero-downtime routing to the best active free model.
+  - `particle-ai/particle-1:free` — Specialized 1M token context agentic coding model.
+  - `nvidia/nemotron-3-ultra-550b-a55b:free` — Massive 550B frontier model with 1M tokens.
+  - `google/gemma-4-31b-it:free` — Google DeepMind 30.7B dense instruction-tuned model.
+  - `dots-studio/dots-3-note-preview:free` — 512,000 token context reasoning and code model.
 - **Cost:** 100% Free with zero credit card required.
 
 ### 3. Groq Cloud (Ultra-Fast 500+ tokens/sec)
@@ -216,16 +217,16 @@ You don't need to spend any money or enter credit cards to use `banglaCLI`. Here
 
 | Provider | Model | Context Window | Req / Min (RPM) | Tokens / Min (TPM) | Req / Day (RPD) |
 |---|---|---|---|---|---|
-| **Google Gemini** | `gemini-2.0-flash` | **1,048,576** tokens | 15 RPM | **1,000,000** TPM | **1,500** RPD |
-| **Google Gemini** | `gemini-1.5-flash` | **1,048,576** tokens | 15 RPM | **1,000,000** TPM | **1,500** RPD |
+| **Google Gemini** | `gemini-3.5-flash-lite` | **1,048,576** tokens | 15 RPM | **1,000,000** TPM | **1,500** RPD |
+| **Google Gemini** | `gemini-3.1-flash-lite` | **1,048,576** tokens | 15 RPM | **1,000,000** TPM | **1,500** RPD |
+| **Google Gemini** | `gemini-3.5-flash` | **1,048,576** tokens | 15 RPM | **1,000,000** TPM | **1,500** RPD |
 | **Google Gemini** | `gemini-3.8-flash` | **1,048,576** tokens | 15 RPM | **1,000,000** TPM | **1,500** RPD |
-| **Google Gemini** | `gemini-1.5-pro` | **2,097,152** tokens | 2 RPM | 32,000 TPM | 50 RPD |
-| **OpenRouter** | `deepseek/deepseek-chat:free` | 128,000 tokens | 20 RPM | Generous Free | ~200 RPD |
-| **OpenRouter** | `zhipu/glm-4:free` | 128,000 tokens | 20 RPM | Generous Free | ~200 RPD |
+| **OpenRouter** | `openrouter/free` | 200,000 tokens | 20 RPM | Generous Free | ~200 RPD |
+| **OpenRouter** | `particle-ai/particle-1:free` | **1,048,576** tokens | 20 RPM | Generous Free | ~200 RPD |
 | **Groq Cloud** | `llama-3.3-70b-versatile` | 128,000 tokens | 30 RPM | 6,000 TPM | **14,400** RPD |
 | **Ollama (Local)** | `qwen2.5-coder` | Hardware limit | **Unlimited** | **Unlimited** | **Unlimited** |
 
-> 🛡️ **Auto-Failover Protection:** If a model temporarily returns 503 (High Demand), `banglaCLI` automatically reroutes your request to a stable fallback model (`gemini-2.0-flash` or `gemini-1.5-flash`) so your building process never crashes!
+> 🛡️ **Auto-Failover Protection:** If a model temporarily returns 503 (High Demand) or quota limit, `banglaCLI` automatically cascades to the next best zero-plan free model (`gemini-3.5-flash-lite`, `openrouter/free`, etc.) so your building process never crashes!
 
 ---
 

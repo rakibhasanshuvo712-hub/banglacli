@@ -231,8 +231,8 @@ export function showFreeApiKeyGuide(): void {
   console.log(chalk.bold.hex('#00FF7F')('1. Google Gemini (Google AI Studio) - 🌟 RECOMMENDED'));
   console.log(`   ${chalk.gray('Direct Link:')} ${chalk.bold.underline.cyan('https://aistudio.google.com/apikey')}`);
   console.log(`   ${chalk.gray('Steps:')} Sign in with Google ➔ Click "${chalk.white('Create API Key')}" ➔ Copy key.`);
-  console.log(`   ${chalk.gray('Best Free Model:')} ${chalk.bold.yellow('gemini-3.8-flash')} (Super fast & smart)`);
-  console.log(`   ${chalk.gray('Alternative Models:')} ${chalk.white('gemini-2.0-flash, gemini-1.5-pro')}`);
+  console.log(`   ${chalk.gray('Best Free Model:')} ${chalk.bold.yellow('gemini-3.5-flash-lite')} (🌟 100% Free, active & fast)`);
+  console.log(`   ${chalk.gray('Alternative Free Models:')} ${chalk.white('gemini-3.1-flash-lite, gemini-3.5-flash, gemini-3.8-flash')}`);
   console.log(`   ${chalk.gray('Quota:')} Free tier gives 15 Requests/min & 1,500 Requests/day for free!\n`);
 
   // 2. OpenRouter Free Models
@@ -287,14 +287,14 @@ export function showTokenLimitsGuide(): void {
 
   // 1. Google Gemini Free Tier Limits
   console.log(chalk.bold.hex('#00FF7F')('1. Google Gemini (Google AI Studio Free Tier)'));
-  console.log(chalk.dim('┌──────────────────────┬────────────────┬──────────────┬──────────────┬──────────────┐'));
-  console.log(chalk.dim('│') + chalk.bold(' Model                ') + chalk.dim('│') + chalk.bold(' Context Window ') + chalk.dim('│') + chalk.bold(' Req / Minute ') + chalk.dim('│') + chalk.bold(' Tokens / Min ') + chalk.dim('│') + chalk.bold(' Req / Day    ') + chalk.dim('│'));
-  console.log(chalk.dim('├──────────────────────┼────────────────┼──────────────┼──────────────┼──────────────┤'));
-  console.log(chalk.dim('│') + chalk.green(' gemini-2.0-flash     ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
-  console.log(chalk.dim('│') + chalk.green(' gemini-1.5-flash     ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
-  console.log(chalk.dim('│') + chalk.green(' gemini-3.8-flash     ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
-  console.log(chalk.dim('│') + chalk.white(' gemini-1.5-pro       ') + chalk.dim('│') + chalk.white(' 2,097,152 toks ') + chalk.dim('│') + chalk.red(' 2 RPM        ') + chalk.dim('│') + chalk.cyan(' 32,000 TPM   ') + chalk.dim('│') + chalk.yellow(' 50 RPD       ') + chalk.dim('│'));
-  console.log(chalk.dim('└──────────────────────┴────────────────┴──────────────┴──────────────┴──────────────┘'));
+  console.log(chalk.dim('┌────────────────────────┬────────────────┬──────────────┬──────────────┬──────────────┐'));
+  console.log(chalk.dim('│') + chalk.bold(' Model                  ') + chalk.dim('│') + chalk.bold(' Context Window ') + chalk.dim('│') + chalk.bold(' Req / Minute ') + chalk.dim('│') + chalk.bold(' Tokens / Min ') + chalk.dim('│') + chalk.bold(' Req / Day    ') + chalk.dim('│'));
+  console.log(chalk.dim('├────────────────────────┼────────────────┼──────────────┼──────────────┼──────────────┤'));
+  console.log(chalk.dim('│') + chalk.green(' gemini-3.5-flash-lite  ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' gemini-3.1-flash-lite  ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' gemini-3.5-flash       ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' gemini-3.8-flash       ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
+  console.log(chalk.dim('└────────────────────────┴────────────────┴──────────────┴──────────────┴──────────────┘'));
   console.log(chalk.gray('ℹ️ 1M Tokens/min is equivalent to ~750,000 words per minute! Gemini 2.0/1.5 Flash are best for 0% downtime.\n'));
 
   // 2. OpenRouter Free Models Limits
