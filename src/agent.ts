@@ -14,6 +14,7 @@ import { OPENROUTER_FREE_CASCADE_CHAIN, GEMINI_CASCADE_CHAIN, normalizeGeminiMod
 import { detectProjectContext } from './detector.js';
 import { updateFixedBottomStatus } from './prompt.js';
 import type { ImagePayload } from './image.js';
+import { exploreAndSelectFreeModel } from './explorer.js';
 import chalk from 'chalk';
 
 export type AgentMode = 'build' | 'plan';
@@ -570,8 +571,41 @@ export class BanglaAgent {
       return this.config.model;
     }
 
-    // ALL models across ALL agents and providers have exhausted their tokens!
+    // Active Model Explorer: dynamically scan all 77 models and live free endpoints
+    // to find an alive model with free tokens before rendering exhausted notice
+    const explored = await exploreAndSelectFreeModel(this.config, this.attemptedModelsInCascade);
+    if (explored) {
+      this.attemptedModelsInCascade.add(explored.id);
+      this.initClients();
+      if (explored.provider === 'gemini') {
+        this.syncMessagesToGemini();
+      } else {
+        this.syncMessagesToOpenAI();
+      }
+      this.onModelChangeCallback?.(explored.id, explored.provider);
+      return explored.id;
+    }
+
+    // Only if every single model across all providers is 100% exhausted
     renderAllTokensExhaustedReport();
+    return null;
+  }
+
+  /**
+   * Run model explorer to find and select an active model with free tokens.
+   */
+  public async exploreFreeModel(): Promise<string | null> {
+    const explored = await exploreAndSelectFreeModel(this.config);
+    if (explored) {
+      this.initClients();
+      if (explored.provider === 'gemini') {
+        this.syncMessagesToGemini();
+      } else {
+        this.syncMessagesToOpenAI();
+      }
+      this.onModelChangeCallback?.(explored.id, explored.provider);
+      return explored.id;
+    }
     return null;
   }
 

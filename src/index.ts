@@ -37,6 +37,7 @@ import { readOpenCodePrompt, expandOpenCodeMentions, restoreTerminalViewport, up
 import { detectProjectContext } from './detector.js';
 import { MeshNode } from './mesh.js';
 import { captureClipboardImage, loadImagePayload, isImageFile, type ImagePayload } from './image.js';
+import { exploreAndSelectFreeModel } from './explorer.js';
 
 // Ensure terminal viewport & mesh connections are cleanly restored on process exit
 process.on('exit', () => {
@@ -319,6 +320,27 @@ program
 
       if (lowerCmd === '/help') {
         showHelp();
+        continue;
+      }
+
+      if (
+        lowerCmd === '/explore' ||
+        lowerCmd === '/find-model' ||
+        lowerCmd === '/scan' ||
+        lowerCmd === '/free-tokens' ||
+        lowerCmd === '/free'
+      ) {
+        const found = await exploreAndSelectFreeModel(config);
+        if (found) {
+          agent.updateConfig(config);
+          updateDockedModel(
+            PROVIDER_LABELS[config.provider] || config.provider,
+            config.model,
+            agent.getMode()
+          );
+        } else {
+          console.log(chalk.yellow('\n⚠️ All free models currently have zero available quota across all providers.\n'));
+        }
         continue;
       }
 

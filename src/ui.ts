@@ -122,6 +122,29 @@ export function renderCascadeNotice(fromModel: string, toModel: string, reason: 
 }
 
 /**
+ * Render sleek auto-exploration notice when a working model with free tokens is discovered.
+ */
+export function renderModelExplorationNotice(model: string, provider: string, testedCount: number): void {
+  const cols = process.stdout.columns || 80;
+  const width = Math.max(36, Math.min(cols - 4, 70));
+  const border = chalk.hex('#00FF7F')('═'.repeat(width));
+  process.stdout.write('\r\x1b[2K\n');
+  console.log(border);
+  console.log(
+    chalk.bgHex('#004D40').hex('#00FF7F').bold(' 🔍 MODEL EXPLORER: FREE TOKENS DISCOVERED ') +
+      ' ' +
+      chalk.white.bold(`Scanned ${testedCount} model(s)`)
+  );
+  console.log(
+    chalk.green.bold('✔ Selected Active Model: ') +
+      chalk.bold.cyan(model) +
+      chalk.gray(` [${provider.toUpperCase()}]`)
+  );
+  console.log(chalk.gray('Active free tokens verified. Seamlessly continuing your coding task...'));
+  console.log(border + '\n');
+}
+
+/**
  * Display action details before executing a dangerous tool (write_file or run_command).
  */
 export async function askToolConfirmation(
@@ -294,6 +317,7 @@ export function showHelp(): void {
   console.log(`  ${chalk.green.bold('⚡ BUILD Mode')}   - Autonomous full-stack coder. Can create/edit files & run terminal commands.`);
   console.log(`  ${chalk.yellow.bold('📋 PLAN Mode')}    - Senior Architect. Read-only codebase investigation & step-by-step planning.`);
   console.log(`\n${chalk.yellow.bold('Slash Commands in Chat (OpenCode & Antigravity Style):')}`);
+  console.log(`  ${chalk.cyan('/explore')}      - Explore all models and auto-select the model with active free tokens (alias: /find-model, /scan)`);
   console.log(`  ${chalk.cyan('/image')}        - Paste screenshot from system clipboard or stage an image (alias: /screenshot, /pic)`);
   console.log(`  ${chalk.cyan('/task <query>')} - Push and execute a specific task first with priority (like Antigravity)`);
   console.log(`  ${chalk.cyan('/urgent <q>')}   - Alias for priority task dispatch (also supports "urgent: <task>")`);
