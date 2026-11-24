@@ -1,6 +1,6 @@
 {
   "name": "banglacli",
-  "version": "4.2.1",
+  "version": "4.2.2",
   "description": "Production-grade, next-generation BYOK autonomous terminal coding agent that speaks Bangla, Banglish & English with codebase grep search, dynamic free model explorer & auto-recovery, multimodal screenshot & image pasting, web ingestion, bracketed paste protection, auto-cascade resilience and OpenCode-style Build & Plan modes.",
   "type": "module",
   "main": "./dist/index.js",
