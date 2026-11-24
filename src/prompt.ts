@@ -719,14 +719,10 @@ export function activateFixedDock(
   writeDockedBox(rows, cols, model, mode);
 
   // Set DECSTBM Scroll Region
-  const { boxRows, contentRow } = getDockedRows(rows);
-  const scrollTop = headerHeight + 1;
-  const scrollBottom = rows - boxRows;
+  // Keep terminal scroll margins completely reset (\x1b[r) so user's mouse wheel, trackpad, and terminal scrollbar are never locked
+  process.stdout.write('\x1b[r');
 
-  if (scrollBottom > scrollTop) {
-    process.stdout.write(`\x1b[${scrollTop};${scrollBottom}r`);
-  }
-
+  const { contentRow } = getDockedRows(rows);
   // Position cursor inside input box
   process.stdout.write(`\x1b[${contentRow};5H\x1b[?25h`);
 
@@ -755,12 +751,9 @@ function onDockedResize(): void {
   _dockedHeaderHeight = headerHeight;
   writeDockedBox(rows, cols, _dockedModel, _dockedMode);
 
-  const { boxRows, contentRow } = getDockedRows(rows);
-  const scrollTop = headerHeight + 1;
-  const scrollBottom = rows - boxRows;
-  if (scrollBottom > scrollTop) {
-    process.stdout.write(`\x1b[${scrollTop};${scrollBottom}r`);
-  }
+  // Keep terminal scroll margins completely reset (\x1b[r) so user's mouse wheel, trackpad, and terminal scrollbar are never locked
+  process.stdout.write('\x1b[r');
+  const { contentRow } = getDockedRows(rows);
   process.stdout.write(`\x1b[${contentRow};5H\x1b[?25h`);
 }
 
@@ -796,6 +789,28 @@ export function deactivateFixedDock(): void {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Persistent Command & Prompt History (Up / Down Arrow Navigation)
+// ─────────────────────────────────────────────────────────────────────────────
+const _commandHistory: string[] = [];
+const MAX_HISTORY = 100;
+
+export function addPromptHistory(cmd: string): void {
+  const trimmed = cmd.trim();
+  if (!trimmed) return;
+  // Don't duplicate consecutive identical commands
+  if (_commandHistory.length === 0 || _commandHistory[_commandHistory.length - 1] !== trimmed) {
+    _commandHistory.push(trimmed);
+    if (_commandHistory.length > MAX_HISTORY) {
+      _commandHistory.shift();
+    }
+  }
+}
+
+export function getPromptHistory(): string[] {
+  return [..._commandHistory];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // DOCKED PROMPT — Interactive reader inside fixed bottom box
 // ─────────────────────────────────────────────────────────────────────────────
 async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string | null> {
@@ -821,11 +836,9 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
     _dockedHeaderHeight = headerHeight;
     writeDockedBox(rows, cols, options.model, options.mode);
 
-    const scrollTop = headerHeight + 1;
     const scrollBottom = rows - boxRows;
-    if (scrollBottom > scrollTop) {
-      process.stdout.write(`\x1b[${scrollTop};${scrollBottom}r`);
-    }
+    // Keep terminal scroll margins completely reset (\x1b[r) so user's mouse wheel, trackpad, and terminal scrollbar are never locked
+    process.stdout.write('\x1b[r');
 
     process.stdout.write(`\x1b[${contentRow};${startCol}H\x1b[?25h`);
 
@@ -834,6 +847,8 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
     let cursorCol = 0;
     let inBracketedPaste = false;
     let pasteBuffer = '';
+    let historyIdx = -1;
+    let savedDraft = '';
 
     const wasRaw = process.stdin.isRaw;
     try {
@@ -884,6 +899,11 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
     const submit = () => {
       cleanup();
       const fullContent = bufferLines.join('\n').trim();
+      if (fullContent.length > 0) {
+        addPromptHistory(fullContent);
+      }
+      historyIdx = -1;
+      savedDraft = '';
       const isSlash = fullContent.startsWith('/') || /^[>❯$#\s]+\//.test(fullContent);
 
       // Only show processing status line in dock for actual prompts, NOT for slash commands!
@@ -1075,8 +1095,8 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
         return;
       }
 
-      // Arrow keys
-      if (str === '\x1b[D') { // Left
+      // Arrow keys & History navigation
+      if (str === '\x1b[D' || str === '\x1bOD') { // Left
         if (cursorCol > 0) {
           cursorCol--;
           const absCol = startCol + Math.min(cursorCol, boxWidth - 8);
@@ -1088,7 +1108,7 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
         }
         return;
       }
-      if (str === '\x1b[C') { // Right
+      if (str === '\x1b[C' || str === '\x1bOC') { // Right
         if (cursorCol < bufferLines[cursorLine].length) {
           cursorCol++;
           const absCol = startCol + Math.min(cursorCol, boxWidth - 8);
@@ -1100,18 +1120,72 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
         }
         return;
       }
-      if (str === '\x1b[A') { // Up
+      if (str === '\x1b[A' || str === '\x1bOA' || str === '\x10') { // Up / Ctrl+P (History Backward)
         if (cursorLine > 0) {
           cursorLine--;
           cursorCol = Math.min(cursorCol, bufferLines[cursorLine].length);
           updateActiveLine();
+          return;
+        }
+        if (_commandHistory.length > 0) {
+          if (historyIdx === -1) {
+            savedDraft = bufferLines.join('\n');
+          }
+          if (historyIdx < _commandHistory.length - 1) {
+            historyIdx++;
+            const histItem = _commandHistory[_commandHistory.length - 1 - historyIdx];
+            bufferLines = histItem.split('\n');
+            cursorLine = bufferLines.length - 1;
+            cursorCol = bufferLines[cursorLine].length;
+            updateActiveLine();
+          }
         }
         return;
       }
-      if (str === '\x1b[B') { // Down
+      if (str === '\x1b[B' || str === '\x1bOB' || str === '\x0e') { // Down / Ctrl+N (History Forward)
         if (cursorLine < bufferLines.length - 1) {
           cursorLine++;
           cursorCol = Math.min(cursorCol, bufferLines[cursorLine].length);
+          updateActiveLine();
+          return;
+        }
+        if (historyIdx > 0) {
+          historyIdx--;
+          const histItem = _commandHistory[_commandHistory.length - 1 - historyIdx];
+          bufferLines = histItem.split('\n');
+          cursorLine = 0;
+          cursorCol = bufferLines[0].length;
+          updateActiveLine();
+        } else if (historyIdx === 0) {
+          historyIdx = -1;
+          bufferLines = savedDraft.split('\n');
+          cursorLine = 0;
+          cursorCol = bufferLines[0].length;
+          updateActiveLine();
+        }
+        return;
+      }
+
+      // PageUp (\x1b[5~): Jump to oldest history entry
+      if (str === '\x1b[5~') {
+        if (_commandHistory.length > 0) {
+          if (historyIdx === -1) savedDraft = bufferLines.join('\n');
+          historyIdx = _commandHistory.length - 1;
+          bufferLines = _commandHistory[0].split('\n');
+          cursorLine = 0;
+          cursorCol = bufferLines[0].length;
+          updateActiveLine();
+        }
+        return;
+      }
+
+      // PageDown (\x1b[6~): Jump to latest draft entry
+      if (str === '\x1b[6~') {
+        if (historyIdx !== -1) {
+          historyIdx = -1;
+          bufferLines = savedDraft.split('\n');
+          cursorLine = 0;
+          cursorCol = bufferLines[0].length;
           updateActiveLine();
         }
         return;
@@ -1190,6 +1264,8 @@ async function readInlinePrompt(options: OpenCodePromptOptions): Promise<string 
     let cursorCol = 0;
     let inBracketedPaste = false;
     let pasteBuffer = '';
+    let historyIdx = -1;
+    let savedDraft = '';
 
     const boxWidth = getSafeBoxWidth();
 
@@ -1230,6 +1306,11 @@ async function readInlinePrompt(options: OpenCodePromptOptions): Promise<string 
     const submit = () => {
       cleanup();
       const fullContent = bufferLines.join('\n').trim();
+      if (fullContent.length > 0) {
+        addPromptHistory(fullContent);
+      }
+      historyIdx = -1;
+      savedDraft = '';
       const downLines = bufferLines.length - cursorLine;
       process.stdout.write(`\x1b[${downLines}B\r\n`);
       resolve(fullContent);
@@ -1358,22 +1439,80 @@ async function readInlinePrompt(options: OpenCodePromptOptions): Promise<string 
         return;
       }
 
-      if (str === '\x1b[D') {
+      if (str === '\x1b[D' || str === '\x1bOD') {
         if (cursorCol > 0) { cursorCol--; process.stdout.write(`\x1b[${5 + Math.min(cursorCol, boxWidth - 8)}G`); }
         else if (cursorLine > 0) { cursorLine--; cursorCol = bufferLines[cursorLine].length; process.stdout.write(`\x1b[1A\x1b[${5 + Math.min(cursorCol, boxWidth - 8)}G`); }
         return;
       }
-      if (str === '\x1b[C') {
+      if (str === '\x1b[C' || str === '\x1bOC') {
         if (cursorCol < bufferLines[cursorLine].length) { cursorCol++; process.stdout.write(`\x1b[${5 + Math.min(cursorCol, boxWidth - 8)}G`); }
         else if (cursorLine < bufferLines.length - 1) { cursorLine++; cursorCol = 0; process.stdout.write('\x1b[1B\x1b[5G'); }
         return;
       }
-      if (str === '\x1b[A') {
-        if (cursorLine > 0) { cursorLine--; cursorCol = Math.min(cursorCol, bufferLines[cursorLine].length); process.stdout.write(`\x1b[1A\x1b[${5 + Math.min(cursorCol, boxWidth - 8)}G`); }
+      if (str === '\x1b[A' || str === '\x1bOA' || str === '\x10') { // Up / Ctrl+P
+        if (cursorLine > 0) {
+          cursorLine--;
+          cursorCol = Math.min(cursorCol, bufferLines[cursorLine].length);
+          process.stdout.write(`\x1b[1A\x1b[${5 + Math.min(cursorCol, boxWidth - 8)}G`);
+          return;
+        }
+        if (_commandHistory.length > 0) {
+          if (historyIdx === -1) savedDraft = bufferLines.join('\n');
+          if (historyIdx < _commandHistory.length - 1) {
+            historyIdx++;
+            const histItem = _commandHistory[_commandHistory.length - 1 - historyIdx];
+            bufferLines = histItem.split('\n');
+            cursorLine = bufferLines.length - 1;
+            cursorCol = bufferLines[cursorLine].length;
+            redrawFrom(0);
+          }
+        }
         return;
       }
-      if (str === '\x1b[B') {
-        if (cursorLine < bufferLines.length - 1) { cursorLine++; cursorCol = Math.min(cursorCol, bufferLines[cursorLine].length); process.stdout.write(`\x1b[1B\x1b[${5 + Math.min(cursorCol, boxWidth - 8)}G`); }
+      if (str === '\x1b[B' || str === '\x1bOB' || str === '\x0e') { // Down / Ctrl+N
+        if (cursorLine < bufferLines.length - 1) {
+          cursorLine++;
+          cursorCol = Math.min(cursorCol, bufferLines[cursorLine].length);
+          process.stdout.write(`\x1b[1B\x1b[${5 + Math.min(cursorCol, boxWidth - 8)}G`);
+          return;
+        }
+        if (historyIdx > 0) {
+          historyIdx--;
+          const histItem = _commandHistory[_commandHistory.length - 1 - historyIdx];
+          bufferLines = histItem.split('\n');
+          cursorLine = 0;
+          cursorCol = bufferLines[0].length;
+          redrawFrom(0);
+        } else if (historyIdx === 0) {
+          historyIdx = -1;
+          bufferLines = savedDraft.split('\n');
+          cursorLine = 0;
+          cursorCol = bufferLines[0].length;
+          redrawFrom(0);
+        }
+        return;
+      }
+
+      // PageUp (\x1b[5~) & PageDown (\x1b[6~)
+      if (str === '\x1b[5~') {
+        if (_commandHistory.length > 0) {
+          if (historyIdx === -1) savedDraft = bufferLines.join('\n');
+          historyIdx = _commandHistory.length - 1;
+          bufferLines = _commandHistory[0].split('\n');
+          cursorLine = 0;
+          cursorCol = bufferLines[0].length;
+          redrawFrom(0);
+        }
+        return;
+      }
+      if (str === '\x1b[6~') {
+        if (historyIdx !== -1) {
+          historyIdx = -1;
+          bufferLines = savedDraft.split('\n');
+          cursorLine = 0;
+          cursorCol = bufferLines[0].length;
+          redrawFrom(0);
+        }
         return;
       }
 
