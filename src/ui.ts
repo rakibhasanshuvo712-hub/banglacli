@@ -193,6 +193,7 @@ export function createSpinner(text: string): Ora {
     text: chalk.cyan(text),
     color: 'cyan',
     spinner: 'dots',
+    stream: process.stdout,
   });
 }
 

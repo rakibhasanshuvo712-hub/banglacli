@@ -129,6 +129,11 @@ program
           }
         }
         saveConfig(config);
+        updateDockedModel(
+          PROVIDER_LABELS[config.provider] || config.provider,
+          config.model,
+          agent.getMode()
+        );
       }
     });
 
@@ -163,12 +168,16 @@ program
       return;
     }
 
-    // Interactive Chat REPL Loop
-    printBanner(PROVIDER_LABELS[config.provider], config.model, process.cwd());
-
     // Activate fixed-dock layout: sticky header at top + docked input box at bottom.
-    // Gracefully falls back to inline mode on non-TTY or small terminals.
-    activateFixedDock(config.model, initialMode);
+    // Gracefully falls back to inline banner on non-TTY or small terminals.
+    const isDocked = activateFixedDock(
+      PROVIDER_LABELS[config.provider] || config.provider,
+      config.model,
+      initialMode
+    );
+    if (!isDocked) {
+      printBanner(PROVIDER_LABELS[config.provider], config.model, process.cwd());
+    }
 
     let running = true;
     while (running) {
@@ -239,12 +248,21 @@ program
             );
           }
         }
-        activateFixedDock(config.model, agent.getMode());
+        activateFixedDock(
+          PROVIDER_LABELS[config.provider] || config.provider,
+          config.model,
+          agent.getMode()
+        );
         continue;
       }
 
       if (trimmed === '/plan') {
         agent.setMode('plan');
+        updateDockedModel(
+          PROVIDER_LABELS[config.provider] || config.provider,
+          config.model,
+          'plan'
+        );
         console.log(
           chalk.yellow('\n✔ Switched to 📋 PLAN MODE (Senior Architect: read-only analysis & planning enabled)\n')
         );
@@ -253,6 +271,11 @@ program
 
       if (trimmed === '/build') {
         agent.setMode('build');
+        updateDockedModel(
+          PROVIDER_LABELS[config.provider] || config.provider,
+          config.model,
+          'build'
+        );
         console.log(
           chalk.green('\n✔ Switched to ⚡ BUILD MODE (Autonomous Builder: file writes & commands enabled)\n')
         );
@@ -428,7 +451,11 @@ program
             )
           );
         }
-        activateFixedDock(config.model, agent.getMode());
+        activateFixedDock(
+          PROVIDER_LABELS[config.provider] || config.provider,
+          config.model,
+          agent.getMode()
+        );
         continue;
       }
 
@@ -439,7 +466,11 @@ program
         config = newConfig;
         agent.updateConfig(newConfig);
         console.log(chalk.green(`\n✔ Config updated: ${PROVIDER_LABELS[config.provider]} (${config.model})\n`));
-        activateFixedDock(config.model, agent.getMode());
+        activateFixedDock(
+          PROVIDER_LABELS[config.provider] || config.provider,
+          config.model,
+          agent.getMode()
+        );
         continue;
       }
 
@@ -468,6 +499,11 @@ program
             if (newConfig) {
               config = newConfig;
               agent.updateConfig(newConfig);
+              updateDockedModel(
+                PROVIDER_LABELS[config.provider] || config.provider,
+                config.model,
+                agent.getMode()
+              );
               console.log(
                 chalk.green(
                   `\n✔ Active Model switched to: ${chalk.bold(match.name)} (${chalk.cyan(match.id)})\n` +
@@ -495,7 +531,11 @@ program
             )
           );
         }
-        activateFixedDock(config.model, agent.getMode());
+        activateFixedDock(
+          PROVIDER_LABELS[config.provider] || config.provider,
+          config.model,
+          agent.getMode()
+        );
         continue;
       }
 
