@@ -30,7 +30,7 @@ export const PROVIDER_LABELS: Record<ProviderType, string> = {
 };
 
 export const DEFAULT_MODELS: Record<ProviderType, string> = {
-  gemini: 'gemini-2.0-flash',
+  gemini: 'gemini-3.5-flash-lite',
   openrouter: 'openrouter/free',
   custom: 'llama-3.3-70b-versatile',
 };

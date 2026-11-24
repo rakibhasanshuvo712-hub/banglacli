@@ -170,12 +170,14 @@ interface ChatMessage {
 }
 
 const GEMINI_FALLBACK_MAP: Record<string, string[]> = {
-  'gemini-2.0-flash': ['gemini-2.0-flash-lite', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
-  'gemini-2.0-flash-lite': ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'],
-  'gemini-2.5-flash': ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash'],
-  'gemini-2.5-pro': ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-1.5-pro'],
-  'gemini-1.5-flash': ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-2.5-flash'],
-  'gemini-1.5-pro': ['gemini-2.0-flash', 'gemini-2.5-pro', 'gemini-1.5-flash'],
+  'gemini-3.5-flash-lite': ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'],
+  'gemini-3.5-flash': ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'],
+  'gemini-3.8-flash': ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
+  'gemini-3.1-flash-lite': ['gemini-3.5-flash-lite', 'gemini-3.5-flash'],
+  'gemini-2.0-flash': ['gemini-3.5-flash-lite', 'gemini-3.5-flash'],
+  'gemini-2.0-flash-lite': ['gemini-3.5-flash-lite', 'gemini-3.5-flash'],
+  'gemini-2.5-flash': ['gemini-3.5-flash-lite', 'gemini-3.5-flash'],
+  'gemini-2.5-pro': ['gemini-3.5-flash', 'gemini-3.5-flash-lite'],
 };
 
 export class BanglaAgent {
@@ -211,15 +213,10 @@ export class BanglaAgent {
   private initClients(): void {
     if (this.config.provider === 'gemini') {
       const normalized = normalizeGeminiModel(this.config.model);
-      if (
-        !normalized ||
-        normalized.startsWith('gemini-3.') ||
-        normalized.startsWith('gemini-4.') ||
-        !GEMINI_CASCADE_CHAIN.includes(normalized)
-      ) {
-        this.config.model = 'gemini-2.0-flash';
-        updateModel('gemini-2.0-flash');
-      } else if (normalized !== this.config.model) {
+      if (!normalized || !GEMINI_CASCADE_CHAIN.includes(normalized)) {
+        this.config.model = 'gemini-3.5-flash-lite';
+        updateModel('gemini-3.5-flash-lite');
+      } else {
         this.config.model = normalized;
         updateModel(normalized);
       }
