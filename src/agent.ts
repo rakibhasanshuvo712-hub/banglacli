@@ -11,6 +11,7 @@ import {
 import { createSpinner, renderMarkdown, renderCascadeNotice } from './ui.js';
 import { OPENROUTER_FREE_CASCADE_CHAIN, GEMINI_CASCADE_CHAIN } from './models.js';
 import { detectProjectContext } from './detector.js';
+import { updateFixedBottomStatus } from './prompt.js';
 import chalk from 'chalk';
 
 export type AgentMode = 'build' | 'plan';
@@ -650,6 +651,11 @@ export class BanglaAgent {
         const toolName = call.name;
         const toolArgs = call.args || {};
 
+        updateFixedBottomStatus(`Executing tool: ${toolName}... (Esc to abort)`, {
+          mode: this.mode,
+          model: this.config.model,
+        });
+
         const output = await executeTool(toolName, toolArgs, this.mode, options?.signal);
 
         if (options?.signal?.aborted) {
@@ -910,6 +916,11 @@ export class BanglaAgent {
         } catch {
           fnArgs = {};
         }
+
+        updateFixedBottomStatus(`Executing tool: ${fnName}... (Esc to abort)`, {
+          mode: this.mode,
+          model: this.config.model,
+        });
 
         const toolResult = await executeTool(fnName, fnArgs, this.mode, options?.signal);
 

@@ -31,8 +31,19 @@ import {
 } from './ui.js';
 import { safetySession, getSessionChanges, undoLastChange } from './tools.js';
 import { selectAgentModelInteractive, findModelByQuery, applyModelDirect } from './models.js';
-import { readOpenCodePrompt, expandOpenCodeMentions } from './prompt.js';
+import { readOpenCodePrompt, expandOpenCodeMentions, restoreTerminalViewport, updateFixedBottomStatus } from './prompt.js';
 import { detectProjectContext } from './detector.js';
+
+// Ensure terminal viewport is cleanly restored on process exit
+process.on('exit', () => restoreTerminalViewport());
+process.on('SIGINT', () => {
+  restoreTerminalViewport();
+  process.exit(0);
+});
+process.on('SIGTERM', () => {
+  restoreTerminalViewport();
+  process.exit(0);
+});
 
 /**
  * Real-time Escape key listener during agent thinking / tool execution.
@@ -165,6 +176,7 @@ program
       });
 
       if (input === null) {
+        restoreTerminalViewport();
         console.log(chalk.yellow('\nবিদায়! Goodbye! Exiting banglacli.\n'));
         break;
       }
@@ -176,6 +188,7 @@ program
 
       // Handle Slash Commands
       if (trimmed === '/exit' || trimmed === '/quit') {
+        restoreTerminalViewport();
         console.log(chalk.hex('#00FF7F')('\nধন্যবাদ! Thanks for using banglacli. Happy coding! 🚀\n'));
         break;
       }
@@ -187,6 +200,7 @@ program
 
       // Mode Switching (OpenCode Style)
       if (trimmed === '/mode') {
+        restoreTerminalViewport();
         const modeChoice = (await p.select({
           message: chalk.cyan('Select Agent Mode (OpenCode Style):'),
           initialValue: agent.getMode(),
@@ -394,6 +408,7 @@ program
       }
 
       if (trimmed === '/provider') {
+        restoreTerminalViewport();
         const newConfig = await switchProviderInteractive(config);
         if (newConfig) {
           config = newConfig;
@@ -408,6 +423,7 @@ program
       }
 
       if (trimmed === '/config') {
+        restoreTerminalViewport();
         const newConfig = await promptConfig(false);
         config = newConfig;
         agent.updateConfig(newConfig);
@@ -455,6 +471,7 @@ program
           }
         }
 
+        restoreTerminalViewport();
         const newConfig = await selectAgentModelInteractive(config);
         if (newConfig) {
           config = newConfig;
