@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import * as p from '@clack/prompts';
 import { ProviderType, BanglaCLIConfig, saveConfig, PROVIDER_LABELS, PROVIDER_KEY_URLS } from './config.js';
 import { createSpinner } from './ui.js';
-import { prepareInteractiveArea } from './prompt.js';
+import { prepareInteractiveArea, interactiveSelect } from './prompt.js';
 
 export interface AgentModelPreset {
   id: string;
@@ -931,10 +931,10 @@ export async function selectAgentModelInteractive(
   p.intro(chalk.bold.hex('#00FF7F')('🤖 OpenCode AI Agent & Model Selector'));
 
   // 1. Choose Category (or use initialCategory shortcut)
-  let categoryChoice = initialCategory;
+  let categoryChoice: string | null | undefined = initialCategory;
   if (!categoryChoice) {
-    categoryChoice = (await p.select({
-      message: chalk.cyan('Select Agent Category:'),
+    categoryChoice = await interactiveSelect({
+      message: 'Select Agent Category:',
       initialValue: defaultCategory,
       maxItems: selectMaxItems,
       options: [
@@ -999,9 +999,9 @@ export async function selectAgentModelInteractive(
           hint: 'Type any model slug (e.g. mistralai/mistral-large:free)',
         },
       ],
-    })) as string;
+    });
 
-    if (p.isCancel(categoryChoice)) return null;
+    if (!categoryChoice || p.isCancel(categoryChoice)) return null;
   }
 
   // Handle custom input
@@ -1053,14 +1053,14 @@ export async function selectAgentModelInteractive(
   const hasMatch = modelOptions.some((m) => m.value === currentConfig.model);
   const safeInitialValue = hasMatch ? currentConfig.model : modelOptions[0]?.value;
 
-  const selectedModelId = (await p.select({
-    message: chalk.cyan('Select AI Model:'),
+  const selectedModelId = await interactiveSelect({
+    message: 'Select AI Model:',
     initialValue: safeInitialValue,
     maxItems: selectMaxItems,
     options: modelOptions,
-  })) as string;
+  });
 
-  if (p.isCancel(selectedModelId) || !selectedModelId) return null;
+  if (!selectedModelId || p.isCancel(selectedModelId)) return null;
 
   const preset =
     modelsToShow.find((m) => m.id === selectedModelId) ||

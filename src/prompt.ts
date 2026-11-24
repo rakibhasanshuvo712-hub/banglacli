@@ -370,6 +370,302 @@ export function prepareInteractiveArea(
   return headerHeight;
 }
 
+/**
+ * Safely truncates a string containing ANSI escape codes to a maximum visible width,
+ * appending an ellipsis if truncated, while keeping ANSI formatting intact.
+ */
+export function truncateWithAnsi(str: string, maxWidth: number): string {
+  if (stringWidth(str) <= maxWidth) return str;
+  const chars = Array.from(str);
+  let visibleWidth = 0;
+  let result = '';
+  let i = 0;
+  while (i < chars.length) {
+    if (chars[i] === '\x1b') {
+      const remaining = chars.slice(i).join('');
+      const match = remaining.match(/^\x1b\[[0-9;]*[a-zA-Z]/);
+      if (match) {
+        result += match[0];
+        i += Array.from(match[0]).length;
+        continue;
+      }
+    }
+    const char = chars[i];
+    const w = stringWidth(char);
+    if (visibleWidth + w > maxWidth - 1) {
+      result += '…\x1b[0m';
+      break;
+    }
+    result += char;
+    visibleWidth += w;
+    i++;
+  }
+  return result + '\x1b[0m';
+}
+
+export interface InteractiveSelectOption<T extends string = string> {
+  value: T;
+  label: string;
+  hint?: string;
+}
+
+export interface InteractiveSelectConfig<T extends string = string> {
+  message: string;
+  options: InteractiveSelectOption<T>[];
+  initialValue?: T;
+  maxItems?: number;
+}
+
+/**
+ * 100% resilient terminal interactive selector that works across all operating systems and shells
+ * (PowerShell, Windows Terminal, VS Code terminal, cmd.exe, Git Bash, macOS, Linux).
+ * 
+ * Direct raw data events ensure arrow keys (↑/↓), vim keys (j/k), numbers (1-9), Enter, and Esc
+ * always navigate and confirm without hanging or freezing.
+ */
+export async function interactiveSelect<T extends string = string>(
+  config: InteractiveSelectConfig<T>
+): Promise<T | null> {
+  if (!config.options || config.options.length === 0) return null;
+  if (!process.stdin.isTTY) {
+    return config.initialValue ?? config.options[0]?.value ?? null;
+  }
+
+  return new Promise((resolve) => {
+    let cursor = config.options.findIndex((o) => o.value === config.initialValue);
+    if (cursor === -1) cursor = 0;
+
+    const wasRaw = process.stdin.isRaw;
+    try {
+      process.stdin.setRawMode(true);
+    } catch {}
+    process.stdin.resume();
+    process.stdout.write('\x1b[?25l'); // Hide cursor
+
+    let termRows = process.stdout.rows || 24;
+    let termCols = process.stdout.columns || 80;
+    const maxVisible = Math.max(3, Math.min(config.maxItems || 8, config.options.length, termRows - 8));
+    let scrollOffset = 0;
+
+    const updateScroll = () => {
+      if (cursor < scrollOffset) {
+        scrollOffset = cursor;
+      } else if (cursor >= scrollOffset + maxVisible) {
+        scrollOffset = cursor - maxVisible + 1;
+      }
+    };
+
+    const renderFrame = (): string => {
+      updateScroll();
+      const lines: string[] = [];
+      lines.push(chalk.cyan.bold('◆ ') + chalk.bold.white(config.message));
+
+      const visibleSlice = config.options.slice(scrollOffset, scrollOffset + maxVisible);
+      const canScrollUp = scrollOffset > 0;
+      const canScrollDown = scrollOffset + maxVisible < config.options.length;
+
+      for (let i = 0; i < visibleSlice.length; i++) {
+        const opt = visibleSlice[i];
+        const actualIdx = scrollOffset + i;
+        const isSelected = actualIdx === cursor;
+
+        const bullet = isSelected ? chalk.hex('#00FF7F').bold('●') : chalk.gray('○');
+        const numStr = (actualIdx + 1).toString();
+        const numTag = isSelected
+          ? chalk.hex('#00FF7F').bold(`[${numStr}]`)
+          : chalk.dim(`[${numStr}]`);
+
+        let lineContent = '';
+        if (isSelected) {
+          const hintStr = opt.hint ? chalk.hex('#00E5FF')(` (${opt.hint})`) : '';
+          lineContent = `  ${bullet} ${numTag} ${chalk.white.bold(opt.label)}${hintStr}`;
+        } else {
+          const hintStr = opt.hint ? chalk.dim(` (${opt.hint})`) : '';
+          lineContent = `  ${bullet} ${numTag} ${opt.label}${hintStr}`;
+        }
+
+        lines.push(truncateWithAnsi(lineContent, termCols - 2));
+      }
+
+      let footerScroll = '';
+      if (canScrollUp && canScrollDown) {
+        footerScroll = chalk.dim(`  ↑ ... (${cursor + 1}/${config.options.length}) ... ↓`);
+      } else if (canScrollUp) {
+        footerScroll = chalk.dim(`  ↑ ... (${cursor + 1}/${config.options.length})`);
+      } else if (canScrollDown) {
+        footerScroll = chalk.dim(`  ↓ ... (${cursor + 1}/${config.options.length})`);
+      }
+
+      const keyHint = chalk.dim(
+        `  ↑/↓ or 1-${Math.min(9, config.options.length)} to navigate • Enter: confirm • Esc: cancel`
+      );
+
+      if (footerScroll) {
+        lines.push(footerScroll);
+      }
+      lines.push(keyHint);
+
+      return lines.join('\n');
+    };
+
+    let lastLineCount = 0;
+    const draw = () => {
+      const frame = renderFrame();
+      if (lastLineCount > 0) {
+        process.stdout.write(`\x1b[${lastLineCount}A\r\x1b[J`);
+      }
+      process.stdout.write(frame + '\n');
+      lastLineCount = frame.split('\n').length;
+    };
+
+    const cleanup = () => {
+      process.stdin.removeListener('data', onData);
+      process.stdout.removeListener('resize', onResize);
+      if (numTimeout) clearTimeout(numTimeout);
+      try {
+        if (!wasRaw && process.stdin.isTTY) {
+          process.stdin.setRawMode(false);
+        }
+      } catch {}
+      process.stdout.write('\x1b[?25h'); // Restore cursor
+    };
+
+    const confirm = () => {
+      cleanup();
+      if (lastLineCount > 0) {
+        process.stdout.write(`\x1b[${lastLineCount}A\r\x1b[J`);
+      }
+      const chosen = config.options[cursor];
+      process.stdout.write(
+        chalk.hex('#00FF7F')('✔ ') +
+          chalk.bold(config.message) +
+          ' ' +
+          chalk.hex('#00FF7F').bold(chosen.label) +
+          '\n\n'
+      );
+      resolve(chosen.value);
+    };
+
+    const cancel = () => {
+      cleanup();
+      if (lastLineCount > 0) {
+        process.stdout.write(`\x1b[${lastLineCount}A\r\x1b[J`);
+      }
+      process.stdout.write(
+        chalk.gray('✖ ') + chalk.dim(`${config.message} (cancelled)\n\n`)
+      );
+      resolve(null);
+    };
+
+    const onResize = () => {
+      termRows = process.stdout.rows || 24;
+      termCols = process.stdout.columns || 80;
+      draw();
+    };
+
+    let numBuffer = '';
+    let numTimeout: NodeJS.Timeout | null = null;
+
+    const onData = (buf: Buffer) => {
+      const str = buf.toString('utf-8');
+
+      // Ctrl+C
+      if (str === '\x03') {
+        cleanup();
+        process.stdout.write('\r\n' + chalk.yellow('Exiting banglacli...\n'));
+        process.exit(0);
+      }
+
+      // Escape or 'q' or 'Q'
+      if (str === '\x1b' || str === 'q' || str === 'Q') {
+        cancel();
+        return;
+      }
+
+      // Enter
+      if (str === '\r' || str === '\n' || str === '\r\n') {
+        confirm();
+        return;
+      }
+
+      // Up arrow: \x1b[A, \x1bOA, or 'k', 'K', 'w', 'W'
+      if (
+        str === '\x1b[A' ||
+        str === '\x1bOA' ||
+        str === 'k' ||
+        str === 'K' ||
+        str === 'w' ||
+        str === 'W'
+      ) {
+        cursor = (cursor - 1 + config.options.length) % config.options.length;
+        draw();
+        return;
+      }
+
+      // Down arrow: \x1b[B, \x1bOB, or 'j', 'J', 's', 'S'
+      if (
+        str === '\x1b[B' ||
+        str === '\x1bOB' ||
+        str === 'j' ||
+        str === 'J' ||
+        str === 's' ||
+        str === 'S'
+      ) {
+        cursor = (cursor + 1) % config.options.length;
+        draw();
+        return;
+      }
+
+      // PageUp
+      if (str === '\x1b[5~') {
+        cursor = Math.max(0, cursor - maxVisible);
+        draw();
+        return;
+      }
+
+      // PageDown
+      if (str === '\x1b[6~') {
+        cursor = Math.min(config.options.length - 1, cursor + maxVisible);
+        draw();
+        return;
+      }
+
+      // Home
+      if (str === '\x1b[H' || str === '\x1b[1~') {
+        cursor = 0;
+        draw();
+        return;
+      }
+
+      // End
+      if (str === '\x1b[F' || str === '\x1b[4~') {
+        cursor = config.options.length - 1;
+        draw();
+        return;
+      }
+
+      // Numeric input: '1' - '9', '0'
+      if (/^[0-9]$/.test(str)) {
+        numBuffer += str;
+        const target = parseInt(numBuffer, 10);
+        if (target >= 1 && target <= config.options.length) {
+          cursor = target - 1;
+          draw();
+        }
+        if (numTimeout) clearTimeout(numTimeout);
+        numTimeout = setTimeout(() => {
+          numBuffer = '';
+        }, 700);
+        return;
+      }
+    };
+
+    process.stdout.on('resize', onResize);
+    process.stdin.on('data', onData);
+    draw();
+  });
+}
+
 function writeDockedBox(rows: number, cols: number, model: string, mode: 'build' | 'plan'): void {
   const isBuild = mode === 'build';
   const borderColor = isBuild ? chalk.hex('#00FF7F') : chalk.hex('#FFB300');

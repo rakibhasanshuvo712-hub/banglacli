@@ -5,6 +5,7 @@ import chalk from 'chalk';
 import { marked } from 'marked';
 import { markedTerminal } from 'marked-terminal';
 import * as p from '@clack/prompts';
+import { interactiveSelect } from './prompt.js';
 import ora, { Ora } from 'ora';
 
 // Initialize terminal markdown renderer
@@ -130,16 +131,16 @@ export async function askToolConfirmation(
   );
   console.log(`${chalk.gray('Details:')}\n${chalk.white(summary)}`);
 
-  const choice = (await p.select({
-    message: chalk.yellow('Allow banglaCLI to execute this action?'),
+  const choice = await interactiveSelect<'yes' | 'no' | 'all'>({
+    message: 'Allow banglaCLI to execute this action?',
     options: [
       { value: 'yes', label: chalk.green('✔ Yes, execute this action') },
       { value: 'all', label: chalk.cyan('⚡ Yes to ALL actions (Auto-approve for this session)') },
       { value: 'no', label: chalk.red('✖ No, cancel / reject this action') },
     ],
-  })) as 'yes' | 'no' | 'all';
+  });
 
-  if (p.isCancel(choice)) {
+  if (!choice || p.isCancel(choice)) {
     return 'no';
   }
 

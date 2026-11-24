@@ -33,7 +33,7 @@ import {
 } from './ui.js';
 import { safetySession, getSessionChanges, undoLastChange, setActiveMeshNode, getActiveMeshNode, executeTool } from './tools.js';
 import { selectAgentModelInteractive, findModelByQuery, applyModelDirect } from './models.js';
-import { readOpenCodePrompt, expandOpenCodeMentions, restoreTerminalViewport, updateFixedBottomStatus, activateFixedDock, deactivateFixedDock, updateDockedModel, prepareInteractiveArea } from './prompt.js';
+import { readOpenCodePrompt, expandOpenCodeMentions, restoreTerminalViewport, updateFixedBottomStatus, activateFixedDock, deactivateFixedDock, updateDockedModel, prepareInteractiveArea, interactiveSelect } from './prompt.js';
 import { detectProjectContext } from './detector.js';
 import { MeshNode } from './mesh.js';
 
@@ -329,8 +329,8 @@ program
           config.model,
           agent.getMode()
         );
-        const modeChoice = (await p.select({
-          message: chalk.cyan('Select Agent Mode (OpenCode Style):'),
+        const modeChoice = await interactiveSelect<'build' | 'plan'>({
+          message: 'Select Agent Mode (OpenCode Style):',
           initialValue: agent.getMode(),
           options: [
             {
@@ -344,9 +344,9 @@ program
               hint: 'Read-only: inspect files, explore architecture & design step-by-step plans',
             },
           ],
-        })) as 'build' | 'plan';
+        });
 
-        if (!p.isCancel(modeChoice)) {
+        if (modeChoice && !p.isCancel(modeChoice)) {
           agent.setMode(modeChoice);
           meshNode?.updateState({ mode: modeChoice });
         }
@@ -952,8 +952,8 @@ async function handleSwitchModel(config: BanglaCLIConfig, agent: BanglaAgent): P
   let selectedModel = config.model;
 
   if (config.provider === 'gemini') {
-    const choice = (await p.select({
-      message: chalk.cyan('Switch Gemini Model:'),
+    const choice = await interactiveSelect({
+      message: 'Switch Gemini Model:',
       initialValue: config.model,
       options: [
         { value: 'gemini-2.0-flash', label: 'gemini-2.0-flash (🌟 Recommended - Google Flagship Free, 1M Tokens, 1,500 RPD)' },
@@ -964,9 +964,9 @@ async function handleSwitchModel(config: BanglaCLIConfig, agent: BanglaAgent): P
         { value: 'gemini-1.5-pro', label: 'gemini-1.5-pro (2M Context Long-Form)' },
         { value: 'custom_input', label: 'Enter custom model name...' },
       ],
-    })) as string;
+    });
 
-    if (p.isCancel(choice)) return;
+    if (!choice || p.isCancel(choice)) return;
 
     if (choice === 'custom_input') {
       const custom = (await p.text({
@@ -979,8 +979,8 @@ async function handleSwitchModel(config: BanglaCLIConfig, agent: BanglaAgent): P
       selectedModel = choice;
     }
   } else if (config.provider === 'openrouter') {
-    const choice = (await p.select({
-      message: chalk.cyan('Switch OpenRouter Model:'),
+    const choice = await interactiveSelect({
+      message: 'Switch OpenRouter Model:',
       initialValue: config.model || 'openrouter/free',
       options: [
         { value: 'openrouter/free', label: 'openrouter/free (Recommended - Best Free Model with Tools)' },
@@ -989,9 +989,9 @@ async function handleSwitchModel(config: BanglaCLIConfig, agent: BanglaAgent): P
         { value: 'inclusionai/ling-3.2-flash:free', label: 'inclusionai/ling-3.2-flash:free (Free Flash Model)' },
         { value: 'custom_input', label: 'Enter custom OpenRouter model ID...' },
       ],
-    })) as string;
+    });
 
-    if (p.isCancel(choice)) return;
+    if (!choice || p.isCancel(choice)) return;
 
     if (choice === 'custom_input') {
       const custom = (await p.text({

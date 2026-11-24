@@ -1,5 +1,6 @@
 import Conf from 'conf';
 import * as p from '@clack/prompts';
+import { interactiveSelect } from './prompt.js';
 import chalk from 'chalk';
 
 export type ProviderType = 'gemini' | 'openrouter' | 'custom';
@@ -111,13 +112,13 @@ async function selectModelForProvider(
     const hasMatch = geminiOptions.some((o) => o.value === currentModel);
     const initialVal = hasMatch ? currentModel : geminiOptions[0].value;
 
-    const modelChoice = (await p.select({
-      message: chalk.cyan('Select Gemini Model:'),
+    const modelChoice = await interactiveSelect({
+      message: 'Select Gemini Model:',
       initialValue: initialVal,
       options: geminiOptions,
-    })) as string;
+    });
 
-    if (p.isCancel(modelChoice)) return null;
+    if (!modelChoice || p.isCancel(modelChoice)) return null;
 
     if (modelChoice === 'custom_input') {
       const customModel = (await p.text({
@@ -149,13 +150,13 @@ async function selectModelForProvider(
     const hasMatch = openrouterOptions.some((o) => o.value === currentModel);
     const initialVal = hasMatch ? currentModel : openrouterOptions[0].value;
 
-    const modelChoice = (await p.select({
-      message: chalk.cyan('Select OpenRouter Model:'),
+    const modelChoice = await interactiveSelect({
+      message: 'Select OpenRouter Model:',
       initialValue: initialVal,
       options: openrouterOptions,
-    })) as string;
+    });
 
-    if (p.isCancel(modelChoice)) return null;
+    if (!modelChoice || p.isCancel(modelChoice)) return null;
 
     if (modelChoice === 'custom_input') {
       const customModel = (await p.text({
@@ -186,8 +187,8 @@ export async function switchProviderInteractive(
 ): Promise<BanglaCLIConfig | null> {
   p.intro(chalk.bold.hex('#00FF7F')('🔄 Switch AI Provider'));
 
-  const provider = (await p.select({
-    message: chalk.cyan('Choose provider to switch to:'),
+  const provider = await interactiveSelect<ProviderType>({
+    message: 'Choose provider to switch to:',
     initialValue: currentConfig.provider,
     options: [
       {
@@ -206,9 +207,9 @@ export async function switchProviderInteractive(
         hint: currentConfig.provider === 'custom' ? 'Currently active' : undefined,
       },
     ],
-  })) as ProviderType;
+  });
 
-  if (p.isCancel(provider)) {
+  if (!provider || p.isCancel(provider)) {
     return null;
   }
 
@@ -219,8 +220,8 @@ export async function switchProviderInteractive(
   let baseURL: string | undefined = provider === 'openrouter' ? 'https://openrouter.ai/api/v1' : undefined;
 
   if (saved && saved.apiKey) {
-    const useSaved = await p.select({
-      message: chalk.cyan(`Saved credentials found for ${PROVIDER_LABELS[provider]}. Use saved configuration?`),
+    const useSaved = await interactiveSelect({
+      message: `Saved credentials found for ${PROVIDER_LABELS[provider]}. Use saved configuration?`,
       options: [
         {
           value: 'yes',
@@ -237,7 +238,7 @@ export async function switchProviderInteractive(
       ],
     });
 
-    if (p.isCancel(useSaved)) return null;
+    if (!useSaved || p.isCancel(useSaved)) return null;
 
     if (useSaved === 'yes') {
       apiKey = saved.apiKey;
@@ -350,8 +351,8 @@ export async function promptConfig(isFirstTime = false): Promise<BanglaCLIConfig
   const existingConfig = getConfig();
 
   // 1. Choose Provider
-  const provider = (await p.select({
-    message: chalk.cyan('Select your AI Provider:'),
+  const provider = await interactiveSelect<ProviderType>({
+    message: 'Select your AI Provider:',
     initialValue: existingConfig?.provider || 'openrouter',
     options: [
       {
@@ -370,9 +371,9 @@ export async function promptConfig(isFirstTime = false): Promise<BanglaCLIConfig
         hint: 'Custom baseURL + API key',
       },
     ],
-  })) as ProviderType;
+  });
 
-  if (p.isCancel(provider)) {
+  if (!provider || p.isCancel(provider)) {
     p.cancel(chalk.yellow('Setup cancelled.'));
     process.exit(0);
   }
