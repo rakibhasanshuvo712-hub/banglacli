@@ -36,6 +36,7 @@ import { selectAgentModelInteractive, findModelByQuery, applyModelDirect } from 
 import { readOpenCodePrompt, expandOpenCodeMentions, restoreTerminalViewport, updateFixedBottomStatus, activateFixedDock, deactivateFixedDock, updateDockedModel, prepareInteractiveArea, interactiveSelect } from './prompt.js';
 import { detectProjectContext } from './detector.js';
 import { MeshNode } from './mesh.js';
+import { captureClipboardImage, loadImagePayload, isImageFile, type ImagePayload } from './image.js';
 
 // Ensure terminal viewport & mesh connections are cleanly restored on process exit
 process.on('exit', () => {
@@ -242,8 +243,11 @@ program
         renderInterruptedNotice();
       });
       try {
-        const { expandedPrompt } = await expandOpenCodeMentions(options.prompt);
-        const reply = await agent.chat(expandedPrompt, { signal: abortController.signal });
+        const { expandedPrompt, attachedImages } = await expandOpenCodeMentions(options.prompt);
+        const reply = await agent.chat(expandedPrompt, {
+          signal: abortController.signal,
+          images: attachedImages,
+        });
         if (abortController.signal.aborted) {
           renderInterruptedNotice();
         } else {
@@ -275,6 +279,7 @@ program
     }
 
     let running = true;
+    let stagedImages: ImagePayload[] = [];
     while (running) {
       // OpenCode & Antigravity Interactive Boxed Prompt
       // Features: Terminal Bottom Framed Box with Mode & Model badges,
@@ -314,6 +319,67 @@ program
 
       if (lowerCmd === '/help') {
         showHelp();
+        continue;
+      }
+
+      if (
+        lowerCmd === '/image' ||
+        lowerCmd.startsWith('/image ') ||
+        lowerCmd === '/screenshot' ||
+        lowerCmd.startsWith('/screenshot ') ||
+        lowerCmd === '/pic' ||
+        lowerCmd.startsWith('/pic ') ||
+        lowerCmd === '/paste-image' ||
+        lowerCmd.startsWith('/paste-image ')
+      ) {
+        const rawArg = trimmed.replace(/^\/(image|screenshot|pic|paste-image)\s*/i, '').trim();
+        let capturedPath: string | null = null;
+
+        if (rawArg.length > 0) {
+          const cleanArg = rawArg.replace(/^["']|["']$/g, '').trim();
+          const resolved = path.isAbsolute(cleanArg) ? cleanArg : path.resolve(process.cwd(), cleanArg);
+          if (fs.existsSync(resolved) && isImageFile(resolved)) {
+            capturedPath = resolved;
+          } else {
+            console.log(chalk.red(`\n✖ Could not find image file at: ${cleanArg}\n`));
+            continue;
+          }
+        } else {
+          process.stdout.write(chalk.cyan('\n📸 Checking system clipboard for screenshot / image...\n'));
+          capturedPath = captureClipboardImage();
+        }
+
+        if (capturedPath) {
+          const payload = loadImagePayload(capturedPath);
+          if (payload) {
+            stagedImages.push(payload);
+            const kb = (payload.size / 1024).toFixed(1);
+            console.log(
+              '\n' +
+                chalk.bgHex('#004D40').hex('#00FF7F').bold(' 🖼️  IMAGE STAGED SUCCESSFULLY ') +
+                '\n' +
+                `  ${chalk.gray('File:')} ${chalk.white(path.basename(payload.path))}\n` +
+                `  ${chalk.gray('Format:')} ${chalk.cyan(payload.mimeType)} (${kb} KB)\n` +
+                `  ${chalk.gray('Saved to:')} ${chalk.dim(payload.path)}\n\n` +
+                chalk.green.bold('✔ Ready!') +
+                chalk.white(' Type your question or prompt (e.g. "Explain this error" or "Code this UI") and press Enter.\n')
+            );
+          } else {
+            console.log(chalk.yellow('\n⚠️ Could not read image payload (file might be damaged or larger than 15MB).\n'));
+          }
+        } else {
+          console.log(
+            '\n' +
+              chalk.bgHex('#FF9900').black.bold(' ⚠️  NO IMAGE FOUND IN CLIPBOARD ') +
+              '\n' +
+              chalk.white('No image data was found in your clipboard.\n\n') +
+              chalk.yellow('💡 How to paste a screenshot:') +
+              '\n' +
+              `  1. Take a screenshot: ${chalk.bold('Win + Shift + S')} on Windows, or ${chalk.bold('Cmd + Shift + 4')} on macOS\n` +
+              `  2. Return here and run ${chalk.cyan.bold('/image')}\n` +
+              `  3. Or mention an image file: ${chalk.cyan.bold('@screenshot.png')} or drag-and-drop the image path into prompt.\n`
+          );
+        }
         continue;
       }
 
@@ -759,8 +825,10 @@ program
         renderPriorityTaskBanner(taskPrompt, config.model, agent.getMode());
       }
 
-      // OpenCode @ file mentions ingestion (e.g. @src/index.ts, @package.json)
-      const { expandedPrompt } = await expandOpenCodeMentions(taskPrompt);
+      // OpenCode @ file mentions and image ingestion
+      const { expandedPrompt, attachedImages } = await expandOpenCodeMentions(taskPrompt);
+      const allImages = [...stagedImages, ...attachedImages];
+      stagedImages = []; // reset staged images after passing to agent
 
       // Real-time Escape-to-cancel agent chat execution
       const abortController = new AbortController();
@@ -777,7 +845,10 @@ program
       });
 
       try {
-        const reply = await agent.chat(expandedPrompt, { signal: abortController.signal });
+        const reply = await agent.chat(expandedPrompt, {
+          signal: abortController.signal,
+          images: allImages,
+        });
         if (abortController.signal.aborted || hasAborted) {
           // Notice already rendered immediately upon Escape press
         } else {

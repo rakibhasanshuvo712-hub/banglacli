@@ -13,6 +13,7 @@ import { createSpinner, renderMarkdown, renderCascadeNotice, renderAllTokensExha
 import { OPENROUTER_FREE_CASCADE_CHAIN, GEMINI_CASCADE_CHAIN, normalizeGeminiModel } from './models.js';
 import { detectProjectContext } from './detector.js';
 import { updateFixedBottomStatus } from './prompt.js';
+import type { ImagePayload } from './image.js';
 import chalk from 'chalk';
 
 export type AgentMode = 'build' | 'plan';
@@ -287,8 +288,29 @@ export class BanglaAgent {
       this.geminiContents = [];
       for (const msg of this.openAIMessages) {
         if (msg.role === 'user') {
-          const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
-          this.geminiContents.push({ role: 'user', parts: [{ text: content }] });
+          if (Array.isArray(msg.content)) {
+            const parts: any[] = [];
+            for (const item of msg.content as any[]) {
+              if (item.type === 'text') {
+                parts.push({ text: item.text });
+              } else if (item.type === 'image_url' && item.image_url?.url) {
+                const url = item.image_url.url;
+                const match = url.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/);
+                if (match) {
+                  parts.push({
+                    inlineData: {
+                      mimeType: match[1],
+                      data: match[2],
+                    },
+                  });
+                }
+              }
+            }
+            this.geminiContents.push({ role: 'user', parts });
+          } else {
+            const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+            this.geminiContents.push({ role: 'user', parts: [{ text: content }] });
+          }
         } else if (msg.role === 'assistant') {
           const content = typeof msg.content === 'string' ? msg.content : '';
           if (content) {
@@ -311,15 +333,45 @@ export class BanglaAgent {
         },
       ];
       for (const c of this.geminiContents) {
-        const text = c.parts
-          .map((p: any) => p.text || (p.functionResponse ? `Tool result: ${JSON.stringify(p.functionResponse)}` : ''))
-          .filter(Boolean)
-          .join('\n');
-        if (text) {
-          this.openAIMessages.push({
-            role: c.role === 'model' ? 'assistant' : 'user',
-            content: text,
-          });
+        if (c.role === 'user') {
+          const textParts: string[] = [];
+          const imageParts: any[] = [];
+          for (const p of c.parts) {
+            if (p.text) textParts.push(p.text);
+            if (p.inlineData) {
+              imageParts.push({
+                type: 'image_url',
+                image_url: {
+                  url: `data:${p.inlineData.mimeType};base64,${p.inlineData.data}`,
+                },
+              });
+            }
+          }
+          if (imageParts.length > 0) {
+            this.openAIMessages.push({
+              role: 'user',
+              content: [
+                { type: 'text', text: textParts.join('\n') },
+                ...imageParts,
+              ] as any,
+            });
+          } else {
+            const text = textParts.join('\n');
+            if (text) {
+              this.openAIMessages.push({ role: 'user', content: text });
+            }
+          }
+        } else if (c.role === 'model') {
+          const text = c.parts
+            .map((p: any) => p.text || (p.functionCall ? `Tool call: ${JSON.stringify(p.functionCall)}` : ''))
+            .filter(Boolean)
+            .join('\n');
+          if (text) {
+            this.openAIMessages.push({
+              role: 'assistant',
+              content: text,
+            });
+          }
         }
       }
     }
@@ -559,7 +611,10 @@ export class BanglaAgent {
   /**
    * Main chat turn loop with automatic tool execution and cross-provider failover.
    */
-  public async chat(userInput: string, options?: { signal?: AbortSignal }): Promise<string> {
+  public async chat(
+    userInput: string,
+    options?: { signal?: AbortSignal; images?: ImagePayload[] }
+  ): Promise<string> {
     if (options?.signal?.aborted) {
       return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
     }
@@ -644,7 +699,10 @@ export class BanglaAgent {
   /**
    * Google Gemini Tool-Calling Loop using @google/genai
    */
-  private async chatGemini(userInput: string, options?: { signal?: AbortSignal }): Promise<string> {
+  private async chatGemini(
+    userInput: string,
+    options?: { signal?: AbortSignal; images?: ImagePayload[] }
+  ): Promise<string> {
     if (options?.signal?.aborted) {
       return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
     }
@@ -656,9 +714,20 @@ export class BanglaAgent {
     // Add user message to Gemini conversation contents only if not already added
     const lastContent = this.geminiContents[this.geminiContents.length - 1];
     if (!lastContent || lastContent.role !== 'user') {
+      const parts: any[] = [{ text: userInput }];
+      if (options?.images && options.images.length > 0) {
+        for (const img of options.images) {
+          parts.push({
+            inlineData: {
+              mimeType: img.mimeType,
+              data: img.base64,
+            },
+          });
+        }
+      }
       this.geminiContents.push({
         role: 'user',
-        parts: [{ text: userInput }],
+        parts,
       });
     }
 
@@ -735,10 +804,12 @@ export class BanglaAgent {
             ]);
 
             if (candidateModel !== this.config.model) {
+              spinner.stop();
               renderCascadeNotice(this.config.model, candidateModel, 'Gemini high demand / failover');
               this.config.model = candidateModel;
               updateModel(candidateModel);
               this.onModelChangeCallback?.(candidateModel, 'gemini');
+              spinner.start();
             }
 
             lastError = null;
@@ -896,7 +967,10 @@ export class BanglaAgent {
   /**
    * OpenAI / OpenRouter / Custom Provider Tool-Calling Loop
    */
-  private async chatOpenAI(userInput: string, options?: { signal?: AbortSignal }): Promise<string> {
+  private async chatOpenAI(
+    userInput: string,
+    options?: { signal?: AbortSignal; images?: ImagePayload[] }
+  ): Promise<string> {
     if (options?.signal?.aborted) {
       return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
     }
@@ -907,10 +981,26 @@ export class BanglaAgent {
 
     const lastMsg = this.openAIMessages[this.openAIMessages.length - 1];
     if (!lastMsg || lastMsg.role !== 'user') {
-      this.openAIMessages.push({
-        role: 'user',
-        content: userInput,
-      });
+      if (options?.images && options.images.length > 0) {
+        const contentParts: any[] = [{ type: 'text', text: userInput }];
+        for (const img of options.images) {
+          contentParts.push({
+            type: 'image_url',
+            image_url: {
+              url: `data:${img.mimeType};base64,${img.base64}`,
+            },
+          });
+        }
+        this.openAIMessages.push({
+          role: 'user',
+          content: contentParts as any,
+        });
+      } else {
+        this.openAIMessages.push({
+          role: 'user',
+          content: userInput,
+        });
+      }
     }
 
     const maxTurns = 40;

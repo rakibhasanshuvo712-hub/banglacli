@@ -1,7 +1,7 @@
 {
   "name": "banglacli",
-  "version": "4.0.0",
-  "description": "Production-grade, next-generation BYOK autonomous terminal coding agent that speaks Bangla, Banglish & English with codebase grep search, web ingestion, bracketed paste protection, auto-cascade resilience and OpenCode-style Build & Plan modes.",
+  "version": "4.1.0",
+  "description": "Production-grade, next-generation BYOK autonomous terminal coding agent that speaks Bangla, Banglish & English with codebase grep search, multimodal screenshot & image pasting, web ingestion, bracketed paste protection, auto-cascade resilience and OpenCode-style Build & Plan modes.",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
@@ -15,7 +15,7 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "test": "tsx scripts/test-tools.ts",
+    "test": "tsx scripts/test-tools.ts && tsx scripts/test-image.ts",
     "start": "node ./dist/index.js"
   },
   "keywords": [

@@ -102,8 +102,11 @@ export function renderStatusBar(mode: 'build' | 'plan', model: string, provider?
  * Render sleek auto-cascade notification when a model token limit is reached.
  */
 export function renderCascadeNotice(fromModel: string, toModel: string, reason: string): void {
-  const border = chalk.hex('#FF9900')('─'.repeat(74));
-  console.log('\n' + border);
+  const cols = process.stdout.columns || 80;
+  const width = Math.max(36, Math.min(cols - 4, 70));
+  const border = chalk.hex('#FF9900')('─'.repeat(width));
+  process.stdout.write('\r\x1b[2K\n');
+  console.log(border);
   console.log(
     chalk.bgHex('#FF9900').black.bold(' 🔄 AUTO-CASCADE ACTIVATED ') +
       ' ' +
@@ -291,6 +294,7 @@ export function showHelp(): void {
   console.log(`  ${chalk.green.bold('⚡ BUILD Mode')}   - Autonomous full-stack coder. Can create/edit files & run terminal commands.`);
   console.log(`  ${chalk.yellow.bold('📋 PLAN Mode')}    - Senior Architect. Read-only codebase investigation & step-by-step planning.`);
   console.log(`\n${chalk.yellow.bold('Slash Commands in Chat (OpenCode & Antigravity Style):')}`);
+  console.log(`  ${chalk.cyan('/image')}        - Paste screenshot from system clipboard or stage an image (alias: /screenshot, /pic)`);
   console.log(`  ${chalk.cyan('/task <query>')} - Push and execute a specific task first with priority (like Antigravity)`);
   console.log(`  ${chalk.cyan('/urgent <q>')}   - Alias for priority task dispatch (also supports "urgent: <task>")`);
   console.log(`  ${chalk.cyan('/mode')}        - Toggle or select between BUILD mode and PLAN mode`);
@@ -319,7 +323,8 @@ export function showHelp(): void {
   console.log(`  ${chalk.cyan('/clear')}       - Clear conversation history / reset memory`);
   console.log(`  ${chalk.cyan('/exit')}        - Exit banglacli session`);
   console.log(`\n${chalk.yellow.bold('OpenCode & Antigravity Interactive Input Controls:')}`);
-  console.log(`  • ${chalk.green.bold('Pasting Safety')} : Bracketed paste protection enabled! Pasting code, JSON or multi-line logs`);
+  console.log(`  • ${chalk.green.bold('Screenshot / Image')}: Run ${chalk.cyan('/image')} to paste from clipboard, or mention ${chalk.cyan('@screenshot.png')} / drag-drop an image.`);
+  console.log(`  • ${chalk.green.bold('Pasting Safety')}  : Bracketed paste protection enabled! Pasting code, JSON or multi-line logs`);
   console.log(`                     ${chalk.dim('never auto-submits. It captures cleanly and waits for your Enter key.')}`);
   console.log(`  • ${chalk.green.bold('@ Mentions')}     : Type ${chalk.cyan('@path/to/file')} (e.g. ${chalk.cyan('@package.json')}) or ${chalk.cyan('@dir/')} to auto-ingest.`);
   console.log(`  • ${chalk.green.bold('Web Ingestion')}  : Include any ${chalk.cyan('https://...')} link to auto-fetch documentation or APIs.`);

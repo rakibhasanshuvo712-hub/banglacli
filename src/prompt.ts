@@ -4,6 +4,7 @@ import chalk from 'chalk';
 import Conf from 'conf';
 import stringWidth from 'string-width';
 import { getActiveMeshNode } from './tools.js';
+import { isImageFile, loadImagePayload, type ImagePayload } from './image.js';
 
 export interface OpenCodePromptOptions {
   mode: 'build' | 'plan';
@@ -770,24 +771,25 @@ export function updateDockedModel(
   _dockedProvider = provider;
   _dockedModel = model;
   _dockedMode = mode;
-  if (!_dockedActive) return;
+  // If the prompt box is not actively waiting for user input (e.g. agent is currently executing or streaming),
+  // do not rewrite headers into the scroll stream. The updated model will be cleanly rendered on the next prompt turn.
+  if (!_dockedActive || !_dockedPromptActive) return;
   const rows = process.stdout.rows;
   const cols = process.stdout.columns;
   if (!rows || !cols) return;
 
-  process.stdout.write('\x1b[s');
-  const headerHeight = writeStickyHeader(cols, rows, provider, model, mode);
-  _dockedHeaderHeight = headerHeight;
+  try {
+    process.stdout.write('\x1b[s');
+    const headerHeight = writeStickyHeader(cols, rows, provider, model, mode);
+    _dockedHeaderHeight = headerHeight;
 
-  // Only rewrite bottom prompt box border if the prompt box is actively waiting for input
-  if (_dockedPromptActive) {
     const isBuild = mode === 'build';
     const borderColor = isBuild ? chalk.hex('#00FF7F') : chalk.hex('#FFB300');
     const boxWidth = getSafeBoxWidth(cols);
     const { topRow } = getDockedRows(rows);
     process.stdout.write(`\x1b[${topRow};1H\x1b[2K${renderTopBorder(boxWidth, isBuild, model, borderColor)}`);
-  }
-  process.stdout.write('\x1b[u');
+    process.stdout.write('\x1b[u');
+  } catch {}
 }
 
 export function deactivateFixedDock(): void {
@@ -1571,13 +1573,15 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// expandOpenCodeMentions: @file and URL auto-ingestion
+// expandOpenCodeMentions: @file, images, and URL auto-ingestion
 // ─────────────────────────────────────────────────────────────────────────────
 export async function expandOpenCodeMentions(rawPrompt: string): Promise<{
   expandedPrompt: string;
   attachedFiles: string[];
+  attachedImages: ImagePayload[];
 }> {
   const attachedFiles: string[] = [];
+  const attachedImages: ImagePayload[] = [];
   const contexts: string[] = [];
 
   const urlRegex = /(?:@)?(https?:\/\/[^\s"'<>]+)/g;
@@ -1628,18 +1632,29 @@ export async function expandOpenCodeMentions(rawPrompt: string): Promise<{
     if (fs.existsSync(resolvedPath)) {
       const stat = fs.statSync(resolvedPath);
       if (stat.isFile()) {
-        try {
-          let content = fs.readFileSync(resolvedPath, 'utf-8');
-          const lineCount = content.split('\n').length;
-          if (content.length > 60000)
-            content = content.slice(0, 60000) + '\n\n... [Content truncated] ...';
-          const ext = path.extname(resolvedPath).replace('.', '') || 'text';
-          contexts.push(
-            `\n--- [Attached Workspace File: @${rawPath} (${lineCount} lines, ${stat.size} bytes)] ---\n` +
-              '```' + ext + '\n' + content + '\n```'
-          );
-          attachedFiles.push(`@${rawPath}`);
-        } catch {}
+        if (isImageFile(resolvedPath)) {
+          const imgPayload = loadImagePayload(resolvedPath);
+          if (imgPayload) {
+            attachedImages.push(imgPayload);
+            attachedFiles.push(`🖼️ @${rawPath}`);
+            contexts.push(
+              `\n--- [Attached Image: @${rawPath} (${(imgPayload.size / 1024).toFixed(1)} KB, ${imgPayload.mimeType})] ---`
+            );
+          }
+        } else {
+          try {
+            let content = fs.readFileSync(resolvedPath, 'utf-8');
+            const lineCount = content.split('\n').length;
+            if (content.length > 60000)
+              content = content.slice(0, 60000) + '\n\n... [Content truncated] ...';
+            const ext = path.extname(resolvedPath).replace('.', '') || 'text';
+            contexts.push(
+              `\n--- [Attached Workspace File: @${rawPath} (${lineCount} lines, ${stat.size} bytes)] ---\n` +
+                '```' + ext + '\n' + content + '\n```'
+            );
+            attachedFiles.push(`@${rawPath}`);
+          } catch {}
+        }
       } else if (stat.isDirectory()) {
         try {
           const files = fs.readdirSync(resolvedPath).slice(0, 40);
@@ -1649,6 +1664,25 @@ export async function expandOpenCodeMentions(rawPrompt: string): Promise<{
           );
           attachedFiles.push(`@${rawPath}/`);
         } catch {}
+      }
+    }
+  }
+
+  // Also auto-detect drag-and-dropped image files or direct image paths without @
+  const rawImageRegex = /(?:^|\s)["']?([a-zA-Z]:[\\/][^\r\n"']+\.(?:png|jpg|jpeg|webp|gif|bmp)|(?:\.{1,2}[\\/]|[a-zA-Z0-9_\-]+[\\/])[^\r\n"']+\.(?:png|jpg|jpeg|webp|gif|bmp))["']?(?=\s|$)/gi;
+  const rawImageMatches = Array.from(rawPrompt.matchAll(rawImageRegex));
+  for (const m of rawImageMatches) {
+    const rawPath = m[1].replace(/["']/g, '').trim();
+    const resolvedPath = path.isAbsolute(rawPath) ? rawPath : path.resolve(process.cwd(), rawPath);
+    if (fs.existsSync(resolvedPath) && !attachedImages.some(img => img.path === resolvedPath)) {
+      const payload = loadImagePayload(resolvedPath);
+      if (payload) {
+        attachedImages.push(payload);
+        const name = path.basename(resolvedPath);
+        attachedFiles.push(`🖼️ ${name}`);
+        contexts.push(
+          `\n--- [Attached Image: ${name} (${(payload.size / 1024).toFixed(1)} KB, ${payload.mimeType})] ---`
+        );
       }
     }
   }
@@ -1666,5 +1700,6 @@ export async function expandOpenCodeMentions(rawPrompt: string): Promise<{
       ? rawPrompt + '\n\n' + contexts.join('\n')
       : rawPrompt,
     attachedFiles,
+    attachedImages,
   };
 }
