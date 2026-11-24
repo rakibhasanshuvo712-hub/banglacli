@@ -11,11 +11,29 @@ export interface OpenCodePromptOptions {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Box width: responsive between 42..94, locked per prompt session
+// Box width: responsive between 48..126, perfectly sized for modern terminals
 // ─────────────────────────────────────────────────────────────────────────────
-function getSafeBoxWidth(): number {
-  const termCols = process.stdout.columns || 80;
-  return Math.max(42, Math.min(termCols - 4, 94));
+function getSafeBoxWidth(cols?: number): number {
+  const termCols = cols || process.stdout.columns || 80;
+  return Math.max(48, Math.min(termCols - 4, 126));
+}
+
+function getDockedRows(rows: number): {
+  topRow: number;
+  contentRow: number;
+  hintRow: number | null;
+  bottomRow: number;
+  boxRows: number;
+} {
+  const isSpacious = rows >= 22;
+  const boxRows = isSpacious ? 5 : 4;
+  return {
+    topRow: isSpacious ? rows - 4 : rows - 3,
+    contentRow: isSpacious ? rows - 3 : rows - 2,
+    hintRow: isSpacious ? rows - 2 : null,
+    bottomRow: rows - 1,
+    boxRows,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -174,8 +192,9 @@ export function updateFixedBottomStatus(
   const boxWidth = getSafeBoxWidth();
   const isBuildMode = (options?.mode || _dockedMode) === 'build';
   const borderColor = isBuildMode ? chalk.hex('#00FF7F') : chalk.hex('#FFB300');
+  const { contentRow } = getDockedRows(H);
   const statusLine = renderStatusLine(boxWidth, statusText, borderColor);
-  process.stdout.write(`\x1b[s\x1b[${H - 2};1H\x1b[2K${statusLine}\x1b[u`);
+  process.stdout.write(`\x1b[s\x1b[${contentRow};1H\x1b[2K${statusLine}\x1b[u`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -354,11 +373,8 @@ export function prepareInteractiveArea(
 function writeDockedBox(rows: number, cols: number, model: string, mode: 'build' | 'plan'): void {
   const isBuild = mode === 'build';
   const borderColor = isBuild ? chalk.hex('#00FF7F') : chalk.hex('#FFB300');
-  const boxWidth = Math.max(42, Math.min(cols - 4, 94));
-
-  const topRow = rows - 3;
-  const contentRow = rows - 2;
-  const bottomRow = rows - 1;
+  const boxWidth = getSafeBoxWidth(cols);
+  const { topRow, contentRow, hintRow, bottomRow } = getDockedRows(rows);
 
   const topBorder = renderTopBorder(boxWidth, isBuild, model, borderColor);
   const contentLine = renderContentLine(boxWidth, '', true, isBuild, borderColor);
@@ -367,6 +383,10 @@ function writeDockedBox(rows: number, cols: number, model: string, mode: 'build'
   process.stdout.write(`\x1b[${topRow - 1};1H\x1b[2K`);
   process.stdout.write(`\x1b[${topRow};1H\x1b[2K${topBorder}`);
   process.stdout.write(`\x1b[${contentRow};1H\x1b[2K${contentLine}`);
+  if (hintRow) {
+    const hintLine = borderColor('│ ') + chalk.dim('· Shift+Enter: newline • /help for commands');
+    process.stdout.write(`\x1b[${hintRow};1H\x1b[2K${hintLine}`);
+  }
   process.stdout.write(`\x1b[${bottomRow};1H\x1b[2K${bottomBorder}`);
   process.stdout.write(`\x1b[${rows};1H\x1b[2K`);
 }
@@ -403,15 +423,16 @@ export function activateFixedDock(
   writeDockedBox(rows, cols, model, mode);
 
   // Set DECSTBM Scroll Region
+  const { boxRows, contentRow } = getDockedRows(rows);
   const scrollTop = headerHeight + 1;
-  const scrollBottom = rows - BOX_ROWS;
+  const scrollBottom = rows - boxRows;
 
   if (scrollBottom > scrollTop) {
     process.stdout.write(`\x1b[${scrollTop};${scrollBottom}r`);
   }
 
   // Position cursor inside input box
-  process.stdout.write(`\x1b[${rows - 2};5H\x1b[?25h`);
+  process.stdout.write(`\x1b[${contentRow};5H\x1b[?25h`);
 
   try {
     if (process.stdin.isTTY) {
@@ -438,12 +459,13 @@ function onDockedResize(): void {
   _dockedHeaderHeight = headerHeight;
   writeDockedBox(rows, cols, _dockedModel, _dockedMode);
 
+  const { boxRows, contentRow } = getDockedRows(rows);
   const scrollTop = headerHeight + 1;
-  const scrollBottom = rows - BOX_ROWS;
+  const scrollBottom = rows - boxRows;
   if (scrollBottom > scrollTop) {
     process.stdout.write(`\x1b[${scrollTop};${scrollBottom}r`);
   }
-  process.stdout.write(`\x1b[${rows - 2};5H\x1b[?25h`);
+  process.stdout.write(`\x1b[${contentRow};5H\x1b[?25h`);
 }
 
 export function updateDockedModel(
@@ -464,8 +486,9 @@ export function updateDockedModel(
   _dockedHeaderHeight = headerHeight;
   const isBuild = mode === 'build';
   const borderColor = isBuild ? chalk.hex('#00FF7F') : chalk.hex('#FFB300');
-  const boxWidth = Math.max(42, Math.min(cols - 4, 94));
-  process.stdout.write(`\x1b[${rows - 3};1H\x1b[2K${renderTopBorder(boxWidth, isBuild, model, borderColor)}`);
+  const boxWidth = getSafeBoxWidth(cols);
+  const { topRow } = getDockedRows(rows);
+  process.stdout.write(`\x1b[${topRow};1H\x1b[2K${renderTopBorder(boxWidth, isBuild, model, borderColor)}`);
   process.stdout.write('\x1b[u');
 }
 
@@ -486,9 +509,8 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
   return new Promise((resolve) => {
     const rows = process.stdout.rows!;
     const cols = process.stdout.columns!;
-    const boxWidth = Math.max(42, Math.min(cols - 4, 94));
-
-    const contentRow = rows - 2;
+    const boxWidth = getSafeBoxWidth(cols);
+    const { boxRows, contentRow, hintRow } = getDockedRows(rows);
     const startCol = 5;
 
     // Self-healing re-render on every turn
@@ -504,7 +526,7 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
     writeDockedBox(rows, cols, options.model, options.mode);
 
     const scrollTop = headerHeight + 1;
-    const scrollBottom = rows - BOX_ROWS;
+    const scrollBottom = rows - boxRows;
     if (scrollBottom > scrollTop) {
       process.stdout.write(`\x1b[${scrollTop};${scrollBottom}r`);
     }
@@ -534,7 +556,25 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
         borderColor
       );
       const absCol = startCol + Math.min(cursorCol, boxWidth - 8);
-      process.stdout.write(`\x1b[${contentRow};1H\x1b[2K${lineStr}\x1b[${contentRow};${absCol}H`);
+      process.stdout.write(`\x1b[${contentRow};1H\x1b[2K${lineStr}`);
+      if (hintRow) {
+        if (bufferLines.length > 1) {
+          const secondLine = renderContentLine(
+            boxWidth,
+            bufferLines.slice(1).join(' ↵ '),
+            false,
+            isBuildMode,
+            borderColor
+          );
+          process.stdout.write(`\x1b[${hintRow};1H\x1b[2K${secondLine}`);
+        } else if (displayLine.length === 0) {
+          const hint = borderColor('│ ') + chalk.dim('· Shift+Enter: newline • /help for commands');
+          process.stdout.write(`\x1b[${hintRow};1H\x1b[2K${hint}`);
+        } else {
+          process.stdout.write(`\x1b[${hintRow};1H\x1b[2K${borderColor('│ ')}`);
+        }
+      }
+      process.stdout.write(`\x1b[${contentRow};${absCol}H`);
     };
 
     const cleanup = () => {
@@ -554,9 +594,19 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
       if (!isSlash) {
         const statusLine = renderStatusLine(boxWidth, 'Processing request...', borderColor);
         process.stdout.write(`\x1b[${contentRow};1H\x1b[2K${statusLine}`);
+        if (hintRow) {
+          const subStatus = borderColor('│ ') + chalk.cyan('⚡ ') + chalk.dim('Autonomous agent working...');
+          process.stdout.write(`\x1b[${hintRow};1H\x1b[2K${subStatus}`);
+        }
       } else {
         const emptyLine = renderContentLine(boxWidth, '', true, isBuildMode, borderColor);
         process.stdout.write(`\x1b[${contentRow};1H\x1b[2K${emptyLine}`);
+        if (hintRow) {
+          process.stdout.write(`\x1b[${hintRow};1H\x1b[2K${borderColor('│ ')}`);
+        }
+        if (hintRow) {
+          process.stdout.write(`\x1b[${hintRow};1H\x1b[2K${borderColor('│ ')}`);
+        }
       }
 
       // Print prompt into scrolling workspace
@@ -577,6 +627,9 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
       cleanup();
       const emptyLine = renderContentLine(boxWidth, '', true, isBuildMode, borderColor);
       process.stdout.write(`\x1b[${contentRow};1H\x1b[2K${emptyLine}`);
+      if (hintRow) {
+        process.stdout.write(`\x1b[${hintRow};1H\x1b[2K${borderColor('│ ')}`);
+      }
       process.stdout.write(`\x1b[${contentRow};${startCol}H\x1b[?25h`);
       resolve(null);
     };
@@ -650,6 +703,9 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
         cleanup();
         const emptyLine = renderContentLine(boxWidth, '', true, isBuildMode, borderColor);
         process.stdout.write(`\x1b[${contentRow};1H\x1b[2K${emptyLine}`);
+        if (hintRow) {
+          process.stdout.write(`\x1b[${hintRow};1H\x1b[2K${borderColor('│ ')}`);
+        }
         process.stdout.write(`\x1b[${contentRow};${startCol}H`);
         resolve('/model');
         return;
