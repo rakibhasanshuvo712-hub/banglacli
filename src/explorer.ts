@@ -32,11 +32,11 @@ async function probeCandidate(candidate: FreeModelCandidate): Promise<boolean> {
 
       const res = await ai.models.generateContent({
         model: normalized,
-        contents: [{ role: 'user', parts: [{ text: '1' }] }],
-        config: { maxOutputTokens: 2 },
+        contents: [{ role: 'user', parts: [{ text: 'Say OK' }] }],
+        config: { maxOutputTokens: 10 },
       });
       clearTimeout(timeout);
-      return Boolean(res && res.text);
+      return Boolean(res && (res.text !== undefined || (res.candidates && res.candidates.length > 0)));
     } catch {
       return false;
     }
@@ -61,8 +61,8 @@ async function probeCandidate(candidate: FreeModelCandidate): Promise<boolean> {
       },
       body: JSON.stringify({
         model: candidate.id,
-        messages: [{ role: 'user', content: '1' }],
-        max_tokens: 1,
+        messages: [{ role: 'user', content: 'Say OK' }],
+        max_tokens: 10,
       }),
     });
     clearTimeout(timeout);
@@ -72,7 +72,7 @@ async function probeCandidate(candidate: FreeModelCandidate): Promise<boolean> {
     }
 
     const data = (await res.json()) as any;
-    // Check if error payload returned in JSON
+    // Check if error payload returned in JSON or rate limited
     if (data?.error) {
       return false;
     }
@@ -214,6 +214,8 @@ export async function exploreAndSelectFreeModel(
       config.apiKey = winner.apiKey;
       if (winner.baseURL) {
         config.baseURL = winner.baseURL;
+      } else {
+        delete (config as any).baseURL;
       }
       updateModel(winner.id);
       saveConfig(config);

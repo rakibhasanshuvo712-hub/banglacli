@@ -426,11 +426,65 @@ export const AGENT_MODELS: AgentModelPreset[] = [
   // 🔷 Google Gemini Suite (100% Free Tier: 1M Tokens, 1,500 Req/Day)
   // ==========================================
   {
-    id: 'gemini-2.0-flash',
-    name: 'Gemini 2.0 Flash (🌟 Google Flagship Free Coder)',
+    id: 'gemini-3.5-flash-lite',
+    name: 'Gemini 3.5 Flash-Lite (🌟 Verified Active Free Coder)',
+    provider: 'gemini',
+    category: 'gemini',
+    description: "Google's ultra-fast verified free model with full tool calling, instant token generation, and zero downtime.",
+    badge: '100% Free',
+    contextLength: '1,048,576',
+  },
+  {
+    id: 'gemini-3.5-flash',
+    name: 'Gemini 3.5 Flash (Flagship Multimodal Free)',
     provider: 'gemini',
     category: 'gemini',
     description: "Google's flagship multimodal model with tool calling, high reasoning, and 1,500 req/day free.",
+    badge: 'Flagship Free',
+    contextLength: '1,048,576',
+  },
+  {
+    id: 'gemini-3.6-flash',
+    name: 'Gemini 3.6 Flash (Enhanced Coding Reasoning)',
+    provider: 'gemini',
+    category: 'gemini',
+    description: 'Advanced reasoning model with full tool execution and multi-turn architectural logic.',
+    badge: '3.6 Flash',
+    contextLength: '1,048,576',
+  },
+  {
+    id: 'gemini-3.7-flash',
+    name: 'Gemini 3.7 Flash Preview (Frontier Flash)',
+    provider: 'gemini',
+    category: 'gemini',
+    description: 'Frontier flash reasoning model optimized for continuous autonomous build execution.',
+    badge: '3.7 Preview',
+    contextLength: '1,048,576',
+  },
+  {
+    id: 'gemini-3.8-flash',
+    name: 'Gemini 3.8 Flash Preview (2M Context)',
+    provider: 'gemini',
+    category: 'gemini',
+    description: 'Massive 2 Million token context preview model for large-scale multi-file codebases.',
+    badge: '2M Preview',
+    contextLength: '2,097,152',
+  },
+  {
+    id: 'gemini-3.1-flash-lite',
+    name: 'Gemini 3.1 Flash-Lite (Ultra-Fast 30 RPM)',
+    provider: 'gemini',
+    category: 'gemini',
+    description: 'Ultra-low latency Gemini model with 30 requests/minute and 1M context.',
+    badge: '30 RPM Free',
+    contextLength: '1,048,576',
+  },
+  {
+    id: 'gemini-2.0-flash',
+    name: 'Gemini 2.0 Flash (Compatible Alias)',
+    provider: 'gemini',
+    category: 'gemini',
+    description: "Compatible alias seamlessly routed to Gemini 3.5 Flash-Lite with 1,500 req/day free.",
     badge: '100% Free',
     contextLength: '1,048,576',
   },
@@ -837,28 +891,33 @@ export const AGENT_MODELS: AgentModelPreset[] = [
 
 export const OPENROUTER_FREE_CASCADE_CHAIN = [
   'openrouter/free',
-  'particle-ai/particle-1:free',
-  'nvidia/nemotron-3-ultra-550b-a55b:free',
-  'google/gemma-4-31b-it:free',
-  'google/gemma-4-26b-a4b-it:free',
-  'nvidia/nemotron-3.5-lightning:free',
-  'baidu/ernie-5.5-flash-preview:free',
   'inclusionai/ling-3.2-flash:free',
-  'dots-studio/dots-3-note-preview:free',
+  'baidu/ernie-5.5-flash-preview:free',
   'liquid/lfm-3-1.7b:free',
+  'particle-ai/particle-1:free',
   'recursive/flint-v1.0:free',
+  'nvidia/nemotron-3.5-super-vl:free',
+  'nvidia/nemotron-3.5-lightning:free',
+  'nvidia/nemotron-3-ultra-550b-a55b:free',
+  'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+  'google/gemma-4-26b-a4b-it:free',
+  'google/gemma-4-31b-it:free',
   'google/lyria-3-pro-preview',
   'google/lyria-3-clip-preview',
-  'meta-llama/llama-3.3-70b-instruct:free',
-  'qwen/qwen-2.5-coder-32b-instruct:free',
-  'mistralai/mistral-small-24b-instruct-2501:free',
-  'deepseek/deepseek-r1:free',
-  'deepseek/deepseek-chat:free',
   'deepseek-v4.1-flash-free',
   'glm-5.3-flash-free',
+  'longcat-2.5-preview-free',
   'solar-mini-4',
   'tencent/hy4-flash',
   'z-ai/glm-5.3-flash',
+  'beam-free',
+  'exo-free',
+  'flint-40b-free',
+  'mimo-v2.6-flash-free',
+  'mimo-v2.5-free',
+  'nemotron-3-ultra-free',
+  'nemotron-3.5-lightning-free',
+  'nemotron-3.5-super-vl-free',
 ];
 
 export function normalizeGeminiModel(model: string): string {
@@ -866,15 +925,15 @@ export function normalizeGeminiModel(model: string): string {
   if (
     model === 'gemini-2.0-flash' ||
     model === 'gemini-2.0-flash-lite' ||
-    model === 'gemini-2.5-flash' ||
-    model === 'gemini-2.5-flash-lite' ||
     model === 'gemini-1.5-flash' ||
     model === 'gemini-1.5-flash-8b' ||
-    model === 'gemini-4-argon'
+    model === 'gemini-2.5-flash-lite' ||
+    model === 'gemini-2.5-flash' ||
+    model === 'gemini-2.5-pro'
   ) {
     return 'gemini-3.5-flash-lite';
   }
-  if (model === 'gemini-2.5-pro' || model === 'gemini-1.5-pro') {
+  if (model === 'gemini-1.5-pro') {
     return 'gemini-3.5-flash';
   }
   return model;
@@ -883,12 +942,16 @@ export function normalizeGeminiModel(model: string): string {
 export const GEMINI_CASCADE_CHAIN = [
   'gemini-3.5-flash-lite',
   'gemini-3.5-flash',
-  'gemini-3.8-flash',
   'gemini-3.1-flash-lite',
-  'gemini-2.0-flash',
-  'gemini-2.5-flash',
-  'gemini-1.5-flash',
-  'gemini-1.5-pro',
+  'gemini-3.6-flash',
+  'gemini-3.7-flash',
+  'gemini-3.8-flash',
+  'gemini-4-argon',
+  'gemini-4-carbon',
+  'gemini-4-hydrogen',
+  'gemini-4-neon',
+  'gemma-4-26b-a4b-it',
+  'gemma-4-31b-it',
 ];
 
 /**

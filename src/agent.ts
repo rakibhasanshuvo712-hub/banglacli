@@ -76,7 +76,6 @@ ${meshContext}
   4. 🧩 Core Components, Modules, Data Models & API Contracts.
   5. 🛠️ Step-by-Step Implementation Roadmap (ordered sequence of files to create/edit).
   6. 🧪 Verification & Testing Strategy.
-- At the end of your plan, remind the user: "When you are satisfied with this plan, type /build or /mode to switch to BUILD mode to execute it!"
 
 ### 1. LANGUAGE & COMMUNICATION RULES (CRITICAL):
 - ALWAYS write all responses, architectural plans, explanations, code, and terminal guidance in clear, professional ENGLISH.
@@ -96,10 +95,12 @@ ${meshContext}
 ${envContext.summary}
 ${meshContext}
 ### 🌟 CURRENT ACTIVE MODE: ⚡ BUILD MODE (AUTONOMOUS BUILDER)
-- You are 100% in BUILD MODE. You are NOT in plan mode!
+- You are 100% in BUILD MODE right now. You are NOT in plan mode.
 - File creation (write_file), surgical editing (edit_file), and terminal command execution (run_command) are FULLY UNLOCKED AND ACTIVE.
-- NEVER claim or state that you are in plan mode when the active mode is BUILD mode.
-- If the user asks you to implement, build, create, write, edit, code, or run anything, DO NOT tell them to switch modes or run /build. You are ALREADY in BUILD mode. Immediately call the appropriate tools (write_file, edit_file, run_command) to execute the request!
+- NEVER claim or state that you are in plan mode, and NEVER claim you cannot write or edit files.
+- NEVER ask or instruct the user to type /build, /mode, or any switch command. You are ALREADY in BUILD mode.
+- NEVER refuse to build, code, or execute. If the user asks you to implement, build, create, write, edit, code, fix, recheck, or continue, DO NOT argue, discuss control-flow, or give excuses. IMMEDIATELY call the appropriate tools (write_file, edit_file, run_command) to execute the request!
+- If the conversation history contains an implementation plan or roadmap, THAT PLAN IS APPROVED. Immediately call tools to create and edit the files. Never output a message stating "No files have been created" without calling tools.
 - You have workspace tools and cross-instance mesh tools:
   1. list_files(dirPath): Explore directories to understand workspace context and file hierarchy.
   2. read_file(filePath): Inspect existing source files before editing.
@@ -492,14 +493,23 @@ export class BanglaAgent {
         reason.includes('free-models-per-day') ||
         reason.includes('daily free') ||
         reason.includes('insufficient_quota') ||
-        reason.includes('402');
+        reason.includes('insufficient_balance') ||
+        reason.includes('Insufficient Balance') ||
+        reason.includes('402') ||
+        reason.includes('quota') ||
+        reason.includes('Daily quota') ||
+        reason.includes('Rate Limit') ||
+        reason.includes('rate limit') ||
+        reason.includes('rate-limit') ||
+        reason.includes('Provider failure') ||
+        reason.includes('provider failure');
 
       const geminiSaved = this.config.savedProviders?.gemini;
       const geminiKey =
         geminiSaved?.apiKey ||
         ((this.config.provider as string) === 'gemini' ? this.config.apiKey : undefined);
 
-      // If OpenRouter daily limit is hit, jump straight to Gemini for zero-delay continuity
+      // If OpenRouter daily limit or custom provider limit is hit, jump straight to Gemini for zero-delay continuity
       if (isAccountWideLimit && geminiKey) {
         for (const rawModel of GEMINI_CASCADE_CHAIN) {
           const model = normalizeGeminiModel(rawModel);
@@ -508,11 +518,12 @@ export class BanglaAgent {
             renderCascadeNotice(
               currentModel,
               model,
-              'OpenRouter daily quota limit reached; cascading immediately to Google Gemini'
+              'Quota limit reached on active provider; cascading immediately to Google Gemini'
             );
             this.config.provider = 'gemini';
             this.config.apiKey = geminiKey;
             this.config.model = model;
+            delete (this.config as any).baseURL;
             this.initClients();
             saveConfig(this.config);
             this.syncMessagesToGemini();
@@ -547,6 +558,7 @@ export class BanglaAgent {
             this.config.provider = 'gemini';
             this.config.apiKey = geminiKey;
             this.config.model = model;
+            delete (this.config as any).baseURL;
             this.initClients();
             saveConfig(this.config);
             this.syncMessagesToGemini();
