@@ -188,7 +188,7 @@ export function updateFixedBottomStatus(
   statusText: string,
   options?: { mode?: 'build' | 'plan'; model?: string }
 ): void {
-  if (!_dockedActive || !process.stdout.rows || process.stdout.rows < 16) return;
+  if (!_dockedActive || !_dockedPromptActive || !process.stdout.rows || process.stdout.rows < 16) return;
   const H = process.stdout.rows;
   const boxWidth = getSafeBoxWidth();
   const isBuildMode = (options?.mode || _dockedMode) === 'build';
@@ -203,6 +203,7 @@ export function updateFixedBottomStatus(
 // ─────────────────────────────────────────────────────────────────────────────
 
 let _dockedActive = false;
+let _dockedPromptActive = false;
 let _dockedRows = 0;
 let _dockedCols = 0;
 let _dockedProvider = 'Google Gemini';
@@ -777,17 +778,22 @@ export function updateDockedModel(
   process.stdout.write('\x1b[s');
   const headerHeight = writeStickyHeader(cols, rows, provider, model, mode);
   _dockedHeaderHeight = headerHeight;
-  const isBuild = mode === 'build';
-  const borderColor = isBuild ? chalk.hex('#00FF7F') : chalk.hex('#FFB300');
-  const boxWidth = getSafeBoxWidth(cols);
-  const { topRow } = getDockedRows(rows);
-  process.stdout.write(`\x1b[${topRow};1H\x1b[2K${renderTopBorder(boxWidth, isBuild, model, borderColor)}`);
+
+  // Only rewrite bottom prompt box border if the prompt box is actively waiting for input
+  if (_dockedPromptActive) {
+    const isBuild = mode === 'build';
+    const borderColor = isBuild ? chalk.hex('#00FF7F') : chalk.hex('#FFB300');
+    const boxWidth = getSafeBoxWidth(cols);
+    const { topRow } = getDockedRows(rows);
+    process.stdout.write(`\x1b[${topRow};1H\x1b[2K${renderTopBorder(boxWidth, isBuild, model, borderColor)}`);
+  }
   process.stdout.write('\x1b[u');
 }
 
 export function deactivateFixedDock(): void {
   if (!_dockedActive) return;
   _dockedActive = false;
+  _dockedPromptActive = false;
   process.stdout.removeListener('resize', onDockedResize);
   restoreTerminalViewport();
 }
@@ -837,6 +843,7 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
     const boxWidth = getSafeBoxWidth(cols);
     const { boxRows, contentRow, hintRow } = getDockedRows(rows);
     const startCol = 5;
+    _dockedPromptActive = true;
 
     // Self-healing re-render on every turn
     process.stdout.write('\x1b[?25l');
@@ -903,6 +910,7 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
     };
 
     const cleanup = () => {
+      _dockedPromptActive = false;
       try { process.stdout.write('\x1b[?2004l'); } catch {}
       process.stdin.removeListener('data', onData);
       try {
@@ -1312,6 +1320,7 @@ async function readInlinePrompt(options: OpenCodePromptOptions): Promise<string 
     };
 
     const cleanup = () => {
+      _dockedPromptActive = false;
       try { process.stdout.write('\x1b[?2004l'); } catch {}
       process.stdin.removeListener('data', onData);
       try {

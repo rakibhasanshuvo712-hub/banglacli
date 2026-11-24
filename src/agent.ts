@@ -10,7 +10,7 @@ import {
   getActiveMeshNode,
 } from './tools.js';
 import { createSpinner, renderMarkdown, renderCascadeNotice, renderAllTokensExhaustedReport } from './ui.js';
-import { OPENROUTER_FREE_CASCADE_CHAIN, GEMINI_CASCADE_CHAIN } from './models.js';
+import { OPENROUTER_FREE_CASCADE_CHAIN, GEMINI_CASCADE_CHAIN, normalizeGeminiModel } from './models.js';
 import { detectProjectContext } from './detector.js';
 import { updateFixedBottomStatus } from './prompt.js';
 import chalk from 'chalk';
@@ -210,14 +210,18 @@ export class BanglaAgent {
 
   private initClients(): void {
     if (this.config.provider === 'gemini') {
+      const normalized = normalizeGeminiModel(this.config.model);
       if (
-        !this.config.model ||
-        this.config.model.startsWith('gemini-3.') ||
-        this.config.model.startsWith('gemini-4.') ||
-        !GEMINI_CASCADE_CHAIN.includes(this.config.model)
+        !normalized ||
+        normalized.startsWith('gemini-3.') ||
+        normalized.startsWith('gemini-4.') ||
+        !GEMINI_CASCADE_CHAIN.includes(normalized)
       ) {
         this.config.model = 'gemini-2.0-flash';
         updateModel('gemini-2.0-flash');
+      } else if (normalized !== this.config.model) {
+        this.config.model = normalized;
+        updateModel(normalized);
       }
       this.geminiClient = new GoogleGenAI({ apiKey: this.config.apiKey });
       this.openAIClient = undefined;
@@ -270,9 +274,12 @@ export class BanglaAgent {
   }
 
   private attemptedModelsInCascade = new Set<string>();
+  private cascadeStepsCount = 0;
+  private readonly MAX_CASCADE_STEPS = 6;
 
   public resetCascadeAttempts(): void {
     this.attemptedModelsInCascade.clear();
+    this.cascadeStepsCount = 0;
   }
 
   /**
@@ -282,13 +289,24 @@ export class BanglaAgent {
    * renders the Token Renewal Countdown report.
    */
   public async cascadeModel(currentModel: string, reason: string): Promise<string | null> {
+    this.cascadeStepsCount++;
     this.attemptedModelsInCascade.add(currentModel);
+    if (this.config.provider === 'gemini') {
+      this.attemptedModelsInCascade.add(normalizeGeminiModel(currentModel));
+    }
+
+    if (this.cascadeStepsCount > this.MAX_CASCADE_STEPS) {
+      renderAllTokensExhaustedReport();
+      return null;
+    }
 
     // 1. If currently on Gemini:
     if (this.config.provider === 'gemini') {
       // Try next unattempted Gemini model
-      for (const model of GEMINI_CASCADE_CHAIN) {
+      for (const rawModel of GEMINI_CASCADE_CHAIN) {
+        const model = normalizeGeminiModel(rawModel);
         if (!this.attemptedModelsInCascade.has(model)) {
+          this.attemptedModelsInCascade.add(model);
           renderCascadeNotice(currentModel, model, reason);
           this.config.model = model;
           updateModel(model);
@@ -305,6 +323,7 @@ export class BanglaAgent {
       if (openRouterKey) {
         for (const model of OPENROUTER_FREE_CASCADE_CHAIN) {
           if (!this.attemptedModelsInCascade.has(model)) {
+            this.attemptedModelsInCascade.add(model);
             renderCascadeNotice(
               currentModel,
               model,
@@ -325,6 +344,7 @@ export class BanglaAgent {
       // 2. If currently on OpenRouter/Custom:
       for (const model of OPENROUTER_FREE_CASCADE_CHAIN) {
         if (!this.attemptedModelsInCascade.has(model)) {
+          this.attemptedModelsInCascade.add(model);
           renderCascadeNotice(currentModel, model, reason);
           this.config.model = model;
           updateModel(model);
@@ -339,8 +359,10 @@ export class BanglaAgent {
         geminiSaved?.apiKey ||
         ((this.config.provider as string) === 'gemini' ? this.config.apiKey : undefined);
       if (geminiKey) {
-        for (const model of GEMINI_CASCADE_CHAIN) {
+        for (const rawModel of GEMINI_CASCADE_CHAIN) {
+          const model = normalizeGeminiModel(rawModel);
           if (!this.attemptedModelsInCascade.has(model)) {
+            this.attemptedModelsInCascade.add(model);
             renderCascadeNotice(
               currentModel,
               model,
@@ -537,11 +559,14 @@ export class BanglaAgent {
       throw new Error('Gemini client is not initialized.');
     }
 
-    // Add user message to Gemini conversation contents
-    this.geminiContents.push({
-      role: 'user',
-      parts: [{ text: userInput }],
-    });
+    // Add user message to Gemini conversation contents only if not already added
+    const lastContent = this.geminiContents[this.geminiContents.length - 1];
+    if (!lastContent || lastContent.role !== 'user') {
+      this.geminiContents.push({
+        role: 'user',
+        parts: [{ text: userInput }],
+      });
+    }
 
     const maxTurns = 40;
     let turnCount = 0;
@@ -564,9 +589,14 @@ export class BanglaAgent {
       let response: any = null;
       let lastError: any = null;
 
-      // Candidate models: requested model first, then fallback models
-      const fallbacks = GEMINI_FALLBACK_MAP[this.config.model] || ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.5-flash'];
-      const modelCandidates = [this.config.model, ...fallbacks.filter((m) => m !== this.config.model)];
+      // Candidate models: normalized requested model first, then fallback models, excluding already attempted models
+      const normalizedCurrent = normalizeGeminiModel(this.config.model);
+      const fallbackList = (GEMINI_FALLBACK_MAP[this.config.model] || GEMINI_FALLBACK_MAP[normalizedCurrent] || GEMINI_CASCADE_CHAIN)
+        .map(normalizeGeminiModel);
+      const rawCandidates = [normalizedCurrent, ...fallbackList];
+      const modelCandidates = rawCandidates.filter(
+        (m, idx, arr) => arr.indexOf(m) === idx && !this.attemptedModelsInCascade.has(m)
+      );
 
       for (const candidateModel of modelCandidates) {
         if (options?.signal?.aborted) {
@@ -611,7 +641,7 @@ export class BanglaAgent {
             ]);
 
             if (candidateModel !== this.config.model) {
-              renderCascadeNotice(this.config.model, candidateModel, 'Gemini high demand / 503 failover');
+              renderCascadeNotice(this.config.model, candidateModel, 'Gemini high demand / failover');
               this.config.model = candidateModel;
               updateModel(candidateModel);
               this.onModelChangeCallback?.(candidateModel, 'gemini');
@@ -626,6 +656,7 @@ export class BanglaAgent {
             }
 
             lastError = err;
+            this.attemptedModelsInCascade.add(candidateModel);
             const errMsg = err?.message || String(err);
             const isTemporary =
               errMsg.includes('503') ||
@@ -673,18 +704,13 @@ export class BanglaAgent {
             `\n✖ Gemini API Key Error: Your API key appears to be invalid or expired.\n` +
               `Please run ${chalk.yellow('/config')} to update your API key.`
           );
-        } else if (
-          errMsg.includes('503') ||
-          errMsg.includes('UNAVAILABLE') ||
-          errMsg.includes('high demand') ||
-          errMsg.includes('RESOURCE_EXHAUSTED') ||
-          errMsg.includes('429')
-        ) {
+        } else {
+          // All local candidate Gemini models failed; cascade to next provider / model in chain
           const nextModel = await this.cascadeModel(
             this.config.model,
             errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED')
               ? 'Gemini Rate Limit / Token Quota Exceeded (429)'
-              : 'Gemini Server High Demand (503 UNAVAILABLE)'
+              : 'Gemini Server High Demand / Provider Error'
           );
           if (nextModel) {
             if (this.config.provider === 'gemini') {
@@ -697,7 +723,6 @@ export class BanglaAgent {
             '\n⏳ All free model tokens are currently exhausted across all providers. Check the renewal countdown above.'
           );
         }
-        throw new Error(`Gemini Error: ${errMsg}`);
       }
 
       const candidate = response.candidates?.[0];
@@ -773,10 +798,13 @@ export class BanglaAgent {
       throw new Error('OpenAI client is not initialized.');
     }
 
-    this.openAIMessages.push({
-      role: 'user',
-      content: userInput,
-    });
+    const lastMsg = this.openAIMessages[this.openAIMessages.length - 1];
+    if (!lastMsg || lastMsg.role !== 'user') {
+      this.openAIMessages.push({
+        role: 'user',
+        content: userInput,
+      });
+    }
 
     const maxTurns = 40;
     let turnCount = 0;
@@ -845,24 +873,22 @@ export class BanglaAgent {
             errMsg.includes('free-models-per-day') ||
             errMsg.includes('free_daily_limit');
 
-          // If daily quota across all OpenRouter free models is exhausted, immediately auto-recover to Gemini
           if (isDailyQuotaExhausted && (this.config.provider === 'openrouter' || this.config.provider === 'custom')) {
             spinner.stop();
-            const geminiSaved = this.config.savedProviders?.gemini;
-            if (geminiSaved && geminiSaved.apiKey) {
-              renderCascadeNotice(
-                this.config.model,
-                'gemini-2.0-flash',
-                'OpenRouter daily free limit reached; auto-recovering with Google Gemini Free (1,500 req/day)'
-              );
-              this.config.provider = 'gemini';
-              this.config.apiKey = geminiSaved.apiKey;
-              this.config.model = 'gemini-2.0-flash';
-              this.initClients();
-              saveConfig(this.config);
-              this.onModelChangeCallback?.('gemini-2.0-flash', 'gemini');
-              return await this.chatGemini(userInput, options);
+            const nextModel = await this.cascadeModel(
+              this.config.model,
+              'OpenRouter daily free limit reached'
+            );
+            if (nextModel) {
+              if ((this.config.provider as string) === 'gemini') {
+                return await this.chatGemini(userInput, options);
+              }
+              spinner.start();
+              continue;
             }
+            return chalk.yellow(
+              '\n⏳ All free model tokens are currently exhausted across all providers. Check the renewal countdown above.'
+            );
           }
 
           const isLimitOrOverload =
@@ -910,20 +936,16 @@ export class BanglaAgent {
             errMsg.includes('invalid_api_key') ||
             errMsg.includes('Authentication failed')
           ) {
-            const geminiSaved = this.config.savedProviders?.gemini;
-            if (geminiSaved && geminiSaved.apiKey && this.config.provider !== 'gemini') {
-              renderCascadeNotice(
-                this.config.model,
-                'gemini-2.0-flash',
-                `Auth error on ${this.config.provider}; auto-recovering with Google Gemini Free (1,500 req/day)`
-              );
-              this.config.provider = 'gemini';
-              this.config.apiKey = geminiSaved.apiKey;
-              this.config.model = 'gemini-2.0-flash';
-              this.initClients();
-              updateModel('gemini-2.0-flash');
-              this.onModelChangeCallback?.('gemini-2.0-flash', 'gemini');
-              return await this.chatGemini(userInput, options);
+            const nextModel = await this.cascadeModel(
+              this.config.model,
+              `Auth error on ${this.config.provider}`
+            );
+            if (nextModel) {
+              if ((this.config.provider as string) === 'gemini') {
+                return await this.chatGemini(userInput, options);
+              }
+              spinner.start();
+              continue;
             }
 
             return chalk.red(
@@ -933,7 +955,7 @@ export class BanglaAgent {
           } else if (errMsg.includes('429') || errMsg.includes('rate limit')) {
             const nextModel = await this.cascadeModel(this.config.model, 'Rate Limit Exceeded (429)');
             if (nextModel) {
-              if (this.config.provider === 'gemini') {
+              if ((this.config.provider as string) === 'gemini') {
                 return await this.chatGemini(userInput, options);
               } else {
                 return await this.chatOpenAI(userInput, options);

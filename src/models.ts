@@ -860,13 +860,19 @@ export const OPENROUTER_FREE_CASCADE_CHAIN = [
   'recursive/flint-v1.0:free',
 ];
 
+export function normalizeGeminiModel(model: string): string {
+  if (!model) return 'gemini-2.0-flash';
+  if (model === 'gemini-2.5-flash') return 'gemini-2.0-flash';
+  if (model === 'gemini-2.5-pro') return 'gemini-1.5-pro';
+  return model;
+}
+
 export const GEMINI_CASCADE_CHAIN = [
   'gemini-2.0-flash',
   'gemini-2.0-flash-lite',
-  'gemini-2.5-flash',
-  'gemini-2.5-pro',
   'gemini-1.5-flash',
   'gemini-1.5-pro',
+  'gemini-1.5-flash-8b',
 ];
 
 /**
