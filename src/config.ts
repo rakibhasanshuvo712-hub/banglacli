@@ -103,12 +103,8 @@ async function selectModelForProvider(
       { value: 'gemini-2.0-flash-lite', label: 'gemini-2.0-flash-lite (Ultra-Fast 30 RPM Free)' },
       { value: 'gemini-2.5-flash', label: 'gemini-2.5-flash (Next-Gen Flash Preview)' },
       { value: 'gemini-2.5-pro', label: 'gemini-2.5-pro (2M Context Frontier Preview)' },
-      { value: 'gemini-3.5-flash-lite', label: 'gemini-3.5-flash-lite (100% Free & Active, 1M Tokens)' },
-      { value: 'gemini-3.1-flash-lite', label: 'gemini-3.1-flash-lite (Free, Low Latency)' },
-      { value: 'gemini-3.5-flash', label: 'gemini-3.5-flash (Next-Gen Free Flash)' },
       { value: 'gemini-1.5-flash', label: 'gemini-1.5-flash (Battle-Tested Stable, 1M Tokens)' },
       { value: 'gemini-1.5-pro', label: 'gemini-1.5-pro (2M Context Long-Form)' },
-      { value: 'gemini-3.8-flash', label: 'gemini-3.8-flash (Latest Preview)' },
       { value: 'custom_input', label: 'Enter custom model name manually...' },
     ];
 
@@ -366,7 +362,7 @@ export async function promptConfig(isFirstTime = false): Promise<BanglaCLIConfig
       {
         value: 'gemini',
         label: `${chalk.bold('Google Gemini')} ${chalk.yellow('(Free Tier - High Quota, Subject to 503 Spikes)')}`,
-        hint: 'gemini-3.5-flash-lite, gemini-3.1-flash-lite',
+        hint: 'gemini-2.0-flash, gemini-2.0-flash-lite, gemini-2.5-flash',
       },
       {
         value: 'custom',

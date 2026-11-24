@@ -311,6 +311,7 @@ export function showHelp(): void {
   console.log(`  ${chalk.cyan('/role')}        - View or change instance role (/role frontend, /role backend)`);
   console.log(`  ${chalk.cyan('/send')}        - Send direct message to a peer (/send backend <message>)`);
   console.log(`  ${chalk.cyan('/limits')}      - View free token limits, context windows & RPM/RPD`);
+  console.log(`  ${chalk.cyan('/renewal')}     - Display live token renewal countdown timer and reset schedules (alias: /countdown)`);
   console.log(`  ${chalk.cyan('/guide')}       - Direct free API links & models guide (Free API Guide)`);
   console.log(`  ${chalk.cyan('/config')}      - Full interactive configuration wizard`);
   console.log(`  ${chalk.cyan('/about')}       - View developer information, GitHub account & project details`);
@@ -359,8 +360,8 @@ export function showFreeApiKeyGuide(): void {
   console.log(chalk.bold.hex('#00FF7F')('1. Google Gemini (Google AI Studio) - 🌟 RECOMMENDED'));
   console.log(`   ${chalk.gray('Direct Link:')} ${chalk.bold.underline.cyan('https://aistudio.google.com/apikey')}`);
   console.log(`   ${chalk.gray('Steps:')} Sign in with Google ➔ Click "${chalk.white('Create API Key')}" ➔ Copy key.`);
-  console.log(`   ${chalk.gray('Best Free Model:')} ${chalk.bold.yellow('gemini-3.5-flash-lite')} (🌟 100% Free, active & fast)`);
-  console.log(`   ${chalk.gray('Alternative Free Models:')} ${chalk.white('gemini-3.1-flash-lite, gemini-3.5-flash, gemini-3.8-flash')}`);
+  console.log(`   ${chalk.gray('Best Free Model:')} ${chalk.bold.yellow('gemini-2.0-flash')} (🌟 100% Free, flagship speed & 1,500 RPD)`);
+  console.log(`   ${chalk.gray('Alternative Free Models:')} ${chalk.white('gemini-2.0-flash-lite, gemini-2.5-flash, gemini-1.5-flash')}`);
   console.log(`   ${chalk.gray('Quota:')} Free tier gives 15 Requests/min & 1,500 Requests/day for free!\n`);
 
   // 2. OpenRouter Free Models
@@ -438,10 +439,10 @@ export function showTokenLimitsGuide(): void {
   console.log(chalk.dim('┌────────────────────────┬────────────────┬──────────────┬──────────────┬──────────────┐'));
   console.log(chalk.dim('│') + chalk.bold(' Model                  ') + chalk.dim('│') + chalk.bold(' Context Window ') + chalk.dim('│') + chalk.bold(' Req / Minute ') + chalk.dim('│') + chalk.bold(' Tokens / Min ') + chalk.dim('│') + chalk.bold(' Req / Day    ') + chalk.dim('│'));
   console.log(chalk.dim('├────────────────────────┼────────────────┼──────────────┼──────────────┼──────────────┤'));
-  console.log(chalk.dim('│') + chalk.green(' gemini-3.5-flash-lite  ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
-  console.log(chalk.dim('│') + chalk.green(' gemini-3.1-flash-lite  ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
-  console.log(chalk.dim('│') + chalk.green(' gemini-3.5-flash       ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
-  console.log(chalk.dim('│') + chalk.green(' gemini-3.8-flash       ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' gemini-2.0-flash       ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' gemini-2.0-flash-lite  ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 30 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' gemini-2.5-flash       ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' gemini-1.5-flash       ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
   console.log(chalk.dim('└────────────────────────┴────────────────┴──────────────┴──────────────┴──────────────┘'));
   console.log(chalk.gray('ℹ️ 1M Tokens/min is equivalent to ~750,000 words per minute! Gemini 2.0/1.5 Flash are best for 0% downtime.\n'));
 
@@ -619,4 +620,85 @@ export function showAbout(): void {
   console.log(`  • ${chalk.green('Instant Abort:')}     Real-time Escape key listener halts generation and subprocesses instantly.`);
   console.log(`  • ${chalk.green('83+ Models:')}         Google Gemini, DeepSeek, Groq, OpenRouter, and Flagship BYOK.`);
   console.log(chalk.dim('─'.repeat(74)) + '\n');
+}
+
+/**
+ * Render comprehensive Global Quota Exhaustion & Token Renewal Countdown Report.
+ * Displays when all free agent models in the CLI have exhausted their quotas.
+ */
+export function renderAllTokensExhaustedReport(): void {
+  const now = new Date();
+
+  // Daily reset happens at 00:00:00 UTC
+  const nextReset = new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate() + 1,
+      0,
+      0,
+      0,
+      0
+    )
+  );
+
+  const diffMs = nextReset.getTime() - now.getTime();
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+
+  const localResetStr = nextReset.toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    timeZoneName: 'short',
+  });
+  const utcResetStr = '00:00:00 UTC';
+
+  const border = chalk.hex('#FF3366')('═'.repeat(76));
+
+  console.log('\n' + border);
+  console.log(' ' + chalk.bgHex('#D32F2F').white.bold(' 🛑 ALL FREE MODEL TOKENS EXHAUSTED ACROSS ALL AGENTS '));
+  console.log(chalk.yellow.bold('\n  banglacli has exhaustively cycled through all available free models in the CLI.'));
+  console.log(chalk.gray('  All free daily rate limits and per-minute quotas have been temporarily reached.'));
+  console.log(chalk.dim('─'.repeat(76)));
+
+  console.log(chalk.bold.hex('#00FF7F')('\n  ⏳ NEXT GLOBAL TOKEN QUOTA RENEWAL IN:'));
+  console.log(
+    `     ${chalk.bgHex('#1A237E').white.bold(
+      `  ${hours} Hours, ${minutes} Minutes, ${seconds} Seconds  `
+    )}`
+  );
+  console.log(`     ${chalk.dim('•')} Reset Time (UTC):   ${chalk.cyan.bold(utcResetStr)}`);
+  console.log(
+    `     ${chalk.dim('•')} Reset Time (Local): ${chalk.green.bold(localResetStr)} (Your local timezone)`
+  );
+
+  console.log(chalk.bold.yellow('\n  📋 Quota Renewal Schedule by Provider:'));
+  console.log(
+    `  1. ${chalk.bold.white('Google Gemini Free Tier')}  : Resets ${chalk.green('1,500 Requests/day')} & ${chalk.cyan('1M TPM')} daily at 00:00 UTC`
+  );
+  console.log(
+    `  2. ${chalk.bold.white('OpenRouter Free Tier')}     : Resets daily free model rate limits at 00:00 UTC`
+  );
+  console.log(
+    `  3. ${chalk.bold.white('Groq Cloud Free Tier')}      : Resets ${chalk.green('14,400 Requests/day')} daily at 00:00 UTC (15 RPM rolling)`
+  );
+  console.log(
+    `  4. ${chalk.bold.white('DeepSeek Platform')}        : Rolling RPM resets every minute; daily grants refresh at 00:00 UTC`
+  );
+  console.log(chalk.dim('─'.repeat(76)));
+
+  console.log(chalk.bold.cyan('\n  💡 WHAT YOU CAN DO RIGHT NOW (NO WAITING REQUIRED):'));
+  console.log(`  1. ${chalk.green.bold('Run Local Offline Models (UNLIMITED TOKENS, ZERO LIMITS):')}`);
+  console.log(`     Use Ollama for 100% free offline coding on your local CPU/GPU.`);
+  console.log(
+    `     Run: ${chalk.white('ollama run deepseek-r1')} or ${chalk.white('ollama run qwen2.5-coder')}`
+  );
+  console.log(`     Then type ${chalk.yellow('/local')} inside banglacli to switch instantly!`);
+  console.log(`  2. ${chalk.green.bold('Add a BYOK API Key (OpenAI, Anthropic, DeepSeek, Groq):')}`);
+  console.log(`     Run ${chalk.yellow('/config')} or ${chalk.yellow('/provider')} to insert a key with custom quotas.`);
+  console.log(`  3. ${chalk.green.bold('Wait for Renewal:')}`);
+  console.log(`     Tokens will automatically be restored in ${hours}h ${minutes}m.\n`);
+  console.log(border + '\n');
 }

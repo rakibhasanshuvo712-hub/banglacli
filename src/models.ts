@@ -479,42 +479,6 @@ export const AGENT_MODELS: AgentModelPreset[] = [
     badge: '2M Free',
     contextLength: '2,097,152',
   },
-  {
-    id: 'gemini-3.5-flash-lite',
-    name: 'Gemini 3.5 Flash-Lite (🌟 100% Free & Active)',
-    provider: 'gemini',
-    category: 'gemini',
-    description: 'Active free Google model with 1M context, high speed & 1,500 req/day free.',
-    badge: '100% Free',
-    contextLength: '1,048,576',
-  },
-  {
-    id: 'gemini-3.1-flash-lite',
-    name: 'Gemini 3.1 Flash-Lite (Fast & Efficient)',
-    provider: 'gemini',
-    category: 'gemini',
-    description: 'Cost-efficient, low-latency Gemini Flash-Lite model.',
-    badge: '100% Free',
-    contextLength: '1,048,576',
-  },
-  {
-    id: 'gemini-3.5-flash',
-    name: 'Gemini 3.5 Flash (Next-Gen Flash)',
-    provider: 'gemini',
-    category: 'gemini',
-    description: 'Next-generation Gemini Flash model with 1M tokens.',
-    badge: '100% Free',
-    contextLength: '1,048,576',
-  },
-  {
-    id: 'gemini-3.8-flash',
-    name: 'Gemini 3.8 Flash (Latest Preview)',
-    provider: 'gemini',
-    category: 'gemini',
-    description: 'Latest Google model (auto-fails over to 3.5-flash-lite if 503 occurs).',
-    badge: '100% Free',
-    contextLength: '1,048,576',
-  },
 
   // ==========================================
   // 🧠 DeepSeek Frontier Models (Free Tokens & High Speed)
@@ -897,17 +861,12 @@ export const OPENROUTER_FREE_CASCADE_CHAIN = [
 ];
 
 export const GEMINI_CASCADE_CHAIN = [
-  'gemini-4-argon',
   'gemini-2.0-flash',
   'gemini-2.0-flash-lite',
   'gemini-2.5-flash',
   'gemini-2.5-pro',
-  'gemini-3.5-flash-lite',
-  'gemini-3.1-flash-lite',
-  'gemini-3.5-flash',
   'gemini-1.5-flash',
   'gemini-1.5-pro',
-  'gemini-3.8-flash',
 ];
 
 /**

@@ -29,6 +29,7 @@ import {
   renderGitStatus,
   renderDirectoryTree,
   showAbout,
+  renderAllTokensExhaustedReport,
 } from './ui.js';
 import { safetySession, getSessionChanges, undoLastChange, setActiveMeshNode, getActiveMeshNode, executeTool } from './tools.js';
 import { selectAgentModelInteractive, findModelByQuery, applyModelDirect } from './models.js';
@@ -313,6 +314,11 @@ program
 
       if (lowerCmd === '/about' || lowerCmd === '/developer' || lowerCmd === '/creator') {
         showAbout();
+        continue;
+      }
+
+      if (lowerCmd === '/renewal' || lowerCmd === '/countdown' || lowerCmd === '/renew') {
+        renderAllTokensExhaustedReport();
         continue;
       }
 
@@ -834,6 +840,16 @@ program
     showAbout();
   });
 
+// Explicit renewal subcommand (Token renewal countdown & provider schedule)
+program
+  .command('renewal')
+  .alias('countdown')
+  .alias('renew')
+  .description('Display live token quota renewal countdown and provider reset schedules')
+  .action(() => {
+    renderAllTokensExhaustedReport();
+  });
+
 // Explicit doctor subcommand (OpenCode style)
 program
   .command('doctor')
@@ -924,10 +940,12 @@ async function handleSwitchModel(config: BanglaCLIConfig, agent: BanglaAgent): P
       message: chalk.cyan('Switch Gemini Model:'),
       initialValue: config.model,
       options: [
-        { value: 'gemini-3.5-flash-lite', label: 'gemini-3.5-flash-lite (🌟 Recommended - 100% Free, High Speed & 1M Tokens)' },
-        { value: 'gemini-3.1-flash-lite', label: 'gemini-3.1-flash-lite (Free, Low Latency)' },
-        { value: 'gemini-3.5-flash', label: 'gemini-3.5-flash (Next-Gen Free Flash)' },
-        { value: 'gemini-3.8-flash', label: 'gemini-3.8-flash (Latest Preview)' },
+        { value: 'gemini-2.0-flash', label: 'gemini-2.0-flash (🌟 Recommended - Google Flagship Free, 1M Tokens, 1,500 RPD)' },
+        { value: 'gemini-2.0-flash-lite', label: 'gemini-2.0-flash-lite (Ultra-Fast 30 RPM Free)' },
+        { value: 'gemini-2.5-flash', label: 'gemini-2.5-flash (Next-Gen Flash Preview)' },
+        { value: 'gemini-2.5-pro', label: 'gemini-2.5-pro (2M Context Frontier Preview)' },
+        { value: 'gemini-1.5-flash', label: 'gemini-1.5-flash (Battle-Tested Stable, 1M Tokens)' },
+        { value: 'gemini-1.5-pro', label: 'gemini-1.5-pro (2M Context Long-Form)' },
         { value: 'custom_input', label: 'Enter custom model name...' },
       ],
     })) as string;

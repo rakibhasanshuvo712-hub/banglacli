@@ -186,7 +186,7 @@ let _dockedActive = false;
 let _dockedRows = 0;
 let _dockedCols = 0;
 let _dockedProvider = 'Google Gemini';
-let _dockedModel = 'gemini-3.5-flash-lite';
+let _dockedModel = 'gemini-2.0-flash';
 let _dockedMode: 'build' | 'plan' = 'build';
 let _dockedHeaderHeight = 11;
 
