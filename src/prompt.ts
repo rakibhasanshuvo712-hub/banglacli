@@ -252,30 +252,15 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
     let pasteBuffer = '';
 
     const boxWidth = getSafeBoxWidth();
-    const isDocked = Boolean(process.stdout.isTTY && (process.stdout.rows || 0) >= 12);
-    let termRows = process.stdout.rows || 24;
-    const scrollBottom = isDocked ? Math.max(5, termRows - 3) : 0;
-
     const top = renderTopBorder(boxWidth, isBuildMode, options.model, borderColor);
     const line0 = renderContentLine(boxWidth, '', true, isBuildMode, borderColor);
     const bottom = renderBottomBorder(boxWidth, borderColor);
 
-    if (isDocked) {
-      // Establish fixed bottom dock: set scrolling margins to upper working area (rows 1 to scrollBottom)
-      process.stdout.write(`\x1b[1;${scrollBottom}r`);
-      // Draw 3-line box permanently anchored at the bottom
-      process.stdout.write(`\x1b[${termRows - 2};1H\x1b[2K${top}`);
-      process.stdout.write(`\x1b[${termRows - 1};1H\x1b[2K${line0}`);
-      process.stdout.write(`\x1b[${termRows};1H\x1b[2K${bottom}`);
-      // Position cursor at row termRows - 1, col 5 (directly after "│ ❯ ")
-      process.stdout.write(`\x1b[${termRows - 1};5G`);
-    } else {
-      // Fallback for non-TTY pipelines or tiny screens
-      process.stdout.write(top + '\n');
-      process.stdout.write(line0 + '\n');
-      process.stdout.write(bottom);
-      process.stdout.write('\x1b[1A\x1b[5G');
-    }
+    // Initial render of the prompt box at the bottom of the current view
+    process.stdout.write(top + '\n');
+    process.stdout.write(line0 + '\n');
+    process.stdout.write(bottom);
+    process.stdout.write('\x1b[1A\x1b[5G');
 
     // Update active line in-place without touching any other line
     const updateActiveLineInPlace = () => {
@@ -287,40 +272,11 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
         borderColor
       );
       const activeCol = 5 + Math.min(cursorCol, boxWidth - 8);
-      if (isDocked) {
-        process.stdout.write(`\x1b[${termRows - 1};1H\x1b[2K${lineStr}\x1b[${termRows - 1};${activeCol}G`);
-      } else {
-        process.stdout.write(`\r${lineStr}\r\x1b[${activeCol}G`);
-      }
+      process.stdout.write(`\r${lineStr}\r\x1b[${activeCol}G`);
     };
 
     // Redraw content lines and bottom border from startLine down
     const redrawContentFrom = (startLine: number) => {
-      if (isDocked) {
-        const curBoxHeight = Math.min(bufferLines.length + 2, Math.floor(termRows / 2));
-        const curScrollBottom = Math.max(5, termRows - curBoxHeight);
-        process.stdout.write(`\x1b[1;${curScrollBottom}r`);
-
-        const topRow = termRows - curBoxHeight + 1;
-        process.stdout.write(`\x1b[${topRow};1H\x1b[2K${top}`);
-
-        const visibleLinesCount = curBoxHeight - 2;
-        const startIdx = Math.max(0, bufferLines.length - visibleLinesCount);
-        for (let i = 0; i < visibleLinesCount; i++) {
-          const lineIdx = startIdx + i;
-          const text = bufferLines[lineIdx] ?? '';
-          const lineStr = renderContentLine(boxWidth, text, lineIdx === 0, isBuildMode, borderColor);
-          process.stdout.write(`\x1b[${topRow + 1 + i};1H\x1b[2K${lineStr}`);
-        }
-        process.stdout.write(`\x1b[${termRows};1H\x1b[2K${bottom}`);
-
-        const activeRow = topRow + 1 + Math.max(0, cursorLine - startIdx);
-        const activeCol = 5 + Math.min(cursorCol, boxWidth - 8);
-        process.stdout.write(`\x1b[${activeRow};${activeCol}G`);
-        return;
-      }
-
-      // Inline fallback
       const linesToDraw: string[] = [];
       for (let i = startLine; i < bufferLines.length; i++) {
         linesToDraw.push(
@@ -337,21 +293,11 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
       process.stdout.write(`\x1b[${linesUpFromBottom}A\x1b[${activeCol}G`);
     };
 
-    const onResize = () => {
-      if (!isDocked) return;
-      termRows = process.stdout.rows || 24;
-      const curScrollBottom = Math.max(5, termRows - 3);
-      process.stdout.write(`\x1b[1;${curScrollBottom}r`);
-      redrawContentFrom(0);
-    };
-    process.stdout.on('resize', onResize);
-
     const cleanup = () => {
       try {
         process.stdout.write('\x1b[?2004l');
       } catch {}
 
-      process.stdout.removeListener('resize', onResize);
       process.stdin.removeListener('data', onData);
 
       try {
@@ -362,49 +308,33 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
       } catch {}
     };
 
+    // Cleanly erase the box borders from screen so no empty ghost boxes ever remain in history
+    const eraseBox = () => {
+      const linesUpToTop = cursorLine + 1;
+      process.stdout.write(`\x1b[${linesUpToTop}A\r\x1b[J`);
+    };
+
     const submit = () => {
       cleanup();
       const fullContent = bufferLines.join('\n').trim();
 
-      if (isDocked) {
-        // Restore standard 3-line dock scroll margins
-        const curScrollBottom = Math.max(5, termRows - 3);
-        process.stdout.write(`\x1b[1;${curScrollBottom}r`);
+      // Erase box borders in-place
+      eraseBox();
 
-        // Move cursor into upper scroll area and print user's prompt
-        process.stdout.write(`\x1b[${curScrollBottom};1H\n`);
-        const promptArrow = isBuildMode ? chalk.hex('#00FF7F').bold('❯ ') : chalk.hex('#FFB300').bold('❯ ');
-        for (let i = 0; i < bufferLines.length; i++) {
-          const pfx = i === 0 ? promptArrow : chalk.dim('· ');
-          process.stdout.write(`${pfx}${chalk.white.bold(bufferLines[i])}\n`);
-        }
-        process.stdout.write('\n');
-
-        // Transition fixed bottom dock into active working status
-        const statusLine = renderStatusLine(boxWidth, 'banglacli thinking & analyzing workspace...', borderColor);
-        const statusBottom = renderBottomBorder(boxWidth, borderColor, ' Running tools • File edits • Press Esc to abort ');
-        process.stdout.write(`\x1b[${termRows - 2};1H\x1b[2K${top}`);
-        process.stdout.write(`\x1b[${termRows - 1};1H\x1b[2K${statusLine}`);
-        process.stdout.write(`\x1b[${termRows};1H\x1b[2K${statusBottom}`);
-
-        // Park cursor inside upper working area
-        process.stdout.write(`\x1b[${curScrollBottom};1H`);
-      } else {
-        const downLines = (bufferLines.length - cursorLine);
-        process.stdout.write(`\x1b[${downLines}B\r\n`);
+      // Print clean user prompt in standard transcript format
+      const promptArrow = isBuildMode ? chalk.hex('#00FF7F').bold('❯ ') : chalk.hex('#FFB300').bold('❯ ');
+      for (let i = 0; i < bufferLines.length; i++) {
+        const pfx = i === 0 ? promptArrow : chalk.dim('· ');
+        process.stdout.write(`${pfx}${chalk.white.bold(bufferLines[i])}\n`);
       }
+      process.stdout.write('\n');
 
       resolve(fullContent);
     };
 
     const cancel = () => {
       cleanup();
-      if (isDocked) {
-        process.stdout.write(`\x1b[${scrollBottom};1H\n`);
-      } else {
-        const downLines = (bufferLines.length - cursorLine);
-        process.stdout.write(`\x1b[${downLines}B\r\n`);
-      }
+      eraseBox();
       resolve(null);
     };
 
@@ -478,21 +408,15 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
       // 3. Ctrl+C
       if (str === '\x03') {
         cleanup();
-        restoreTerminalViewport();
-        process.stdout.write(chalk.yellow('\nExiting banglacli...\n'));
+        eraseBox();
+        process.stdout.write(chalk.yellow('Exiting banglacli...\n'));
         process.exit(0);
       }
 
       // Tab key or F2: Instant Model Selector Switcher
       if (str === '\t' || str === '\x09' || str === '\x1bOQ' || str === '\x1b[12~') {
         cleanup();
-        if (isDocked) {
-          restoreTerminalViewport();
-          process.stdout.write('\n');
-        } else {
-          const downLines = (bufferLines.length - cursorLine);
-          process.stdout.write(`\x1b[${downLines}B\r\n`);
-        }
+        eraseBox();
         resolve('/model');
         return;
       }
@@ -508,17 +432,13 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
       // Escape
       if (str === '\x1b') {
         if (bufferLines.join('').length > 0) {
+          if (cursorLine > 0) {
+            process.stdout.write(`\x1b[${cursorLine}A`);
+          }
           bufferLines = [''];
           cursorLine = 0;
           cursorCol = 0;
-          if (isDocked) {
-            updateActiveLineInPlace();
-          } else {
-            if (cursorLine > 0) {
-              process.stdout.write(`\x1b[${cursorLine}A`);
-            }
-            redrawContentFrom(0);
-          }
+          redrawContentFrom(0);
         } else {
           cancel();
         }
@@ -583,20 +503,12 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
         if (cursorCol > 0) {
           cursorCol--;
           const activeCol = 5 + Math.min(cursorCol, boxWidth - 8);
-          if (isDocked) {
-            process.stdout.write(`\x1b[${termRows - 1};${activeCol}G`);
-          } else {
-            process.stdout.write(`\x1b[${activeCol}G`);
-          }
+          process.stdout.write(`\x1b[${activeCol}G`);
         } else if (cursorLine > 0) {
           cursorLine--;
           cursorCol = bufferLines[cursorLine].length;
           const activeCol = 5 + Math.min(cursorCol, boxWidth - 8);
-          if (isDocked) {
-            process.stdout.write(`\x1b[${termRows - 1};${activeCol}G`);
-          } else {
-            process.stdout.write(`\x1b[1A\x1b[${activeCol}G`);
-          }
+          process.stdout.write(`\x1b[1A\x1b[${activeCol}G`);
         }
         return;
       }
@@ -605,19 +517,11 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
         if (cursorCol < bufferLines[cursorLine].length) {
           cursorCol++;
           const activeCol = 5 + Math.min(cursorCol, boxWidth - 8);
-          if (isDocked) {
-            process.stdout.write(`\x1b[${termRows - 1};${activeCol}G`);
-          } else {
-            process.stdout.write(`\x1b[${activeCol}G`);
-          }
+          process.stdout.write(`\x1b[${activeCol}G`);
         } else if (cursorLine < bufferLines.length - 1) {
           cursorLine++;
           cursorCol = 0;
-          if (isDocked) {
-            process.stdout.write(`\x1b[${termRows - 1};5G`);
-          } else {
-            process.stdout.write('\x1b[1B\x1b[5G');
-          }
+          process.stdout.write('\x1b[1B\x1b[5G');
         }
         return;
       }
