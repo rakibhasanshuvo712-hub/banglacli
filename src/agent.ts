@@ -7,6 +7,7 @@ import {
   BUILD_OPENAI_TOOLS,
   PLAN_OPENAI_TOOLS,
   executeTool,
+  getActiveMeshNode,
 } from './tools.js';
 import { createSpinner, renderMarkdown, renderCascadeNotice } from './ui.js';
 import { OPENROUTER_FREE_CASCADE_CHAIN, GEMINI_CASCADE_CHAIN } from './models.js';
@@ -18,12 +19,34 @@ export type AgentMode = 'build' | 'plan';
 
 export function getSystemPrompt(mode: AgentMode = 'build'): string {
   const envContext = detectProjectContext();
+  const meshNode = getActiveMeshNode();
+  let meshContext = '';
+  if (meshNode) {
+    const peers = meshNode.listPeers().filter((p) => p.nodeId !== meshNode.nodeId);
+    if (peers.length > 0) {
+      meshContext =
+        `\n### 🌐 CONNECTED WORKSPACE MESH PEERS (CROSS-INSTANCE COLLABORATION):\n` +
+        `This instance role is [${meshNode.role.toUpperCase()}] at "${meshNode.workspace}".\n` +
+        `Active connected peer instances in the mesh:\n` +
+        peers
+          .map(
+            (p) =>
+              `- [${p.role}] (Node: "${p.nodeId}"): Workspace "${p.workspace}" (Mode: ${p.mode.toUpperCase()}, Model: ${p.model})`
+          )
+          .join('\n') +
+        `\n\nCross-Instance Capabilities:\n` +
+        `- list_peers(): View up-to-date peer status and directories.\n` +
+        `- peer_call_tool(peer, tool, args): Trigger tools (read_file, write_file, edit_file, run_command, list_files, grep_search) across workspaces safely.\n` +
+        `- peer_send_message(peer, message): Send coordination messages or API contracts to peer agents.\n` +
+        `Example: To inspect backend endpoints from frontend, call peer_call_tool("backend", "read_file", { "filePath": "src/api/routes.ts" }).\n`;
+    }
+  }
 
   if (mode === 'plan') {
     return `You are banglacli, a world-class Principal Software Architect and Systems Designer running directly in the user's terminal. You are designed to be more intelligent, thorough, and reliable than other agents like OpenCode or FreeBuf.
 
 ${envContext.summary}
-
+${meshContext}
 ### 🌟 CURRENT ACTIVE MODE: 📋 PLAN MODE (ARCHITECT & PLANNING ONLY)
 - You are strictly in PLAN MODE. You act as an expert senior software architect.
 - Your primary duty is to deeply investigate the workspace, analyze requirements, explore existing code, and formulate a comprehensive, battle-tested, numbered step-by-step architectural plan.
@@ -34,6 +57,9 @@ ${envContext.summary}
   4. find_files(pattern): Find files matching wildcard patterns (e.g. "*.json", "src/**/*.ts").
   5. fetch_url(url): Fetch documentation, API references, or web content directly from any URL.
   6. web_search(query): Search the web for library documentation, syntax specs, and architectural patterns.
+  7. list_peers(): Check connected mesh peer instances across the local machine.
+  8. peer_call_tool(peer, tool, args): Inspect files and listings in peer workspaces.
+  9. peer_send_message(peer, message): Coordinate architectural contracts with peers.
 - YOU CANNOT AND MUST NOT write files or run terminal commands. Any attempt will be safely blocked.
 - Your architectural breakdown MUST be thorough and structured:
   1. 🎯 Executive Architecture Summary & Requirements Analysis.
@@ -54,10 +80,10 @@ ${envContext.summary}
   return `You are banglacli v2.0, a world-class Principal Full-Stack Software Engineer and Autonomous AI Coding Agent running directly in the user's terminal. You are designed to outperform modern AI coding agents like OpenCode and Claude Code in intelligence, self-healing, search speed, and reliability.
 
 ${envContext.summary}
-
+${meshContext}
 ### 🌟 CURRENT ACTIVE MODE: ⚡ BUILD MODE (AUTONOMOUS BUILDER)
 - You have full autonomous authority to build, edit, test, and execute software.
-- You have all 9 workspace tools:
+- You have workspace tools and cross-instance mesh tools:
   1. list_files(dirPath): Explore directories to understand workspace context and file hierarchy.
   2. read_file(filePath): Inspect existing source files before editing.
   3. write_file(filePath, content): Create directories automatically and write complete files.
@@ -67,6 +93,9 @@ ${envContext.summary}
   7. find_files(pattern): Locate files matching wildcard patterns across the project.
   8. fetch_url(url): Fetch documentation, API specs, or web content directly from any URL.
   9. web_search(query): Search the web for library documentation, syntax specs, and error solutions.
+  10. list_peers(): Discover connected peer instances across the local mesh (e.g. backend, frontend).
+  11. peer_call_tool(peer, tool, args): Remotely execute tools (read_file, write_file, edit_file, run_command, list_files) in peer workspaces.
+  12. peer_send_message(peer, message): Coordinate schemas, contracts, or tasks with peer instances.
 
 ### 🧠 INTELLIGENT AGENT PROTOCOL (FOLLOW RIGOROUSLY):
 1. **Investigate Before Acting**:
@@ -409,12 +438,12 @@ export class BanglaAgent {
             this.initClients();
             updateModel('openrouter/free');
             this.onModelChangeCallback?.('openrouter/free', 'openrouter');
-            return await this.chatOpenAI(userInput, options);
+            return await this.chatOpenAI(englishEnforcedInput, options);
           }
         }
         return reply;
       } else {
-        const reply = await this.chatOpenAI(userInput, options);
+        const reply = await this.chatOpenAI(englishEnforcedInput, options);
         if (options?.signal?.aborted) {
           return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
         }
@@ -439,7 +468,7 @@ export class BanglaAgent {
             this.initClients();
             updateModel('gemini-3.5-flash-lite');
             this.onModelChangeCallback?.('gemini-3.5-flash-lite', 'gemini');
-            return await this.chatGemini(userInput, options);
+            return await this.chatGemini(englishEnforcedInput, options);
           }
         }
         return reply;
@@ -463,7 +492,7 @@ export class BanglaAgent {
           this.initClients();
           updateModel('openrouter/free');
           this.onModelChangeCallback?.('openrouter/free', 'openrouter');
-          return await this.chatOpenAI(userInput, options);
+          return await this.chatOpenAI(englishEnforcedInput, options);
         }
       } else {
         const geminiSaved = this.config.savedProviders?.gemini;
@@ -479,7 +508,7 @@ export class BanglaAgent {
           this.initClients();
           updateModel('gemini-3.5-flash-lite');
           this.onModelChangeCallback?.('gemini-3.5-flash-lite', 'gemini');
-          return await this.chatGemini(userInput, options);
+          return await this.chatGemini(englishEnforcedInput, options);
         }
       }
       throw err;

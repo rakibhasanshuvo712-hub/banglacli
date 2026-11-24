@@ -307,6 +307,9 @@ export function showHelp(): void {
   console.log(`  ${chalk.cyan('/detect')}      - View detected project stack, package manager & scripts`);
   console.log(`  ${chalk.cyan('/compact')}     - Compact conversation history to free context window`);
   console.log(`  ${chalk.cyan('/session')}     - View active session status, files touched & memory`);
+  console.log(`  ${chalk.cyan('/peers')}       - View connected cross-instance mesh peers (e.g. backend, frontend)`);
+  console.log(`  ${chalk.cyan('/role')}        - View or change instance role (/role frontend, /role backend)`);
+  console.log(`  ${chalk.cyan('/send')}        - Send direct message to a peer (/send backend <message>)`);
   console.log(`  ${chalk.cyan('/limits')}      - View free token limits, context windows & RPM/RPD`);
   console.log(`  ${chalk.cyan('/guide')}       - Direct free API links & models guide (Free API Guide)`);
   console.log(`  ${chalk.cyan('/config')}      - Full interactive configuration wizard`);
@@ -321,7 +324,7 @@ export function showHelp(): void {
   console.log(`  • ${chalk.green.bold('Enter')}          : Submit your prompt to the active AI agent.`);
   console.log(`  • ${chalk.green.bold('Escape')}         : Clear input buffer while typing; stops agent immediately while running.`);
 
-  console.log(`\n${chalk.yellow.bold('Autonomous Tool Capabilities (9 Built-in Tools):')}`);
+  console.log(`\n${chalk.yellow.bold('Autonomous Tool Capabilities (12 Built-in Tools):')}`);
   console.log(`  1. ${chalk.bold('list_files')}   - Lists workspace files (ignoring node_modules, .git)`);
   console.log(`  2. ${chalk.bold('read_file')}    - Reads contents of any file in workspace`);
   console.log(`  3. ${chalk.bold('write_file')}   - Creates directories and writes new files (BUILD mode)`);
@@ -331,6 +334,9 @@ export function showHelp(): void {
   console.log(`  7. ${chalk.bold('find_files')}   - Finds files by wildcard patterns (e.g. "*.json")`);
   console.log(`  8. ${chalk.bold('fetch_url')}    - Fetches web/API documentation directly`);
   console.log(`  9. ${chalk.bold('web_search')}   - Autonomous web search for docs, APIs & solutions`);
+  console.log(`  10. ${chalk.bold('list_peers')}  - Discovers connected peer instances across the mesh`);
+  console.log(`  11. ${chalk.bold('peer_call_tool')} - Triggers tools on peer instances across workspaces safely`);
+  console.log(`  12. ${chalk.bold('peer_send_message')} - Sends structured messages/contracts to peer instances`);
 
   console.log(`\n${chalk.yellow.bold('Language Support (Outputs strictly in English):')}`);
   console.log(`  • ${chalk.green('English:')}  "Build a full-stack Next.js portfolio website"`);

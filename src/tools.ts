@@ -3,7 +3,19 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { Type } from '@google/genai';
 import { askToolConfirmation, renderToolCall, renderToolResult } from './ui.js';
+import { MeshNode } from './mesh.js';
 import chalk from 'chalk';
+
+// Active mesh node for cross-instance communication
+let activeMeshNode: MeshNode | null = null;
+
+export function setActiveMeshNode(node: MeshNode | null): void {
+  activeMeshNode = node;
+}
+
+export function getActiveMeshNode(): MeshNode | null {
+  return activeMeshNode;
+}
 
 export interface SafetySession {
   autoApproveAll: boolean;
@@ -821,6 +833,48 @@ export async function executeTool(
       case 'web_search':
         result = await webSearch(args.query);
         break;
+      case 'list_peers':
+      case 'list_mesh_peers': {
+        if (!activeMeshNode) {
+          result = 'Cross-instance mesh is not active or enabled on this instance.';
+        } else {
+          const peers = activeMeshNode.listPeers().filter((p) => p.nodeId !== activeMeshNode?.nodeId);
+          if (peers.length === 0) {
+            result = `No other banglacli instances are currently connected on the local mesh (Port: ${activeMeshNode.port}). Current node: [${activeMeshNode.role}] (${activeMeshNode.nodeId}) at ${activeMeshNode.workspace}.`;
+          } else {
+            result =
+              `Connected Peer Instances (${peers.length}):\n` +
+              peers
+                .map(
+                  (p, idx) =>
+                    `  ${idx + 1}. [${p.role}] (Node: ${p.nodeId})\n     Workspace: ${p.workspace}\n     Mode: ${p.mode.toUpperCase()} | Model: ${p.model} (${p.provider})`
+                )
+                .join('\n\n');
+          }
+        }
+        break;
+      }
+      case 'peer_call_tool': {
+        if (!activeMeshNode) {
+          result = 'Error: Cross-instance mesh is not active. Start banglacli with mesh enabled to call remote peer tools.';
+          isError = true;
+        } else {
+          const targetPeer = args.peer;
+          const targetTool = args.tool;
+          const targetArgs = typeof args.args === 'string' ? JSON.parse(args.args) : (args.args || {});
+          result = await activeMeshNode.callRemoteTool(targetPeer, targetTool, targetArgs);
+        }
+        break;
+      }
+      case 'peer_send_message': {
+        if (!activeMeshNode) {
+          result = 'Error: Cross-instance mesh is not active.';
+          isError = true;
+        } else {
+          result = await activeMeshNode.sendMessage(args.peer, args.message);
+        }
+        break;
+      }
       default:
         result = `Error: Unknown tool "${name}".`;
         isError = true;
@@ -1010,6 +1064,68 @@ export const OPENAI_TOOLS = [
       },
     },
   },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'list_peers',
+      description:
+        'Discovers all active connected banglacli peer instances across the workspace mesh (e.g. backend, frontend), returning their roles, working directories, and modes.',
+      parameters: {
+        type: 'object',
+        properties: {},
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'peer_call_tool',
+      description:
+        'Executes a workspace tool (list_files, read_file, write_file, edit_file, run_command, grep_search, find_files) on a connected peer instance (e.g. "backend" or "frontend") in its workspace.',
+      parameters: {
+        type: 'object',
+        properties: {
+          peer: {
+            type: 'string',
+            description: 'Target peer role (e.g. "backend", "frontend") or exact nodeId.',
+          },
+          tool: {
+            type: 'string',
+            description:
+              'Name of the tool to execute on the peer (e.g. "read_file", "write_file", "run_command", "list_files", "grep_search").',
+          },
+          args: {
+            type: 'object',
+            description:
+              'Arguments object for the tool (e.g. {"filePath": "src/api/routes.ts"} or {"command": "npm run build"}).',
+          },
+        },
+        required: ['peer', 'tool', 'args'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'peer_send_message',
+      description:
+        'Sends a structured communication message or coordination request to a connected peer instance (e.g. "backend" or "frontend").',
+      parameters: {
+        type: 'object',
+        properties: {
+          peer: {
+            type: 'string',
+            description: 'Target peer role (e.g. "backend", "frontend") or exact nodeId.',
+          },
+          message: {
+            type: 'string',
+            description: 'Message or instruction to send to the peer.',
+          },
+        },
+        required: ['peer', 'message'],
+      },
+    },
+  },
 ];
 
 /**
@@ -1159,6 +1275,58 @@ export const GEMINI_TOOLS = [
           required: ['url'],
         },
       },
+      {
+        name: 'list_peers',
+        description:
+          'Discovers all active connected banglacli peer instances across the workspace mesh (e.g. backend, frontend), returning their roles, working directories, and modes.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {},
+        },
+      },
+      {
+        name: 'peer_call_tool',
+        description:
+          'Executes a workspace tool (list_files, read_file, write_file, edit_file, run_command, grep_search, find_files) on a connected peer instance (e.g. "backend" or "frontend") in its workspace.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            peer: {
+              type: Type.STRING,
+              description: 'Target peer role (e.g. "backend", "frontend") or exact nodeId.',
+            },
+            tool: {
+              type: Type.STRING,
+              description:
+                'Name of the tool to execute on the peer (e.g. "read_file", "write_file", "run_command", "list_files", "grep_search").',
+            },
+            args: {
+              type: Type.OBJECT,
+              description: 'Arguments object for the tool (e.g. {"filePath": "src/api/routes.ts"}).',
+            },
+          },
+          required: ['peer', 'tool', 'args'],
+        },
+      },
+      {
+        name: 'peer_send_message',
+        description:
+          'Sends a structured communication message or coordination request to a connected peer instance (e.g. "backend" or "frontend").',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            peer: {
+              type: Type.STRING,
+              description: 'Target peer role (e.g. "backend", "frontend") or exact nodeId.',
+            },
+            message: {
+              type: Type.STRING,
+              description: 'Message or instruction to send to the peer.',
+            },
+          },
+          required: ['peer', 'message'],
+        },
+      },
     ],
   },
 ];
@@ -1168,14 +1336,34 @@ export const GEMINI_TOOLS = [
  */
 export const BUILD_OPENAI_TOOLS = OPENAI_TOOLS;
 export const PLAN_OPENAI_TOOLS = OPENAI_TOOLS.filter((t) =>
-  ['list_files', 'read_file', 'grep_search', 'find_files', 'fetch_url', 'web_search'].includes(t.function.name)
+  [
+    'list_files',
+    'read_file',
+    'grep_search',
+    'find_files',
+    'fetch_url',
+    'web_search',
+    'list_peers',
+    'peer_call_tool',
+    'peer_send_message',
+  ].includes(t.function.name)
 );
 
 export const BUILD_GEMINI_TOOLS = GEMINI_TOOLS;
 export const PLAN_GEMINI_TOOLS = [
   {
     functionDeclarations: GEMINI_TOOLS[0].functionDeclarations.filter((t) =>
-      ['list_files', 'read_file', 'grep_search', 'find_files', 'fetch_url', 'web_search'].includes(t.name)
+      [
+        'list_files',
+        'read_file',
+        'grep_search',
+        'find_files',
+        'fetch_url',
+        'web_search',
+        'list_peers',
+        'peer_call_tool',
+        'peer_send_message',
+      ].includes(t.name)
     ),
   },
 ];

@@ -29,19 +29,26 @@ import {
   renderGitStatus,
   renderDirectoryTree,
 } from './ui.js';
-import { safetySession, getSessionChanges, undoLastChange } from './tools.js';
+import { safetySession, getSessionChanges, undoLastChange, setActiveMeshNode, getActiveMeshNode, executeTool } from './tools.js';
 import { selectAgentModelInteractive, findModelByQuery, applyModelDirect } from './models.js';
 import { readOpenCodePrompt, expandOpenCodeMentions, restoreTerminalViewport, updateFixedBottomStatus, activateFixedDock, deactivateFixedDock, updateDockedModel, prepareInteractiveArea } from './prompt.js';
 import { detectProjectContext } from './detector.js';
+import { MeshNode } from './mesh.js';
 
-// Ensure terminal viewport is cleanly restored on process exit
-process.on('exit', () => { deactivateFixedDock(); restoreTerminalViewport(); });
+// Ensure terminal viewport & mesh connections are cleanly restored on process exit
+process.on('exit', () => {
+  getActiveMeshNode()?.stop();
+  deactivateFixedDock();
+  restoreTerminalViewport();
+});
 process.on('SIGINT', () => {
+  getActiveMeshNode()?.stop();
   deactivateFixedDock();
   restoreTerminalViewport();
   process.exit(0);
 });
 process.on('SIGTERM', () => {
+  getActiveMeshNode()?.stop();
   deactivateFixedDock();
   restoreTerminalViewport();
   process.exit(0);
@@ -95,6 +102,10 @@ program
   .option('-M, --mode <mode>', 'Execution mode: "build" (default) or "plan"', 'build')
   .option('-p, --prompt <prompt>', 'Run a single prompt and exit')
   .option('-y, --yes', 'Auto-approve all file writes and shell commands')
+  .option('-r, --role <role>', 'Instance role for cross-instance mesh (e.g. "frontend", "backend")')
+  .option('--mesh-port <port>', 'Local port for mesh broker', '49152')
+  .option('--mesh-token <token>', 'Shared authentication token for mesh')
+  .option('--no-mesh', 'Disable cross-instance mesh networking')
   .action(async (options) => {
     if (options.yes) {
       safetySession.autoApproveAll = true;
@@ -115,6 +126,53 @@ program
     const initialMode: 'build' | 'plan' = options.mode === 'plan' ? 'plan' : 'build';
     const agent = new BanglaAgent(config, initialMode);
 
+    // Initialize Cross-Instance Mesh Node
+    let meshNode: MeshNode | null = null;
+    if (!options.noMesh) {
+      meshNode = new MeshNode({
+        role: options.role,
+        port: options.meshPort ? parseInt(options.meshPort, 10) : undefined,
+        token: options.meshToken,
+        mode: initialMode,
+        model: config.model,
+        provider: config.provider,
+        workspace: process.cwd(),
+        onRemoteToolExecution: async (tool, args, fromRole) => {
+          console.log(chalk.cyan(`\n📡 [Mesh RPC from ${chalk.bold(fromRole)}] Executing tool: ${chalk.bold(tool)}`));
+          updateFixedBottomStatus(`[Mesh: ${fromRole}] Executing ${tool}...`, {
+            mode: agent.getMode(),
+            model: config?.model || 'unknown',
+          });
+          const result = await executeTool(tool, args, agent.getMode());
+          updateFixedBottomStatus('', { mode: agent.getMode(), model: config?.model || 'unknown' });
+          return result;
+        },
+        onPeerMessage: (message, fromRole) => {
+          console.log(
+            chalk.bgHex('#004D40').hex('#00FF7F').bold(`\n 📬 [Mesh Message from ${fromRole}]: `) +
+              chalk.white(message) + '\n'
+          );
+        },
+        onPeerConnect: (peer) => {
+          console.log(
+            chalk.green(`\n🌐 [Mesh] Connected to peer [${chalk.bold(peer.role)}] (${peer.workspace})\n`)
+          );
+          updateFixedBottomStatus(`Peer connected: ${peer.role}`, {
+            mode: agent.getMode(),
+            model: config?.model || 'unknown',
+          });
+        },
+        onPeerDisconnect: (peer) => {
+          console.log(
+            chalk.yellow(`\n🌐 [Mesh] Peer disconnected: [${chalk.bold(peer.role)}] (${peer.workspace})\n`)
+          );
+        },
+      });
+
+      await meshNode.start();
+      setActiveMeshNode(meshNode);
+    }
+
     // Sync session config when agent auto-cascades to another model
     agent.setOnModelChange((newModel, newProvider) => {
       if (config) {
@@ -128,6 +186,7 @@ program
           }
         }
         saveConfig(config);
+        meshNode?.updateState({ model: newModel });
         updateDockedModel(
           PROVIDER_LABELS[config.provider] || config.provider,
           config.model,
@@ -197,9 +256,13 @@ program
         process.exit(0);
       }
 
-      const trimmed = input.trim();
+      let trimmed = input.trim();
       if (trimmed.length === 0) {
         continue;
+      }
+      // Strip accidental leading prompt arrows when followed by a slash command (e.g. "> /agent", "❯ /exit")
+      if (/^[>❯$#\s]+\//.test(trimmed)) {
+        trimmed = trimmed.replace(/^[>❯$#\s]+/, '').trim();
       }
 
       // Handle Slash Commands
@@ -241,6 +304,7 @@ program
 
         if (!p.isCancel(modeChoice)) {
           agent.setMode(modeChoice);
+          meshNode?.updateState({ mode: modeChoice });
         }
         activateFixedDock(
           PROVIDER_LABELS[config.provider] || config.provider,
@@ -263,6 +327,7 @@ program
 
       if (trimmed === '/plan') {
         agent.setMode('plan');
+        meshNode?.updateState({ mode: 'plan' });
         updateDockedModel(
           PROVIDER_LABELS[config.provider] || config.provider,
           config.model,
@@ -276,6 +341,7 @@ program
 
       if (trimmed === '/build') {
         agent.setMode('build');
+        meshNode?.updateState({ mode: 'build' });
         updateDockedModel(
           PROVIDER_LABELS[config.provider] || config.provider,
           config.model,
@@ -434,6 +500,73 @@ program
         console.log(`  ${chalk.gray('Auto-Approve:')}   ${safetySession.autoApproveAll ? chalk.green('Enabled (-y)') : chalk.gray('Confirm per action')}`);
         console.log(`  ${chalk.gray('Memory Turns:')}   ${chalk.cyan(mem.openAIMessageCount + mem.geminiTurnCount)} turns`);
         console.log(chalk.dim('─'.repeat(60)) + '\n');
+        continue;
+      }
+
+      if (trimmed === '/peers' || trimmed === '/mesh') {
+        const mesh = getActiveMeshNode();
+        if (!mesh) {
+          console.log(chalk.yellow('\nℹ️ Cross-instance mesh is disabled on this instance (--no-mesh).\n'));
+        } else {
+          const allPeers = mesh.listPeers();
+          const remotePeers = allPeers.filter((p) => p.nodeId !== mesh.nodeId);
+          console.log('\n' + chalk.bold.hex('#00FF7F')('🌐 Cross-Instance Workspace Mesh (Multi-Agent Sync)'));
+          console.log(chalk.dim('─'.repeat(70)));
+          console.log(`  ${chalk.bold('This Instance:')}  [${chalk.cyan.bold(mesh.role.toUpperCase())}] (Node: ${chalk.gray(mesh.nodeId)})`);
+          console.log(`  ${chalk.gray('Workspace:')}      ${mesh.workspace}`);
+          console.log(`  ${chalk.gray('Mesh Status:')}    ${mesh['isHost'] ? chalk.green('Broker Host') : chalk.blue('Peer Client')} on 127.0.0.1:${mesh.port}`);
+          console.log(`  ${chalk.gray('Active Mode:')}   ${mesh.mode === 'build' ? chalk.green('⚡ BUILD') : chalk.yellow('📋 PLAN')}`);
+          console.log(chalk.dim('─'.repeat(70)));
+          if (remotePeers.length === 0) {
+            console.log(chalk.yellow(`  No other banglacli instances connected yet.`));
+            console.log(chalk.gray(`  Tip: Open another terminal in your backend/frontend repo and run "banglacli --role backend"!\n`));
+          } else {
+            console.log(chalk.bold(`  Connected Peers (${remotePeers.length}):`));
+            remotePeers.forEach((p, idx) => {
+              const roleBadge = chalk.bold.hex('#00FF7F')(`[${p.role.toUpperCase()}]`);
+              const modeBadge = p.mode === 'build' ? chalk.green('BUILD') : chalk.yellow('PLAN');
+              console.log(`  ${idx + 1}. ${roleBadge} (nodeId: ${chalk.gray(p.nodeId)})`);
+              console.log(`     📁 Workspace: ${chalk.white(p.workspace)}`);
+              console.log(`     ⚡ Mode: ${modeBadge}  •  🤖 Model: ${chalk.cyan(p.model)} (${p.provider})`);
+            });
+            console.log(chalk.dim('─'.repeat(70)) + '\n');
+          }
+        }
+        continue;
+      }
+
+      if (trimmed === '/role' || trimmed.startsWith('/role ')) {
+        const parts = trimmed.split(/\s+/);
+        const mesh = getActiveMeshNode();
+        if (!mesh) {
+          console.log(chalk.yellow('\nℹ️ Mesh is not active on this instance.\n'));
+          continue;
+        }
+        if (parts.length > 1) {
+          const newRole = parts.slice(1).join('-').trim();
+          mesh.updateState({ role: newRole });
+          console.log(chalk.green(`\n✔ Instance role updated to: [${chalk.bold(newRole)}]\n`));
+        } else {
+          console.log(chalk.cyan(`\nCurrent instance role: [${chalk.bold(mesh.role)}] (Usage: /role <frontend|backend|name>)\n`));
+        }
+        continue;
+      }
+
+      if (trimmed.startsWith('/send ') || trimmed.startsWith('/msg ')) {
+        const parts = trimmed.split(/\s+/);
+        if (parts.length < 3) {
+          console.log(chalk.yellow('\nUsage: /send <role|nodeId> <message>\nExample: /send backend Please implement /api/users route.\n'));
+          continue;
+        }
+        const target = parts[1];
+        const msg = parts.slice(2).join(' ');
+        const mesh = getActiveMeshNode();
+        if (!mesh) {
+          console.log(chalk.yellow('\nℹ️ Mesh is not active on this instance.\n'));
+          continue;
+        }
+        const result = await mesh.sendMessage(target, msg);
+        console.log(chalk.green(`\n✔ ${result}\n`));
         continue;
       }
 
@@ -797,5 +930,31 @@ async function handleSwitchModel(config: BanglaCLIConfig, agent: BanglaAgent): P
   agent.setModel(selectedModel);
   console.log(chalk.green(`\n✔ Switched model to: ${chalk.bold(selectedModel)}\n`));
 }
+
+// Explicit peers subcommand
+program
+  .command('peers')
+  .alias('mesh')
+  .description('Discover and display connected cross-instance mesh peers (e.g. frontend, backend)')
+  .action(async () => {
+    const node = new MeshNode({ role: 'cli-scanner', workspace: process.cwd() });
+    await node.start();
+    const peers = node.listPeers().filter((p) => p.nodeId !== node.nodeId);
+    console.log('\n' + chalk.bold.hex('#00FF7F')('🌐 Cross-Instance Workspace Mesh Status:'));
+    console.log(chalk.dim('─'.repeat(70)));
+    if (peers.length === 0) {
+      console.log(chalk.yellow('  No other active banglacli instances detected on 127.0.0.1:49152.'));
+      console.log(chalk.gray('  Start an instance with: banglacli --role frontend or banglacli --role backend\n'));
+    } else {
+      console.log(chalk.bold(`  Active Peers (${peers.length}):`));
+      peers.forEach((p, idx) => {
+        console.log(`  ${idx + 1}. [${chalk.cyan.bold(p.role.toUpperCase())}] (${chalk.gray(p.nodeId)})`);
+        console.log(`     📁 Workspace: ${chalk.white(p.workspace)}`);
+        console.log(`     ⚡ Mode: ${p.mode.toUpperCase()}  •  🤖 Model: ${p.model} (${p.provider})`);
+      });
+      console.log(chalk.dim('─'.repeat(70)) + '\n');
+    }
+    node.stop();
+  });
 
 program.parse(process.argv);

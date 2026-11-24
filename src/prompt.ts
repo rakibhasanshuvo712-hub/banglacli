@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import chalk from 'chalk';
 import stringWidth from 'string-width';
+import { getActiveMeshNode } from './tools.js';
 
 export interface OpenCodePromptOptions {
   mode: 'build' | 'plan';
@@ -196,7 +197,8 @@ function renderStickyHeaderLines(
   h: number,
   provider: string,
   model: string,
-  mode: 'build' | 'plan'
+  mode: 'build' | 'plan',
+  compact: boolean = false
 ): string[] {
   const brand = chalk.hex('#00FF7F').bold;
   const accentRed = chalk.hex('#FF3366').bold;
@@ -204,8 +206,18 @@ function renderStickyHeaderLines(
 
   const lines: string[] = [];
 
-  // 1. Colorful BANGLACLI ASCII Art (Green & Red)
-  if (w >= 76 && h >= 24) {
+  // 1. Header Title & Brand
+  if (compact) {
+    let cwd = process.cwd();
+    const cwdTag = cwd ? chalk.dim(` 📁 ${cwd}`) : '';
+    lines.push(
+      brand('  🇧🇩 BANGLACLI v2.0') +
+        chalk.dim(' • Developer: ') +
+        chalk.bold.hex('#00FF7F')('Rakib Hasan Shuvo') +
+        chalk.dim(' (@rakibhasanshuvo712-hub)') +
+        cwdTag
+    );
+  } else if (w >= 76 && h >= 24) {
     lines.push(brand('  ██████╗  █████╗ ███╗   ██╗ ██████╗ ██╗      █████╗  ██████╗██╗     ██╗'));
     lines.push(brand('  ██╔══██╗██╔══██╗████╗  ██║██╔════╝ ██║     ██╔══██╗██╔════╝██║     ██║'));
     lines.push(brand('  ██████╔╝███████║██╔██╗ ██║██║  ███╗██║     ███████║██║     ██║     ██║'));
@@ -219,50 +231,67 @@ function renderStickyHeaderLines(
     lines.push(brand('  🇧🇩 BANGLACLI v2.0 ') + chalk.dim('Next-Gen AI Coding Agent'));
   }
 
-  // 2. Developer Name & Workspace Path
-  const devText = `Developer: Rakib Hasan Shuvo`;
-  let rDevPlain = `  ${devText} (@rakibhasanshuvo712-hub)`;
-  let devPart = chalk.dim('  Developer: ') + chalk.bold.hex('#00FF7F')('Rakib Hasan Shuvo') + chalk.dim(' (@rakibhasanshuvo712-hub)');
+  // 2. Developer Name & Workspace Path (Only if not compact)
+  if (!compact) {
+    const devText = `Developer: Rakib Hasan Shuvo`;
+    let rDevPlain = `  ${devText} (@rakibhasanshuvo712-hub)`;
+    let devPart = chalk.dim('  Developer: ') + chalk.bold.hex('#00FF7F')('Rakib Hasan Shuvo') + chalk.dim(' (@rakibhasanshuvo712-hub)');
 
-  if (stringWidth(rDevPlain) > w) {
-    rDevPlain = `  ${devText}`;
-    devPart = chalk.dim('  Developer: ') + chalk.bold.hex('#00FF7F')('Rakib Hasan Shuvo');
-  }
+    if (stringWidth(rDevPlain) > w) {
+      rDevPlain = `  ${devText}`;
+      devPart = chalk.dim('  Developer: ') + chalk.bold.hex('#00FF7F')('Rakib Hasan Shuvo');
+    }
 
-  let cwd = process.cwd();
-  const maxCwd = Math.max(0, w - stringWidth(rDevPlain) - 5);
-  if (stringWidth(cwd) > maxCwd && maxCwd > 6) {
-    cwd = '…' + cwd.slice(-(maxCwd - 2));
-  } else if (maxCwd <= 6) {
-    cwd = '';
+    let cwd = process.cwd();
+    const maxCwd = Math.max(0, w - stringWidth(rDevPlain) - 5);
+    if (stringWidth(cwd) > maxCwd && maxCwd > 6) {
+      cwd = '…' + cwd.slice(-(maxCwd - 2));
+    } else if (maxCwd <= 6) {
+      cwd = '';
+    }
+    const cwdTag = cwd ? chalk.dim(` 📁 ${cwd}`) : '';
+    const rDevPadding = Math.max(0, w - stringWidth(rDevPlain) - (cwd ? stringWidth(` 📁 ${cwd}`) : 0));
+    lines.push(`${devPart}${' '.repeat(rDevPadding)}${cwdTag}`);
   }
-  const cwdTag = cwd ? chalk.dim(` 📁 ${cwd}`) : '';
-  const rDevPadding = Math.max(0, w - stringWidth(rDevPlain) - (cwd ? stringWidth(` 📁 ${cwd}`) : 0));
-  lines.push(`${devPart}${' '.repeat(rDevPadding)}${cwdTag}`);
 
   // 3. Active Provider, Model, and Mode badge
   const modeBadge = mode === 'build' ? chalk.bold.green('⚡ BUILD Mode') : chalk.bold.yellow('📋 PLAN Mode');
-  let rowModelPlain = `  Provider: ${provider}  •  Model: ${model}  •  Mode: ${mode === 'build' ? '⚡ BUILD Mode' : '📋 PLAN Mode'}`;
-  let rowModel = `  ${chalk.dim('Provider:')} ${chalk.bold.cyan(provider)}  ${chalk.dim('•')}  ${chalk.dim('Model:')} ${chalk.bold.hex('#00FF7F')(model)}  ${chalk.dim('•')}  ${chalk.dim('Mode:')} ${modeBadge}`;
+  const mesh = getActiveMeshNode();
+  let meshTextPlain = '';
+  let meshTextFormatted = '';
+  if (mesh) {
+    const peerCount = mesh.listPeers().filter((p) => p.nodeId !== mesh.nodeId).length;
+    const peerLabel = peerCount > 0 ? `${peerCount} peer${peerCount > 1 ? 's' : ''}` : 'mesh';
+    meshTextPlain = `  •  Mesh: [${mesh.role.toUpperCase()}] (${peerLabel})`;
+    meshTextFormatted = `  ${chalk.dim('•')}  ${chalk.dim('Mesh:')} ${chalk.bold.hex('#00E5FF')(`[${mesh.role.toUpperCase()}]`)} ${chalk.dim(`(${peerLabel})`)}`;
+  }
+
+  let rowModelPlain = `  Provider: ${provider}  •  Model: ${model}  •  Mode: ${mode === 'build' ? '⚡ BUILD Mode' : '📋 PLAN Mode'}${meshTextPlain}`;
+  let rowModel = `  ${chalk.dim('Provider:')} ${chalk.bold.cyan(provider)}  ${chalk.dim('•')}  ${chalk.dim('Model:')} ${chalk.bold.hex('#00FF7F')(model)}  ${chalk.dim('•')}  ${chalk.dim('Mode:')} ${modeBadge}${meshTextFormatted}`;
 
   if (stringWidth(rowModelPlain) > w) {
+    rowModel = `  ${chalk.cyan(provider)} ${chalk.dim('•')} ${chalk.hex('#00FF7F')(model)} ${chalk.dim('•')} ${modeBadge}${meshTextFormatted}`;
+  }
+  if (stringWidth(`  ${provider} • ${model} • Mode • ${meshTextPlain}`) > w) {
     rowModel = `  ${chalk.cyan(provider)} ${chalk.dim('•')} ${chalk.hex('#00FF7F')(model)} ${chalk.dim('•')} ${modeBadge}`;
   }
   lines.push(rowModel);
 
-  // 4. Commands Bar: /mode, /agent, /doctor, /stats, /limits, /help, /exit
-  let cmdsPlain = '  Commands: /mode • /agent • /doctor • /stats • /limits • /help • /exit';
-  let rowCmds = `  ${chalk.dim('Commands:')} ${chalk.cyan('/mode')} ${chalk.dim('•')} ${chalk.cyan('/agent')} ${chalk.dim('•')} ${chalk.cyan('/doctor')} ${chalk.dim('•')} ${chalk.cyan('/stats')} ${chalk.dim('•')} ${chalk.cyan('/limits')} ${chalk.dim('•')} ${chalk.cyan('/help')} ${chalk.dim('•')} ${chalk.cyan('/exit')}`;
+  // 4. Commands Bar: /mode, /agent, /peers, /doctor, /stats, /limits, /help, /exit (Only if not compact)
+  if (!compact) {
+    let cmdsPlain = '  Commands: /mode • /agent • /peers • /doctor • /stats • /limits • /help • /exit';
+    let rowCmds = `  ${chalk.dim('Commands:')} ${chalk.cyan('/mode')} ${chalk.dim('•')} ${chalk.cyan('/agent')} ${chalk.dim('•')} ${chalk.cyan('/peers')} ${chalk.dim('•')} ${chalk.cyan('/doctor')} ${chalk.dim('•')} ${chalk.cyan('/stats')} ${chalk.dim('•')} ${chalk.cyan('/limits')} ${chalk.dim('•')} ${chalk.cyan('/help')} ${chalk.dim('•')} ${chalk.cyan('/exit')}`;
 
-  if (stringWidth(cmdsPlain) > w) {
-    cmdsPlain = '  /mode • /agent • /doctor • /stats • /limits • /help • /exit';
-    rowCmds = `  ${chalk.cyan('/mode')} ${chalk.dim('•')} ${chalk.cyan('/agent')} ${chalk.dim('•')} ${chalk.cyan('/doctor')} ${chalk.dim('•')} ${chalk.cyan('/stats')} ${chalk.dim('•')} ${chalk.cyan('/limits')} ${chalk.dim('•')} ${chalk.cyan('/help')} ${chalk.dim('•')} ${chalk.cyan('/exit')}`;
+    if (stringWidth(cmdsPlain) > w) {
+      cmdsPlain = '  /mode • /agent • /peers • /doctor • /stats • /limits • /help • /exit';
+      rowCmds = `  ${chalk.cyan('/mode')} ${chalk.dim('•')} ${chalk.cyan('/agent')} ${chalk.dim('•')} ${chalk.cyan('/peers')} ${chalk.dim('•')} ${chalk.cyan('/doctor')} ${chalk.dim('•')} ${chalk.cyan('/stats')} ${chalk.dim('•')} ${chalk.cyan('/limits')} ${chalk.dim('•')} ${chalk.cyan('/help')} ${chalk.dim('•')} ${chalk.cyan('/exit')}`;
+    }
+    if (stringWidth(cmdsPlain) > w) {
+      cmdsPlain = '  /mode • /agent • /peers • /limits • /help • /exit';
+      rowCmds = `  ${chalk.cyan('/mode')} ${chalk.dim('•')} ${chalk.cyan('/agent')} ${chalk.dim('•')} ${chalk.cyan('/peers')} ${chalk.dim('•')} ${chalk.cyan('/limits')} ${chalk.dim('•')} ${chalk.cyan('/help')} ${chalk.dim('•')} ${chalk.cyan('/exit')}`;
+    }
+    lines.push(rowCmds);
   }
-  if (stringWidth(cmdsPlain) > w) {
-    cmdsPlain = '  /mode • /agent • /limits • /help • /exit';
-    rowCmds = `  ${chalk.cyan('/mode')} ${chalk.dim('•')} ${chalk.cyan('/agent')} ${chalk.dim('•')} ${chalk.cyan('/limits')} ${chalk.dim('•')} ${chalk.cyan('/help')} ${chalk.dim('•')} ${chalk.cyan('/exit')}`;
-  }
-  lines.push(rowCmds);
 
   // 5. Divider Line
   const divider = chalk.hex('#00FF7F').dim('─'.repeat(Math.max(1, w)));
@@ -276,9 +305,10 @@ export function writeStickyHeader(
   rows: number,
   provider: string,
   model: string,
-  mode: 'build' | 'plan'
+  mode: 'build' | 'plan',
+  compact: boolean = false
 ): number {
-  const lines = renderStickyHeaderLines(cols, rows, provider, model, mode);
+  const lines = renderStickyHeaderLines(cols, rows, provider, model, mode, compact);
   lines.forEach((line, index) => {
     process.stdout.write(`\x1b[${index + 1};1H\x1b[2K${line}`);
   });
@@ -290,7 +320,7 @@ export function writeStickyHeader(
 
 /**
  * Prepares the screen for interactive prompts (e.g. model selector, mode picker).
- * Pinned upper header is drawn at rows 1..H, everything below row H is cleared,
+ * Pinned upper header is drawn at rows 1..H in compact layout, everything below row H is cleared,
  * and the cursor is placed at row H+1 for clean in-place execution.
  * Prevents overlapping, terminal buffer corruption, and displacement of the pinned header.
  */
@@ -313,7 +343,7 @@ export function prepareInteractiveArea(
   process.stdout.write('\x1b[r\x1b[?25h');
   process.stdout.write('\x1b[2J\x1b[H');
 
-  const headerHeight = writeStickyHeader(cols, rows, provider, model, mode);
+  const headerHeight = writeStickyHeader(cols, rows, provider, model, mode, true);
   _dockedHeaderHeight = headerHeight;
 
   // Clear everything from row headerHeight + 1 down to the bottom
@@ -518,9 +548,10 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
     const submit = () => {
       cleanup();
       const fullContent = bufferLines.join('\n').trim();
+      const isSlash = fullContent.startsWith('/') || /^[>❯$#\s]+\//.test(fullContent);
 
       // Only show processing status line in dock for actual prompts, NOT for slash commands!
-      if (!fullContent.startsWith('/')) {
+      if (!isSlash) {
         const statusLine = renderStatusLine(boxWidth, 'Processing request...', borderColor);
         process.stdout.write(`\x1b[${contentRow};1H\x1b[2K${statusLine}`);
       } else {
