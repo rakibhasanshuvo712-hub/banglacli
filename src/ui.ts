@@ -380,43 +380,32 @@ export function showFreeApiKeyGuide(): void {
   console.log(`     • ${chalk.yellow('inclusionai/ling-3.2-flash:free')} (1M token context hybrid reasoning)`);
   console.log(`   ${chalk.gray('Quota:')} 100% Free with zero payment or credit card needed!\n`);
 
-  // 3. Tencent HY4 Suite
-  console.log(chalk.bold.hex('#FF6D00')('3. Tencent HY4 Suite (1M Token Context - Free Promotional Tokens)'));
-  console.log(`   ${chalk.gray('Models:')} ${chalk.yellow('tencent/hy4-flash')} (1M Context), ${chalk.yellow('tencent/hy4')} (1M Frontier), ${chalk.yellow('tencent/hy4-preview')}`);
-  console.log(`   ${chalk.gray('Highlights:')} 1,048,576 token context window, high-throughput code generation & reasoning.\n`);
-
-  // 4. Zhipu AI GLM 5.3 Suite
-  console.log(chalk.bold.hex('#7C4DFF')('4. Zhipu AI GLM 5.3 Suite (Daily Free Tokens - 1M Context)'));
-  console.log(`   ${chalk.gray('Direct Link:')} ${chalk.bold.underline.cyan('https://open.bigmodel.cn')}`);
-  console.log(`   ${chalk.gray('Models:')} ${chalk.yellow('z-ai/glm-5.3-flash')} (1M Context), ${chalk.yellow('z-ai/glm-5.3')}, ${chalk.yellow('z-ai/glm-5.3-flashx')}, ${chalk.yellow('z-ai/glm-5.3-prime')}`);
-  console.log(`   ${chalk.gray('Highlights:')} Daily free tokens refreshed every day on Zhipu AI platform & OpenRouter.\n`);
-
-  // 5. DeepSeek Platform
-  console.log(chalk.bold.hex('#00D2FF')('5. DeepSeek Platform (5,000,000 Free Tokens - 🌟 SOTA Coding)'));
+  // 3. DeepSeek Platform
+  console.log(chalk.bold.hex('#00D2FF')('3. DeepSeek Platform (5,000,000 Free Tokens - 🌟 SOTA Coding)'));
   console.log(`   ${chalk.gray('Direct Link:')} ${chalk.bold.underline.cyan('https://platform.deepseek.com')}`);
   console.log(`   ${chalk.gray('Steps:')} Sign up with Email/Google ➔ Create API Key ➔ 5 Million free tokens credited.`);
   console.log(`   ${chalk.gray('In banglacli:')} Select "${chalk.white('Custom OpenAI-Compatible')}"`);
   console.log(`   ${chalk.gray('Base URL:')} ${chalk.cyan('https://api.deepseek.com/v1')}`);
-  console.log(`   ${chalk.gray('Models:')} ${chalk.yellow('deepseek-chat')} (V4.1 / V3.2 Coding), ${chalk.yellow('deepseek-reasoner')} (R1 Chain-of-Thought)`);
+  console.log(`   ${chalk.gray('Models:')} ${chalk.yellow('deepseek-chat')} (V3 Coding), ${chalk.yellow('deepseek-reasoner')} (R1 Chain-of-Thought)`);
   console.log(`   ${chalk.gray('Quota:')} 5,000,000 free tokens upon registration!\n`);
 
-  // 6. Groq (Blazing Fast Inference)
-  console.log(chalk.bold.hex('#00FF7F')('6. Groq Cloud (Ultra-Fast 500+ tokens/sec - Free Tier)'));
+  // 4. Groq (Blazing Fast Inference)
+  console.log(chalk.bold.hex('#00FF7F')('4. Groq Cloud (Ultra-Fast 500+ tokens/sec - Free Tier)'));
   console.log(`   ${chalk.gray('Direct Link:')} ${chalk.bold.underline.cyan('https://console.groq.com/keys')}`);
   console.log(`   ${chalk.gray('Steps:')} Select "${chalk.white('Custom OpenAI-Compatible')}" in banglacli.`);
   console.log(`   ${chalk.gray('Base URL:')} ${chalk.cyan('https://api.groq.com/openai/v1')}`);
-  console.log(`   ${chalk.gray('Free Models:')} ${chalk.yellow('deepseek-r1-distill-llama-70b')}, ${chalk.yellow('deepseek-r1-distill-qwen-32b')}, ${chalk.yellow('llama-3.3-70b-versatile')}, ${chalk.yellow('qwen-2.5-coder-32b')}`);
+  console.log(`   ${chalk.gray('Free Models:')} ${chalk.yellow('deepseek-r1-distill-llama-70b')}, ${chalk.yellow('llama-3.3-70b-versatile')}, ${chalk.yellow('qwen-2.5-coder-32b')}`);
   console.log(`   ${chalk.gray('Quota:')} 14,400 Requests per day free!\n`);
 
-  // 7. Cerebras Cloud (1,800+ tokens/sec - Free Tier)
-  console.log(chalk.bold.hex('#00FF7F')('7. Cerebras Cloud (World\'s Fastest 1,800+ tokens/sec - Free Tier)'));
+  // 5. Cerebras Cloud (1,800+ tokens/sec - Free Tier)
+  console.log(chalk.bold.hex('#00FF7F')('5. Cerebras Cloud (World\'s Fastest 1,800+ tokens/sec - Free Tier)'));
   console.log(`   ${chalk.gray('Direct Link:')} ${chalk.bold.underline.cyan('https://cloud.cerebras.ai')}`);
   console.log(`   ${chalk.gray('Base URL:')} ${chalk.cyan('https://api.cerebras.ai/v1')}`);
   console.log(`   ${chalk.gray('Free Models:')} ${chalk.yellow('llama3.3-70b')}, ${chalk.yellow('llama3.1-8b')} (128k Context)`);
   console.log(`   ${chalk.gray('Quota:')} Free tier available with ultra-low latency!\n`);
 
-  // 8. Local Offline Models (Ollama)
-  console.log(chalk.bold.hex('#00FF7F')('8. Local Offline (100% Private, Free & Offline via Ollama)'));
+  // 6. Local Offline Models (Ollama)
+  console.log(chalk.bold.hex('#00FF7F')('6. Local Offline (100% Private, Free & Offline via Ollama)'));
   console.log(`   ${chalk.gray('Download:')} ${chalk.bold.underline.cyan('https://ollama.com')}`);
   console.log(`   ${chalk.gray('Run in Terminal:')} ${chalk.white('ollama run qwen2.5-coder')}`);
   console.log(`   ${chalk.gray('In banglacli:')} Choose "${chalk.white('Custom OpenAI-Compatible')}"`);
@@ -440,14 +429,14 @@ export function showTokenLimitsGuide(): void {
   console.log(chalk.dim('┌────────────────────────┬────────────────┬──────────────┬──────────────┬──────────────┐'));
   console.log(chalk.dim('│') + chalk.bold(' Model                  ') + chalk.dim('│') + chalk.bold(' Context Window ') + chalk.dim('│') + chalk.bold(' Req / Minute ') + chalk.dim('│') + chalk.bold(' Tokens / Min ') + chalk.dim('│') + chalk.bold(' Daily Quota  ') + chalk.dim('│'));
   console.log(chalk.dim('├────────────────────────┼────────────────┼──────────────┼──────────────┼──────────────┤'));
-  console.log(chalk.dim('│') + chalk.green(' gemini-2.0-flash       ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
-  console.log(chalk.dim('│') + chalk.green(' gemini-2.0-flash-lite  ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 30 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
-  console.log(chalk.dim('│') + chalk.green(' gemini-2.5-flash       ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
-  console.log(chalk.dim('│') + chalk.green(' gemini-2.5-pro         ') + chalk.dim('│') + chalk.cyan(' 2,097,152 toks ') + chalk.dim('│') + chalk.yellow(' 5 RPM        ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.yellow(' 50 RPD       ') + chalk.dim('│'));
-  console.log(chalk.dim('│') + chalk.green(' gemini-1.5-flash       ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' gemini-3.5-flash-lite  ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' gemini-3.5-flash       ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' gemini-3.8-flash       ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' gemini-3.1-flash-lite  ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 30 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' gemini-2.0-flash       ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' Auto->3.5    ') + chalk.dim('│'));
   console.log(chalk.dim('│') + chalk.green(' gemini-1.5-pro         ') + chalk.dim('│') + chalk.cyan(' 2,097,152 toks ') + chalk.dim('│') + chalk.yellow(' 5 RPM        ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.yellow(' 50 RPD       ') + chalk.dim('│'));
   console.log(chalk.dim('└────────────────────────┴────────────────┴──────────────┴──────────────┴──────────────┘'));
-  console.log(chalk.gray('ℹ️ Daily resets at 00:00 UTC. Gemini 2.0 Flash is the primary autonomous coding model.\n'));
+  console.log(chalk.gray('ℹ️ Daily resets at 00:00 UTC. Gemini 3.5 Flash Lite is the primary autonomous coding model.\n'));
 
   // 2. OpenRouter 100% Free Suite
   console.log(chalk.bold.hex('#00FF7F')('2. 100% Free OpenRouter Models (Zero-Plan Coding Fleet)'));
@@ -475,42 +464,14 @@ export function showTokenLimitsGuide(): void {
   console.log(chalk.dim('└────────────────────────────────────────────────┴────────────────┴──────────────┴──────────────┘'));
   console.log(chalk.gray('ℹ️ 100% Free on OpenRouter with zero credit card required. Free tier rate limits reset daily.\n'));
 
-  // 3. OpenCode & Freebuff Built-in Free Roster
-  console.log(chalk.bold.hex('#00FF7F')('3. OpenCode & Freebuff Built-in Free Mirror Roster'));
-  console.log(chalk.dim('┌──────────────────────────────────────┬────────────────┬──────────────┬──────────────┐'));
-  console.log(chalk.dim('│') + chalk.bold(' Model                                ') + chalk.dim('│') + chalk.bold(' Context Window ') + chalk.dim('│') + chalk.bold(' Rate Limit   ') + chalk.dim('│') + chalk.bold(' Quota Status ') + chalk.dim('│'));
-  console.log(chalk.dim('├──────────────────────────────────────┼────────────────┼──────────────┼──────────────┤'));
-  console.log(chalk.dim('│') + chalk.green(' opencode/deepseek-v4.1-free          ') + chalk.dim('│') + chalk.white(' 131,072 toks   ') + chalk.dim('│') + chalk.yellow(' 30 RPM        ') + chalk.dim('│') + chalk.green(' Free SOTA    ') + chalk.dim('│'));
-  console.log(chalk.dim('│') + chalk.green(' opencode/glm-5.3-free                ') + chalk.dim('│') + chalk.white(' 131,072 toks   ') + chalk.dim('│') + chalk.yellow(' 30 RPM        ') + chalk.dim('│') + chalk.green(' Free GLM     ') + chalk.dim('│'));
-  console.log(chalk.dim('│') + chalk.green(' freebuff/solar-10.7b-free            ') + chalk.dim('│') + chalk.white(' 32,768 toks    ') + chalk.dim('│') + chalk.yellow(' 30 RPM        ') + chalk.dim('│') + chalk.green(' Free Solar   ') + chalk.dim('│'));
-  console.log(chalk.dim('│') + chalk.green(' freebuff/mimo-7b-free                ') + chalk.dim('│') + chalk.white(' 32,768 toks    ') + chalk.dim('│') + chalk.yellow(' 30 RPM        ') + chalk.dim('│') + chalk.green(' Free MiMo    ') + chalk.dim('│'));
-  console.log(chalk.dim('│') + chalk.green(' opencode/katana-14b-free             ') + chalk.dim('│') + chalk.white(' 65,536 toks    ') + chalk.dim('│') + chalk.yellow(' 30 RPM        ') + chalk.dim('│') + chalk.green(' Free Katana  ') + chalk.dim('│'));
-  console.log(chalk.dim('│') + chalk.green(' freebuff/trinity-40b-free            ') + chalk.dim('│') + chalk.white(' 131,072 toks   ') + chalk.dim('│') + chalk.yellow(' 30 RPM        ') + chalk.dim('│') + chalk.green(' Free Trinity ') + chalk.dim('│'));
-  console.log(chalk.dim('└──────────────────────────────────────┴────────────────┴──────────────┴──────────────┘\n'));
-
-  // 4. DeepSeek Platform Frontier Models
-  console.log(chalk.bold.hex('#00FF7F')('4. DeepSeek Platform Models (platform.deepseek.com)'));
-  console.log(`   • ${chalk.white('deepseek-chat')} (V3.2/V4.1) : ${chalk.cyan('128,000 tokens')} context | Rolling RPM | ${chalk.green('5,000,000 Free Starter Tokens')}`);
+  // 3. DeepSeek Platform Frontier Models
+  console.log(chalk.bold.hex('#00FF7F')('3. DeepSeek Platform Models (platform.deepseek.com)'));
+  console.log(`   • ${chalk.white('deepseek-chat')} (V3/V2.5)  : ${chalk.cyan('128,000 tokens')} context | Rolling RPM | ${chalk.green('5,000,000 Free Starter Tokens')}`);
   console.log(`   • ${chalk.white('deepseek-reasoner')} (R1)   : ${chalk.cyan('128,000 tokens')} context | Deep CoT reasoning | ${chalk.green('5,000,000 Free Starter Tokens')}`);
-  console.log(`   • ${chalk.white('deepseek-coder-v2')}        : ${chalk.cyan('128,000 tokens')} context | Specialized coding engine | ${chalk.green('5,000,000 Free Starter Tokens')}`);
-  console.log(`   • ${chalk.white('deepseek-v3-671b')}         : ${chalk.cyan('128,000 tokens')} context | 671B frontier MoE | ${chalk.green('5,000,000 Free Starter Tokens')}\n`);
+  console.log(`   • ${chalk.white('deepseek-coder')}           : ${chalk.cyan('128,000 tokens')} context | Specialized coding engine | ${chalk.green('5,000,000 Free Starter Tokens')}\n`);
 
-  // 5. Tencent Hunyuan (HY4) Suite
-  console.log(chalk.bold.hex('#00FF7F')('5. Tencent Hunyuan (HY4) Suite (Tencent Cloud)'));
-  console.log(`   • ${chalk.white('tencent/hy4-flash')}        : ${chalk.cyan('256,000 tokens')} context | 60 RPM | ${chalk.green('100,000 Free Daily Tokens')}`);
-  console.log(`   • ${chalk.white('tencent/hy4-1m-frontier')}  : ${chalk.cyan('1,000,000 tokens')} context | 30 RPM | Free Tier Starter`);
-  console.log(`   • ${chalk.white('tencent/hy4-preview')}      : ${chalk.cyan('256,000 tokens')} context | 30 RPM | Free Tier Starter`);
-  console.log(`   • ${chalk.white('tencent/hunyuan-pro')}      : ${chalk.cyan('128,000 tokens')} context | 30 RPM | Standard Free Tier\n`);
-
-  // 6. Zhipu AI GLM 5.3 Suite
-  console.log(chalk.bold.hex('#00FF7F')('6. Zhipu AI GLM 5.3 Suite (BigModel Platform)'));
-  console.log(`   • ${chalk.white('zhipu/glm-5.3-flash')}      : ${chalk.cyan('128,000 tokens')} context | 60 RPM | ${chalk.green('100% Free & Unlimited API Calls')}`);
-  console.log(`   • ${chalk.white('zhipu/glm-5.3-1m')}         : ${chalk.cyan('1,048,576 tokens')} context | 30 RPM | Free Trial Quota`);
-  console.log(`   • ${chalk.white('zhipu/glm-5.3-flashx')}     : ${chalk.cyan('128,000 tokens')} context | 60 RPM | Ultra High-Speed Free`);
-  console.log(`   • ${chalk.white('zhipu/glm-4-plus')}         : ${chalk.cyan('128,000 tokens')} context | 30 RPM | Free Starter Tier\n`);
-
-  // 7. Groq Cloud Ultra-Fast Free Suite
-  console.log(chalk.bold.hex('#00FF7F')('7. Groq Cloud Free Tier (console.groq.com)'));
+  // 4. Groq Cloud Ultra-Fast Free Suite
+  console.log(chalk.bold.hex('#00FF7F')('4. Groq Cloud Free Tier (console.groq.com)'));
   console.log(chalk.dim('┌──────────────────────────────┬────────────────┬──────────────┬──────────────┬──────────────┐'));
   console.log(chalk.dim('│') + chalk.bold(' Model                        ') + chalk.dim('│') + chalk.bold(' Context Window ') + chalk.dim('│') + chalk.bold(' Req / Minute ') + chalk.dim('│') + chalk.bold(' Tokens / Min ') + chalk.dim('│') + chalk.bold(' Daily Quota  ') + chalk.dim('│'));
   console.log(chalk.dim('├──────────────────────────────┼────────────────┼──────────────┼──────────────┼──────────────┤'));
@@ -522,8 +483,8 @@ export function showTokenLimitsGuide(): void {
   console.log(chalk.dim('└──────────────────────────────┴────────────────┴──────────────┴──────────────┴──────────────┘'));
   console.log(chalk.gray('ℹ️ Groq delivers 500+ tokens/second inference with a generous 14,400 requests/day free quota!\n'));
 
-  // 8. Frontier Flagship Coding Agents (BYOK)
-  console.log(chalk.bold.hex('#00FF7F')('8. Frontier Flagship Coding Agents (OpenRouter / BYOK)'));
+  // 5. Frontier Flagship Coding Agents (BYOK)
+  console.log(chalk.bold.hex('#00FF7F')('5. Frontier Flagship Coding Agents (OpenRouter / BYOK)'));
   console.log(`   • ${chalk.white('anthropic/claude-3.5-sonnet')} : ${chalk.cyan('200,000 tokens')} context | Top-ranked coding benchmark model`);
   console.log(`   • ${chalk.white('openai/gpt-4o')}               : ${chalk.cyan('128,000 tokens')} context | Flagship multimodal developer agent`);
   console.log(`   • ${chalk.white('openai/o3-mini')}             : ${chalk.cyan('200,000 tokens')} context | Deep STEM & competitive reasoning`);

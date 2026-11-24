@@ -141,7 +141,12 @@ program
 
     if (!config) {
       console.log(chalk.yellow('\nℹ️  No API key or provider found. Starting initial onboarding...\n'));
-      config = await promptConfig(true);
+      const prompted = await promptConfig(true);
+      if (!prompted) {
+        console.log(chalk.yellow('\nSetup cancelled. Exiting.\n'));
+        process.exit(0);
+      }
+      config = prompted;
     }
 
     if (options.model) {
@@ -699,10 +704,10 @@ program
         if (query.length > 0) {
           const match = findModelByQuery(query);
           if (match) {
-            const newConfig = await applyModelDirect(match, config);
-            if (newConfig) {
-              config = newConfig;
-              agent.updateConfig(newConfig);
+            const directConfig: BanglaCLIConfig | null = await applyModelDirect(match, config);
+            if (directConfig) {
+              config = directConfig;
+              agent.updateConfig(directConfig);
               updateDockedModel(
                 PROVIDER_LABELS[config.provider] || config.provider,
                 config.model,
@@ -875,7 +880,7 @@ program
     let config = getConfig() || {
       provider: 'openrouter',
       apiKey: '',
-      model: 'tencent/hy4-flash',
+      model: 'openrouter/free',
     };
 
     const checks: { name: string; status: 'ok' | 'warn' | 'error'; detail: string }[] = [];
@@ -929,7 +934,7 @@ program
     let config = getConfig() || {
       provider: 'openrouter',
       apiKey: '',
-      model: 'tencent/hy4-flash',
+      model: 'openrouter/free',
     };
 
     renderSessionStats({

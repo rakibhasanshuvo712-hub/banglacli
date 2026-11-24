@@ -902,7 +902,9 @@ export class BanglaAgent {
             errMsg.includes('404') ||
             errMsg.includes('no longer available') ||
             errMsg.includes('not found') ||
-            errMsg.includes('402');
+            errMsg.includes('402') ||
+            errMsg.includes('400') ||
+            errMsg.includes('not a valid model ID');
 
           if (isLimitOrOverload && (this.config.provider === 'openrouter' || this.config.provider === 'custom')) {
             cascadeAttempts++;

@@ -100,12 +100,13 @@ async function selectModelForProvider(
 ): Promise<string | null> {
   if (provider === 'gemini') {
     const geminiOptions = [
-      { value: 'gemini-2.0-flash', label: 'gemini-2.0-flash (🌟 Google Flagship Free Coder - 1M Tokens, 1,500 RPD)' },
-      { value: 'gemini-2.0-flash-lite', label: 'gemini-2.0-flash-lite (Ultra-Fast 30 RPM Free)' },
-      { value: 'gemini-2.5-flash', label: 'gemini-2.5-flash (Next-Gen Flash Preview)' },
-      { value: 'gemini-2.5-pro', label: 'gemini-2.5-pro (2M Context Frontier Preview)' },
-      { value: 'gemini-1.5-flash', label: 'gemini-1.5-flash (Battle-Tested Stable, 1M Tokens)' },
-      { value: 'gemini-1.5-pro', label: 'gemini-1.5-pro (2M Context Long-Form)' },
+      { value: 'gemini-3.5-flash-lite', label: 'gemini-3.5-flash-lite (🌟 Google Recommended - 1M Tokens, Stable & Fast)' },
+      { value: 'gemini-3.5-flash', label: 'gemini-3.5-flash (Next-Gen Flash - 1M Context Frontier)' },
+      { value: 'gemini-3.8-flash', label: 'gemini-3.8-flash (Latest Preview from Google AI Studio)' },
+      { value: 'gemini-3.1-flash-lite', label: 'gemini-3.1-flash-lite (High-Throughput Lightweight Coder)' },
+      { value: 'gemini-2.0-flash', label: 'gemini-2.0-flash (Legacy Flash - Auto-maps to 3.5)' },
+      { value: 'gemini-1.5-flash', label: 'gemini-1.5-flash (Legacy Flash 1.5 - Auto-maps to 3.5)' },
+      { value: 'gemini-1.5-pro', label: 'gemini-1.5-pro (Legacy Pro 1.5 - Auto-maps to 3.5)' },
       { value: 'custom_input', label: 'Enter custom model name manually...' },
     ];
 
@@ -123,7 +124,7 @@ async function selectModelForProvider(
     if (modelChoice === 'custom_input') {
       const customModel = (await p.text({
         message: 'Enter Gemini model ID:',
-        initialValue: 'gemini-2.0-flash',
+        initialValue: 'gemini-3.5-flash-lite',
       })) as string;
       if (p.isCancel(customModel)) return null;
       return customModel.trim();
@@ -132,18 +133,17 @@ async function selectModelForProvider(
   } else if (provider === 'openrouter') {
     const openrouterOptions = [
       { value: 'openrouter/free', label: 'openrouter/free (🌟 Recommended - Best Free Model with Tools)' },
+      { value: 'particle-ai/particle-1:free', label: 'particle-ai/particle-1:free (1M Context Free Coder)' },
+      { value: 'nvidia/nemotron-3-ultra-550b-a55b:free', label: 'nvidia/nemotron-3-ultra-550b-a55b:free (550B MoE 1M)' },
+      { value: 'google/gemma-4-31b-it:free', label: 'google/gemma-4-31b-it:free (Free 31B Coding & Chat)' },
+      { value: 'google/gemma-4-26b-a4b-it:free', label: 'google/gemma-4-26b-a4b-it:free (Free Gemma MoE)' },
+      { value: 'nvidia/nemotron-3.5-lightning:free', label: 'nvidia/nemotron-3.5-lightning:free (Free Fast 1M Model)' },
       { value: 'google/lyria-3-pro-preview', label: 'google/lyria-3-pro-preview (1M Context Free)' },
       { value: 'google/lyria-3-clip-preview', label: 'google/lyria-3-clip-preview (1M Context Free)' },
       { value: 'meta-llama/llama-3.3-70b-instruct:free', label: 'meta-llama/llama-3.3-70b-instruct:free (Free 70B Model)' },
       { value: 'qwen/qwen-2.5-coder-32b-instruct:free', label: 'qwen/qwen-2.5-coder-32b-instruct:free (Free 32B Coder)' },
       { value: 'deepseek/deepseek-r1:free', label: 'deepseek/deepseek-r1:free (Free Reasoning Model)' },
       { value: 'deepseek/deepseek-chat:free', label: 'deepseek/deepseek-chat:free (Free 671B Chat/Code)' },
-      { value: 'particle-ai/particle-1:free', label: 'particle-ai/particle-1:free (1M Context Free Coder)' },
-      { value: 'nvidia/nemotron-3-ultra-550b-a55b:free', label: 'nvidia/nemotron-3-ultra-550b-a55b:free (550B MoE 1M)' },
-      { value: 'google/gemma-4-31b-it:free', label: 'google/gemma-4-31b-it:free (Free 31B Coding & Chat)' },
-      { value: 'nvidia/nemotron-3.5-lightning:free', label: 'nvidia/nemotron-3.5-lightning:free (Free Fast Model)' },
-      { value: 'tencent/hy4-flash', label: 'tencent/hy4-flash (Tencent HY4 Free Tokens)' },
-      { value: 'z-ai/glm-5.3-flash', label: 'z-ai/glm-5.3-flash (GLM 5.3 1M Free Tokens)' },
       { value: 'custom_input', label: 'Enter custom OpenRouter model name...' },
     ];
 
