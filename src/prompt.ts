@@ -33,15 +33,12 @@ function renderTopBorder(
     : chalk.bgHex('#FFB300').black.bold(modeText);
   const modeWidth = stringWidth(modeText);
 
-  // Responsive right hint
   let rightText = ' (Tab: model • Esc: clear) ';
   if (width < 86) rightText = ' (Tab: model) ';
   if (width < 66) rightText = '';
 
   let rightWidth = stringWidth(rightText);
 
-  // Available room for model badge
-  // Overhead: '╭── ' (4) + modeWidth + ' ── ' (4) + ' ' (1) + min 1 dash (1) + rightWidth + '──╮' (3)
   let availForModel = width - (4 + modeWidth + 4 + 1 + 1 + rightWidth + 3);
   if (availForModel < 8) {
     rightText = '';
@@ -49,7 +46,6 @@ function renderTopBorder(
     availForModel = width - (4 + modeWidth + 4 + 1 + 1 + rightWidth + 3);
   }
 
-  // Model text truncation
   let modelDisplay = model;
   let modelText = ` 🤖 ${modelDisplay} `;
   if (stringWidth(modelText) > availForModel) {
@@ -63,7 +59,6 @@ function renderTopBorder(
     modelText = ` 🤖 ${modelDisplay} `;
   }
 
-  // Ultra-narrow fallback
   while (stringWidth(modelText) > availForModel && modelDisplay.length > 1) {
     modelDisplay = modelDisplay.slice(0, -1);
     modelText = ` 🤖 ${modelDisplay}… `;
@@ -97,8 +92,8 @@ function renderBottomBorder(
     if (width < 46) hintText = ' Enter: send ';
   }
 
-  const prefixWidth = 4; // '╰── '
-  const suffixWidth = 3; // '──╯'
+  const prefixWidth = 4;
+  const suffixWidth = 3;
   const minDashes = 1;
   const maxHintWidth = width - prefixWidth - suffixWidth - minDashes;
 
@@ -174,23 +169,17 @@ function renderStatusLine(
   return prefix + chalk.yellow(visibleText) + ' '.repeat(padding) + rightBorder;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// restoreTerminalViewport: reset scroll margins + show cursor
-// ─────────────────────────────────────────────────────────────────────────────
 export function restoreTerminalViewport(): void {
   try {
     process.stdout.write('\x1b[r\x1b[?25h');
   } catch {}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// updateFixedBottomStatus: update status line inside fixed dock
-// ─────────────────────────────────────────────────────────────────────────────
 export function updateFixedBottomStatus(
   statusText: string,
   options?: { mode?: 'build' | 'plan'; model?: string }
 ): void {
-  if (!_dockedActive || !process.stdout.rows || process.stdout.rows < 14) return;
+  if (!_dockedActive || !process.stdout.rows || process.stdout.rows < 16) return;
   const H = process.stdout.rows;
   const boxWidth = getSafeBoxWidth();
   const isBuildMode = (options?.mode || _dockedMode) === 'build';
@@ -200,22 +189,7 @@ export function updateFixedBottomStatus(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STICKY HEADER & FIXED DOCK SYSTEM (OpenCode / Antigravity Style)
-//
-// Pinned Header (Rows 1–5):
-//   Row 1: 🇧🇩 BANGLACLI v2.0  •  Developer: Rakib Hasan Shuvo (@rakibhasanshuvo712-hub)   📁 workspace
-//   Row 2: Provider: Google Gemini  •  Model: gemini-3.5-flash-lite  •  Mode: ⚡ BUILD
-//   Row 3: Commands: /mode • /agent • /doctor • /stats • /limits • /help • /exit
-//   Row 4: ─────────────────────────────────────────────────────────────────────────────────────────
-//   Row 5: [Blank separator row]
-//
-// Scrolling Workspace (Rows 6 .. H - 4):
-//   All execution, streaming chat, markdown, and tools stream here cleanly.
-//
-// Pinned Fixed Dock (Rows H - 3 .. H - 1):
-//   Row H - 3: ╭── ⚡ BUILD ── 🤖 model ───────────────────────── (Tab: model • Esc: clear) ──╮
-//   Row H - 2: │ ❯ input...                                                                  │
-//   Row H - 1: ╰── Enter: send • Tab: switch model • Shift+Enter: newline • /help ───────────╯
+// STICKY HEADER SYSTEM (With Colorful Bangladesh Green/Red ASCII Art)
 // ─────────────────────────────────────────────────────────────────────────────
 
 let _dockedActive = false;
@@ -224,79 +198,105 @@ let _dockedCols = 0;
 let _dockedProvider = 'Google Gemini';
 let _dockedModel = 'gemini-3.5-flash-lite';
 let _dockedMode: 'build' | 'plan' = 'build';
+let _dockedHeaderHeight = 11;
 
-const HEADER_TOTAL_ROWS = 5; // Rows 1..4 content + Row 5 blank spacer
-const BOX_ROWS = 4;          // Blank line above box + 3 box lines
+const BOX_ROWS = 4;
 
 function renderStickyHeaderLines(
   w: number,
+  h: number,
   provider: string,
   model: string,
   mode: 'build' | 'plan'
 ): string[] {
-  // Row 1: Brand badge + developer + workspace
-  const badge = chalk.bgHex('#006A4E').white.bold(' 🇧🇩 BANGLACLI v2.0 ');
-  const devText = `Developer: Rakib Hasan Shuvo`;
-  let r1Plain = ` 🇧🇩 BANGLACLI v2.0   ${devText} (@rakibhasanshuvo712-hub)`;
-  let devPart = chalk.dim(' Developer: ') + chalk.bold.hex('#00FF7F')('Rakib Hasan Shuvo') + chalk.dim(' (@rakibhasanshuvo712-hub)');
+  const brand = chalk.hex('#00FF7F').bold;
+  const accentRed = chalk.hex('#FF3366').bold;
+  const dim = chalk.gray;
 
-  if (stringWidth(r1Plain) > w) {
-    r1Plain = ` 🇧🇩 BANGLACLI v2.0   ${devText}`;
-    devPart = chalk.dim(' Developer: ') + chalk.bold.hex('#00FF7F')('Rakib Hasan Shuvo');
+  const lines: string[] = [];
+
+  // 1. Colorful BANGLACLI ASCII Art (Green & Red)
+  if (w >= 76 && h >= 24) {
+    lines.push(brand('  ██████╗  █████╗ ███╗   ██╗ ██████╗ ██╗      █████╗  ██████╗██╗     ██╗'));
+    lines.push(brand('  ██╔══██╗██╔══██╗████╗  ██║██╔════╝ ██║     ██╔══██╗██╔════╝██║     ██║'));
+    lines.push(brand('  ██████╔╝███████║██╔██╗ ██║██║  ███╗██║     ███████║██║     ██║     ██║'));
+    lines.push(accentRed('  ██╔══██╗██╔══██║██║╚██╗██║██║   ██║██║     ██╔══██║██║     ██║     ██║'));
+    lines.push(accentRed('  ██████╔╝██║  ██║██║ ╚████║╚██████╔╝███████╗██║  ██║╚██████╗███████╗██║'));
+    lines.push(dim('  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝╚══════╝╚═╝'));
+  } else if (w >= 52) {
+    lines.push(brand('  █▄▄ ▄▀█ █▄░█ █▀▀ █░░ ▄▀█ █▀▀ █░░ █ ') + chalk.dim('🇧🇩 banglacli v2.0'));
+    lines.push(accentRed('  █▄█ █▀█ █░▀█ █▄█ █▄▄ █▀█ █▄▄ █▄▄ █ ') + chalk.dim('Autonomous Coding Agent'));
+  } else {
+    lines.push(brand('  🇧🇩 BANGLACLI v2.0 ') + chalk.dim('Next-Gen AI Coding Agent'));
+  }
+
+  // 2. Developer Name & Workspace Path
+  const devText = `Developer: Rakib Hasan Shuvo`;
+  let rDevPlain = `  ${devText} (@rakibhasanshuvo712-hub)`;
+  let devPart = chalk.dim('  Developer: ') + chalk.bold.hex('#00FF7F')('Rakib Hasan Shuvo') + chalk.dim(' (@rakibhasanshuvo712-hub)');
+
+  if (stringWidth(rDevPlain) > w) {
+    rDevPlain = `  ${devText}`;
+    devPart = chalk.dim('  Developer: ') + chalk.bold.hex('#00FF7F')('Rakib Hasan Shuvo');
   }
 
   let cwd = process.cwd();
-  const maxCwd = Math.max(0, w - stringWidth(r1Plain) - 5);
+  const maxCwd = Math.max(0, w - stringWidth(rDevPlain) - 5);
   if (stringWidth(cwd) > maxCwd && maxCwd > 6) {
     cwd = '…' + cwd.slice(-(maxCwd - 2));
   } else if (maxCwd <= 6) {
     cwd = '';
   }
   const cwdTag = cwd ? chalk.dim(` 📁 ${cwd}`) : '';
-  const r1Padding = Math.max(0, w - stringWidth(r1Plain) - (cwd ? stringWidth(` 📁 ${cwd}`) : 0));
-  const row1 = `${badge} ${devPart}${' '.repeat(r1Padding)}${cwdTag}`;
+  const rDevPadding = Math.max(0, w - stringWidth(rDevPlain) - (cwd ? stringWidth(` 📁 ${cwd}`) : 0));
+  lines.push(`${devPart}${' '.repeat(rDevPadding)}${cwdTag}`);
 
-  // Row 2: Provider, Model, Mode
+  // 3. Active Provider, Model, and Mode badge
   const modeBadge = mode === 'build' ? chalk.bold.green('⚡ BUILD Mode') : chalk.bold.yellow('📋 PLAN Mode');
-  let row2Plain = `  Provider: ${provider}  •  Model: ${model}  •  Mode: ${mode === 'build' ? '⚡ BUILD Mode' : '📋 PLAN Mode'}`;
-  let row2 = `  ${chalk.dim('Provider:')} ${chalk.bold.cyan(provider)}  ${chalk.dim('•')}  ${chalk.dim('Model:')} ${chalk.bold.hex('#00FF7F')(model)}  ${chalk.dim('•')}  ${chalk.dim('Mode:')} ${modeBadge}`;
+  let rowModelPlain = `  Provider: ${provider}  •  Model: ${model}  •  Mode: ${mode === 'build' ? '⚡ BUILD Mode' : '📋 PLAN Mode'}`;
+  let rowModel = `  ${chalk.dim('Provider:')} ${chalk.bold.cyan(provider)}  ${chalk.dim('•')}  ${chalk.dim('Model:')} ${chalk.bold.hex('#00FF7F')(model)}  ${chalk.dim('•')}  ${chalk.dim('Mode:')} ${modeBadge}`;
 
-  if (stringWidth(row2Plain) > w) {
-    row2Plain = `  ${provider} • ${model} • ${mode.toUpperCase()}`;
-    row2 = `  ${chalk.cyan(provider)} ${chalk.dim('•')} ${chalk.hex('#00FF7F')(model)} ${chalk.dim('•')} ${modeBadge}`;
+  if (stringWidth(rowModelPlain) > w) {
+    rowModel = `  ${chalk.cyan(provider)} ${chalk.dim('•')} ${chalk.hex('#00FF7F')(model)} ${chalk.dim('•')} ${modeBadge}`;
   }
+  lines.push(rowModel);
 
-  // Row 3: Commands bar (/exit, /agent, /limits, /mode, /doctor, /stats, /help)
+  // 4. Commands Bar: /mode, /agent, /doctor, /stats, /limits, /help, /exit
   let cmdsPlain = '  Commands: /mode • /agent • /doctor • /stats • /limits • /help • /exit';
-  let row3 = `  ${chalk.dim('Commands:')} ${chalk.cyan('/mode')} ${chalk.dim('•')} ${chalk.cyan('/agent')} ${chalk.dim('•')} ${chalk.cyan('/doctor')} ${chalk.dim('•')} ${chalk.cyan('/stats')} ${chalk.dim('•')} ${chalk.cyan('/limits')} ${chalk.dim('•')} ${chalk.cyan('/help')} ${chalk.dim('•')} ${chalk.cyan('/exit')}`;
+  let rowCmds = `  ${chalk.dim('Commands:')} ${chalk.cyan('/mode')} ${chalk.dim('•')} ${chalk.cyan('/agent')} ${chalk.dim('•')} ${chalk.cyan('/doctor')} ${chalk.dim('•')} ${chalk.cyan('/stats')} ${chalk.dim('•')} ${chalk.cyan('/limits')} ${chalk.dim('•')} ${chalk.cyan('/help')} ${chalk.dim('•')} ${chalk.cyan('/exit')}`;
 
   if (stringWidth(cmdsPlain) > w) {
     cmdsPlain = '  /mode • /agent • /doctor • /stats • /limits • /help • /exit';
-    row3 = `  ${chalk.cyan('/mode')} ${chalk.dim('•')} ${chalk.cyan('/agent')} ${chalk.dim('•')} ${chalk.cyan('/doctor')} ${chalk.dim('•')} ${chalk.cyan('/stats')} ${chalk.dim('•')} ${chalk.cyan('/limits')} ${chalk.dim('•')} ${chalk.cyan('/help')} ${chalk.dim('•')} ${chalk.cyan('/exit')}`;
+    rowCmds = `  ${chalk.cyan('/mode')} ${chalk.dim('•')} ${chalk.cyan('/agent')} ${chalk.dim('•')} ${chalk.cyan('/doctor')} ${chalk.dim('•')} ${chalk.cyan('/stats')} ${chalk.dim('•')} ${chalk.cyan('/limits')} ${chalk.dim('•')} ${chalk.cyan('/help')} ${chalk.dim('•')} ${chalk.cyan('/exit')}`;
   }
   if (stringWidth(cmdsPlain) > w) {
     cmdsPlain = '  /mode • /agent • /limits • /help • /exit';
-    row3 = `  ${chalk.cyan('/mode')} ${chalk.dim('•')} ${chalk.cyan('/agent')} ${chalk.dim('•')} ${chalk.cyan('/limits')} ${chalk.dim('•')} ${chalk.cyan('/help')} ${chalk.dim('•')} ${chalk.cyan('/exit')}`;
+    rowCmds = `  ${chalk.cyan('/mode')} ${chalk.dim('•')} ${chalk.cyan('/agent')} ${chalk.dim('•')} ${chalk.cyan('/limits')} ${chalk.dim('•')} ${chalk.cyan('/help')} ${chalk.dim('•')} ${chalk.cyan('/exit')}`;
   }
+  lines.push(rowCmds);
 
-  // Row 4: Accent Divider
+  // 5. Divider Line
   const divider = chalk.hex('#00FF7F').dim('─'.repeat(Math.max(1, w)));
+  lines.push(divider);
 
-  return [row1, row2, row3, divider];
+  return lines;
 }
 
 function writeStickyHeader(
   cols: number,
+  rows: number,
   provider: string,
   model: string,
   mode: 'build' | 'plan'
-): void {
-  const lines = renderStickyHeaderLines(cols, provider, model, mode);
-  process.stdout.write(`\x1b[1;1H\x1b[2K${lines[0]}`);
-  process.stdout.write(`\x1b[2;1H\x1b[2K${lines[1]}`);
-  process.stdout.write(`\x1b[3;1H\x1b[2K${lines[2]}`);
-  process.stdout.write(`\x1b[4;1H\x1b[2K${lines[3]}`);
-  process.stdout.write(`\x1b[5;1H\x1b[2K`); // Row 5: blank spacer
+): number {
+  const lines = renderStickyHeaderLines(cols, rows, provider, model, mode);
+  lines.forEach((line, index) => {
+    process.stdout.write(`\x1b[${index + 1};1H\x1b[2K${line}`);
+  });
+  // Blank spacer row directly below divider
+  const spacerRow = lines.length + 1;
+  process.stdout.write(`\x1b[${spacerRow};1H\x1b[2K`);
+  return spacerRow; // returns total height used by header (including spacer)
 }
 
 function writeDockedBox(rows: number, cols: number, model: string, mode: 'build' | 'plan'): void {
@@ -312,19 +312,15 @@ function writeDockedBox(rows: number, cols: number, model: string, mode: 'build'
   const contentLine = renderContentLine(boxWidth, '', true, isBuild, borderColor);
   const bottomBorder = renderBottomBorder(boxWidth, borderColor);
 
-  // Clear blank line above box
   process.stdout.write(`\x1b[${topRow - 1};1H\x1b[2K`);
-  // Render box lines
   process.stdout.write(`\x1b[${topRow};1H\x1b[2K${topBorder}`);
   process.stdout.write(`\x1b[${contentRow};1H\x1b[2K${contentLine}`);
   process.stdout.write(`\x1b[${bottomRow};1H\x1b[2K${bottomBorder}`);
-  // Clear row at bottom
   process.stdout.write(`\x1b[${rows};1H\x1b[2K`);
 }
 
 /**
  * Activates fixed-dock layout with DECSTBM scrolling region.
- * Returns true if docked layout was activated, false if falling back to inline mode.
  */
 export function activateFixedDock(
   provider: string,
@@ -333,7 +329,7 @@ export function activateFixedDock(
 ): boolean {
   const rows = process.stdout.rows;
   const cols = process.stdout.columns;
-  if (!process.stdout.isTTY || !rows || rows < 14 || !cols) return false;
+  if (!process.stdout.isTTY || !rows || rows < 16 || !cols) return false;
 
   _dockedActive = true;
   _dockedRows = rows;
@@ -342,39 +338,25 @@ export function activateFixedDock(
   _dockedModel = model;
   _dockedMode = mode;
 
-  process.stdout.write('\x1b[?25l'); // Hide cursor during layout setup
+  process.stdout.write('\x1b[?25l');
 
-  // Clear screen to start cleanly
+  // Clean screen viewport
   process.stdout.write('\x1b[2J\x1b[H');
 
-  // Render Pinned Header at Rows 1..5
-  writeStickyHeader(cols, provider, model, mode);
+  // Render Pinned Header (includes colorful BANGLACLI art + developer + commands)
+  const headerHeight = writeStickyHeader(cols, rows, provider, model, mode);
+  _dockedHeaderHeight = headerHeight;
 
-  // Render Docked Input Box at Bottom (Rows H - 3 .. H - 1)
+  // Render Fixed Bottom Box
   writeDockedBox(rows, cols, model, mode);
 
-  // Set DECSTBM Scroll Region: Row 6 to Row (H - 4)
-  const scrollTop = HEADER_TOTAL_ROWS + 1; // Row 6
-  const scrollBottom = rows - BOX_ROWS;   // Row H - 4
+  // Set DECSTBM Scroll Region
+  const scrollTop = headerHeight + 1;
+  const scrollBottom = rows - BOX_ROWS;
 
   if (scrollBottom > scrollTop) {
     process.stdout.write(`\x1b[${scrollTop};${scrollBottom}r`);
   }
-
-  // Print friendly welcome message in scrolling workspace
-  process.stdout.write(`\x1b[${scrollTop};1H`);
-  process.stdout.write(
-    chalk.bold.hex('#00FF7F')('⚡ banglacli v2.0 initialized.\n') +
-      chalk.dim('   Speak naturally in ') +
-      chalk.bold.hex('#FFDF00')('বাংলা') +
-      chalk.dim(', ') +
-      chalk.bold.cyan('Banglish') +
-      chalk.dim(', or ') +
-      chalk.bold.white('English') +
-      chalk.dim('. Type a prompt or press ') +
-      chalk.bold.cyan('Tab') +
-      chalk.dim(' to switch models.\n')
-  );
 
   // Position cursor inside input box
   process.stdout.write(`\x1b[${rows - 2};5H\x1b[?25h`);
@@ -387,16 +369,17 @@ function onDockedResize(): void {
   if (!_dockedActive) return;
   const rows = process.stdout.rows;
   const cols = process.stdout.columns;
-  if (!rows || !cols || rows < 14) return;
+  if (!rows || !cols || rows < 16) return;
 
   _dockedRows = rows;
   _dockedCols = cols;
 
   process.stdout.write('\x1b[?25l');
-  writeStickyHeader(cols, _dockedProvider, _dockedModel, _dockedMode);
+  const headerHeight = writeStickyHeader(cols, rows, _dockedProvider, _dockedModel, _dockedMode);
+  _dockedHeaderHeight = headerHeight;
   writeDockedBox(rows, cols, _dockedModel, _dockedMode);
 
-  const scrollTop = HEADER_TOTAL_ROWS + 1;
+  const scrollTop = headerHeight + 1;
   const scrollBottom = rows - BOX_ROWS;
   if (scrollBottom > scrollTop) {
     process.stdout.write(`\x1b[${scrollTop};${scrollBottom}r`);
@@ -417,9 +400,9 @@ export function updateDockedModel(
   const cols = process.stdout.columns;
   if (!rows || !cols) return;
 
-  // Update header and box in-place using saved cursor position
   process.stdout.write('\x1b[s');
-  writeStickyHeader(cols, provider, model, mode);
+  const headerHeight = writeStickyHeader(cols, rows, provider, model, mode);
+  _dockedHeaderHeight = headerHeight;
   const isBuild = mode === 'build';
   const borderColor = isBuild ? chalk.hex('#00FF7F') : chalk.hex('#FFB300');
   const boxWidth = Math.max(42, Math.min(cols - 4, 94));
@@ -435,7 +418,7 @@ export function deactivateFixedDock(): void {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DOCKED PROMPT — Interactive reader inside the fixed bottom box
+// DOCKED PROMPT — Interactive reader inside fixed bottom box
 // ─────────────────────────────────────────────────────────────────────────────
 async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string | null> {
   const isBuildMode = options.mode === 'build';
@@ -447,14 +430,21 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
     const boxWidth = Math.max(42, Math.min(cols - 4, 94));
 
     const contentRow = rows - 2;
-    const startCol = 5; // after '│ ❯ '
+    const startCol = 5;
 
-    // Self-healing: re-assert pinned header and scroll region before reading prompt
+    // Self-healing re-render on every turn
     process.stdout.write('\x1b[?25l');
-    writeStickyHeader(cols, options.provider || _dockedProvider, options.model, options.mode);
+    const headerHeight = writeStickyHeader(
+      cols,
+      rows,
+      options.provider || _dockedProvider,
+      options.model,
+      options.mode
+    );
+    _dockedHeaderHeight = headerHeight;
     writeDockedBox(rows, cols, options.model, options.mode);
 
-    const scrollTop = HEADER_TOTAL_ROWS + 1;
+    const scrollTop = headerHeight + 1;
     const scrollBottom = rows - BOX_ROWS;
     if (scrollBottom > scrollTop) {
       process.stdout.write(`\x1b[${scrollTop};${scrollBottom}r`);
@@ -476,7 +466,6 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
     } catch {}
 
     const updateActiveLine = () => {
-      // For display in single-line dock, display joined text or current line
       const displayLine = bufferLines.length > 1 ? bufferLines.join(' ↵ ') : bufferLines[cursorLine];
       const lineStr = renderContentLine(
         boxWidth,
@@ -502,11 +491,11 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
       cleanup();
       const fullContent = bufferLines.join('\n').trim();
 
-      // Show temporary status inside dock while output streams in workspace above
+      // Show processing status line in dock
       const statusLine = renderStatusLine(boxWidth, 'Processing request...', borderColor);
       process.stdout.write(`\x1b[${contentRow};1H\x1b[2K${statusLine}`);
 
-      // Write user transcript line into scrolling workspace
+      // Print prompt into scrolling workspace
       const promptArrow = isBuildMode
         ? chalk.hex('#00FF7F').bold('❯ ')
         : chalk.hex('#FFB300').bold('❯ ');
@@ -551,7 +540,6 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
     const onData = (data: Buffer) => {
       const str = data.toString('utf-8');
 
-      // Bracketed paste
       if (str.includes('\x1b[200~')) {
         inBracketedPaste = true;
         const afterStart = str.split('\x1b[200~')[1] || '';
@@ -580,13 +568,12 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
         }
       }
 
-      // Burst paste
       if (str.length > 2 && (str.includes('\n') || str.includes('\r'))) {
         handlePastedText(str);
         return;
       }
 
-      // Ctrl+C: Exit cleanly
+      // Ctrl+C: Clean Exit
       if (str === '\x03') {
         cleanup();
         deactivateFixedDock();
@@ -607,8 +594,10 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
       // Ctrl+D: Exit if empty
       if (str === '\x04') {
         if (bufferLines.join('').length === 0) {
-          cancel();
-          return;
+          cleanup();
+          deactivateFixedDock();
+          process.stdout.write('\r\n' + chalk.yellow('Exiting banglacli...\n'));
+          process.exit(0);
         }
       }
 
@@ -712,23 +701,22 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
         return;
       }
 
-      // Home / End keys
-      if (str === '\x1b[H' || str === '\x1b[1~') { // Home
+      // Home / End
+      if (str === '\x1b[H' || str === '\x1b[1~') {
         cursorCol = 0;
         process.stdout.write(`\x1b[${contentRow};${startCol}H`);
         return;
       }
-      if (str === '\x1b[F' || str === '\x1b[4~') { // End
+      if (str === '\x1b[F' || str === '\x1b[4~') {
         cursorCol = bufferLines[cursorLine].length;
         const absCol = startCol + Math.min(cursorCol, boxWidth - 8);
         process.stdout.write(`\x1b[${contentRow};${absCol}H`);
         return;
       }
 
-      // Ignore escape sequences
       if (str.startsWith('\x1b[')) return;
 
-      // Printable single character
+      // Printable single char
       if (str.length === 1 && str.charCodeAt(0) >= 32) {
         const cur = bufferLines[cursorLine];
         bufferLines[cursorLine] = cur.slice(0, cursorCol) + str + cur.slice(cursorCol);
@@ -737,7 +725,7 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
         return;
       }
 
-      // Multi-char text (paste / unicode)
+      // Multi-char text
       if (str.length > 0 && !str.includes('\x1b')) {
         const cur = bufferLines[cursorLine];
         bufferLines[cursorLine] = cur.slice(0, cursorCol) + str + cur.slice(cursorCol);
@@ -851,10 +839,10 @@ async function readInlinePrompt(options: OpenCodePromptOptions): Promise<string 
         const cur = bufferLines[cursorLine];
         const before = cur.slice(0, cursorCol);
         const after = cur.slice(cursorCol);
+        const prevLine = cursorLine;
         bufferLines[cursorLine] = before + pastedLines[0];
         const middle = pastedLines.slice(1, -1);
         const last = pastedLines[pastedLines.length - 1];
-        const prevLine = cursorLine;
         bufferLines.splice(cursorLine + 1, 0, ...middle, last + after);
         cursorLine += pastedLines.length - 1;
         cursorCol = last.length;
@@ -905,7 +893,13 @@ async function readInlinePrompt(options: OpenCodePromptOptions): Promise<string 
         return;
       }
 
-      if (str === '\x04') { if (bufferLines.join('').length === 0) { cancel(); return; } }
+      if (str === '\x04') {
+        if (bufferLines.join('').length === 0) {
+          cleanup();
+          process.stdout.write(chalk.yellow('Exiting banglacli...\n'));
+          process.exit(0);
+        }
+      }
 
       if (str === '\x1b') {
         if (bufferLines.join('').length > 0) {

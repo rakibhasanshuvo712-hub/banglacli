@@ -194,7 +194,7 @@ program
         deactivateFixedDock();
         restoreTerminalViewport();
         console.log(chalk.yellow('\nবিদায়! Goodbye! Exiting banglacli.\n'));
-        break;
+        process.exit(0);
       }
 
       const trimmed = input.trim();
@@ -207,7 +207,7 @@ program
         deactivateFixedDock();
         restoreTerminalViewport();
         console.log(chalk.hex('#00FF7F')('\nধন্যবাদ! Thanks for using banglacli. Happy coding! 🚀\n'));
-        break;
+        process.exit(0);
       }
 
       if (trimmed === '/help') {
