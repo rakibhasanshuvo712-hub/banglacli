@@ -429,7 +429,13 @@ program
         continue;
       }
 
-      if (lowerCmd === '/plan') {
+      if (
+        lowerCmd === '/plan' ||
+        lowerCmd === '/mode plan' ||
+        lowerCmd === 'plan mode' ||
+        lowerCmd === 'switch to plan mode' ||
+        lowerCmd === 'switch plan'
+      ) {
         agent.setMode('plan');
         meshNode?.updateState({ mode: 'plan' });
         updateDockedModel(
@@ -437,10 +443,19 @@ program
           config.model,
           'plan'
         );
+        console.log(chalk.hex('#FFB300')('\n📋 Active mode switched to PLAN MODE (Senior Architect & Read-Only Planning).\n'));
         continue;
       }
 
-      if (lowerCmd === '/build') {
+      if (
+        lowerCmd === '/build' ||
+        lowerCmd === '/mode build' ||
+        lowerCmd === 'build mode' ||
+        lowerCmd === 'switch to build mode' ||
+        lowerCmd === 'you are in build mode' ||
+        lowerCmd === 'you are in build mode recheck' ||
+        lowerCmd === 'switch build'
+      ) {
         agent.setMode('build');
         meshNode?.updateState({ mode: 'build' });
         updateDockedModel(
@@ -448,6 +463,7 @@ program
           config.model,
           'build'
         );
+        console.log(chalk.hex('#00FF7F')('\n⚡ Active mode switched to BUILD MODE (Autonomous Full-Stack Coding & Execution Enabled).\n'));
         continue;
       }
 

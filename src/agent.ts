@@ -95,7 +95,10 @@ ${meshContext}
 ${envContext.summary}
 ${meshContext}
 ### 🌟 CURRENT ACTIVE MODE: ⚡ BUILD MODE (AUTONOMOUS BUILDER)
-- You have full autonomous authority to build, edit, test, and execute software.
+- You are 100% in BUILD MODE. You are NOT in plan mode!
+- File creation (write_file), surgical editing (edit_file), and terminal command execution (run_command) are FULLY UNLOCKED AND ACTIVE.
+- NEVER claim or state that you are in plan mode when the active mode is BUILD mode.
+- If the user asks you to implement, build, create, write, edit, code, or run anything, DO NOT tell them to switch modes or run /build. You are ALREADY in BUILD mode. Immediately call the appropriate tools (write_file, edit_file, run_command) to execute the request!
 - You have workspace tools and cross-instance mesh tools:
   1. list_files(dirPath): Explore directories to understand workspace context and file hierarchy.
   2. read_file(filePath): Inspect existing source files before editing.
@@ -248,11 +251,57 @@ export class BanglaAgent {
   }
 
   /**
-   * Sync active system prompt with current mode.
+   * Sync active system prompt with current mode and inject mode change notification.
    */
   public updateSystemPrompt(): void {
     if (this.openAIMessages.length > 0 && this.openAIMessages[0].role === 'system') {
       this.openAIMessages[0].content = getSystemPrompt(this.mode);
+    }
+    // Inject explicit mode-switch confirmation so models never hallucinate prior mode restrictions
+    if (this.mode === 'build') {
+      this.openAIMessages.push({
+        role: 'system',
+        content:
+          '[SYSTEM DIRECTIVE: The user has switched the agent to ⚡ BUILD MODE. You have full authority to use write_file, edit_file, and run_command immediately. Any previous PLAN MODE restrictions or tool blocks are completely lifted. Code and build the solution right now.]',
+      });
+      this.geminiContents.push({
+        role: 'user',
+        parts: [
+          {
+            text: '[SYSTEM NOTIFICATION: banglacli is now in ⚡ BUILD MODE. Autonomous file creation, editing, and terminal commands are active.]',
+          },
+        ],
+      });
+      this.geminiContents.push({
+        role: 'model',
+        parts: [
+          {
+            text: 'Understood. I am in BUILD MODE with full autonomous tool execution enabled (write_file, edit_file, run_command). I will immediately write, edit, and run code as requested without asking for mode switches.',
+          },
+        ],
+      });
+    } else {
+      this.openAIMessages.push({
+        role: 'system',
+        content:
+          '[SYSTEM DIRECTIVE: The user has switched the agent to 📋 PLAN MODE. Act as Senior Architect formulating structured plans without modifying workspace files.]',
+      });
+      this.geminiContents.push({
+        role: 'user',
+        parts: [
+          {
+            text: '[SYSTEM NOTIFICATION: banglacli is now in 📋 PLAN MODE. Only read-only tools are enabled.]',
+          },
+        ],
+      });
+      this.geminiContents.push({
+        role: 'model',
+        parts: [
+          {
+            text: 'Understood. I am in PLAN MODE. I will formulate a structured architectural plan without modifying files.',
+          },
+        ],
+      });
     }
   }
 
@@ -620,7 +669,12 @@ export class BanglaAgent {
     }
 
     this.resetCascadeAttempts();
-    const englishEnforcedInput = `[CRITICAL: You must provide all explanations, responses, and terminal output strictly in clear ENGLISH. Do not use Bengali script under any circumstances.]\n\n${userInput}`;
+    const modeDirective =
+      this.mode === 'build'
+        ? `[SYSTEM STATUS: ACTIVE MODE = ⚡ BUILD MODE. All coding tools (write_file, edit_file, run_command) are FULLY UNLOCKED AND ACTIVE. You MUST NOT claim you are in PLAN mode or ask the user to type /build. You are ALREADY in BUILD mode. Immediately call your tools to implement, create, or edit code.]`
+        : `[SYSTEM STATUS: ACTIVE MODE = 📋 PLAN MODE. You are in read-only planning mode. Formulate comprehensive step-by-step plans without modifying files.]`;
+
+    const englishEnforcedInput = `[CRITICAL: You must provide all explanations, responses, and terminal output strictly in clear ENGLISH. Do not use Bengali script under any circumstances.]\n${modeDirective}\n\n${userInput}`;
 
     try {
       if (this.config.provider === 'gemini') {
