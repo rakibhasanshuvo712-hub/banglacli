@@ -133,19 +133,14 @@ function renderContentLine(
   const prefix = isFirst
     ? borderColor('│ ') + promptArrow
     : borderColor('│ ') + chalk.dim('· ');
-  const prefixWidth = 4;
-  const rightBorder = borderColor(' │');
-  const rightWidth = 2;
-  const textCapacity = Math.max(1, width - prefixWidth - rightWidth);
 
+  const textCapacity = Math.max(1, width - 6);
   let visibleText = lineText;
   while (stringWidth(visibleText) > textCapacity && visibleText.length > 0) {
     visibleText = visibleText.slice(1);
   }
 
-  const textWidth = stringWidth(visibleText);
-  const padding = Math.max(0, textCapacity - textWidth);
-  return prefix + chalk.white(visibleText) + ' '.repeat(padding) + rightBorder;
+  return prefix + chalk.white(visibleText);
 }
 
 function renderStatusLine(
@@ -154,19 +149,13 @@ function renderStatusLine(
   borderColor: (s: string) => string
 ): string {
   const prefix = borderColor('│ ') + chalk.cyan('⏳ ');
-  const prefixWidth = 4;
-  const rightBorder = borderColor(' │');
-  const rightWidth = 2;
-  const textCapacity = Math.max(1, width - prefixWidth - rightWidth);
-
+  const textCapacity = Math.max(1, width - 6);
   let visibleText = statusText;
   while (stringWidth(visibleText) > textCapacity && visibleText.length > 0) {
     visibleText = visibleText.slice(1);
   }
 
-  const textWidth = stringWidth(visibleText);
-  const padding = Math.max(0, textCapacity - textWidth);
-  return prefix + chalk.yellow(visibleText) + ' '.repeat(padding) + rightBorder;
+  return prefix + chalk.yellow(visibleText);
 }
 
 export function restoreTerminalViewport(): void {
@@ -787,7 +776,7 @@ async function readInlinePrompt(options: OpenCodePromptOptions): Promise<string 
         boxWidth, bufferLines[cursorLine], cursorLine === 0, isBuildMode, borderColor
       );
       const activeCol = 5 + Math.min(cursorCol, boxWidth - 8);
-      process.stdout.write(`\r${lineStr}\r\x1b[${activeCol}G`);
+      process.stdout.write(`\r\x1b[K${lineStr}\r\x1b[${activeCol}G`);
     };
 
     const redrawFrom = (startLine: number) => {
