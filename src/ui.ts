@@ -313,6 +313,7 @@ export function showHelp(): void {
   console.log(`  ${chalk.cyan('/limits')}      - View free token limits, context windows & RPM/RPD`);
   console.log(`  ${chalk.cyan('/guide')}       - Direct free API links & models guide (Free API Guide)`);
   console.log(`  ${chalk.cyan('/config')}      - Full interactive configuration wizard`);
+  console.log(`  ${chalk.cyan('/about')}       - View developer information, GitHub account & project details`);
   console.log(`  ${chalk.cyan('/clear')}       - Clear conversation history / reset memory`);
   console.log(`  ${chalk.cyan('/exit')}        - Exit banglacli session`);
   console.log(`\n${chalk.yellow.bold('OpenCode & Antigravity Interactive Input Controls:')}`);
@@ -571,4 +572,51 @@ export function renderDirectoryTree(dirPath = '.', maxDepth = 2): void {
 
   printTree(process.cwd());
   console.log(border + '\n');
+}
+
+/**
+ * Display developer, project, and GitHub information (banglacli about / /about).
+ */
+export function showAbout(): void {
+  const brand = chalk.hex('#00FF7F').bold;
+  const accentRed = chalk.hex('#FF3366').bold;
+  const dim = chalk.gray;
+
+  console.log('\n' + chalk.bgHex('#006A4E').white.bold(' 🇧🇩 ABOUT BANGLACLI ') + '\n');
+
+  console.log(
+    brand('  ██████╗  █████╗ ███╗   ██╗ ██████╗ ██╗      █████╗  ██████╗██╗     ██╗\n') +
+      brand('  ██╔══██╗██╔══██╗████╗  ██║██╔════╝ ██║     ██╔══██╗██╔════╝██║     ██║\n') +
+      brand('  ██████╔╝███████║██╔██╗ ██║██║  ███╗██║     ███████║██║     ██║     ██║\n') +
+      accentRed('  ██╔══██╗██╔══██║██║╚██╗██║██║   ██║██║     ██╔══██║██║     ██║     ██║\n') +
+      accentRed('  ██████╔╝██║  ██║██║ ╚████║╚██████╔╝███████╗██║  ██║╚██████╗███████╗██║\n') +
+      dim('  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝╚══════╝╚═╝')
+  );
+
+  console.log('\n' + chalk.dim('─'.repeat(74)));
+  console.log(`  ${chalk.bold.white('Project:')}              ${brand('banglacli v2.0.0')}`);
+  console.log(`  ${chalk.bold.white('Description:')}          Next-Gen Autonomous AI Terminal Coding Agent`);
+  console.log(`  ${chalk.bold.white('Architecture:')}         Dual-Engine (BUILD & PLAN Modes) with Workspace Mesh RPC`);
+  console.log(chalk.dim('─'.repeat(74)));
+
+  console.log(`\n  ${chalk.bold.hex('#00FF7F')('👨‍💻 CREATOR & LEAD DEVELOPER:')}`);
+  console.log(`  ${chalk.bold.white('Developer Name:')}       ${chalk.bold.hex('#00FF7F')('Rakib Hasan Shuvo')}`);
+  console.log(
+    `  ${chalk.bold.white('GitHub Account:')}       ${chalk.bold.underline.cyan('https://github.com/rakibhasanshuvo712-hub')} ${chalk.dim('(@rakibhasanshuvo712-hub)')}`
+  );
+  console.log(`  ${chalk.bold.white('Email:')}                ${chalk.white('rakibhasanshuvo712@gmail.com')}`);
+  console.log(
+    `  ${chalk.bold.white('GitHub Repository:')}    ${chalk.bold.underline.cyan('https://github.com/rakibhasanshuvo712-hub/banglacli')}`
+  );
+  console.log(
+    `  ${chalk.bold.white('Production URL:')}       ${chalk.bold.underline.green('https://banglacli.vercel.app')}`
+  );
+
+  console.log('\n' + chalk.dim('─'.repeat(74)));
+  console.log(`  ${chalk.bold.yellow('Core Capabilities:')}`);
+  console.log(`  • ${chalk.green('Autonomous Coding:')} Inspects, creates, surgically edits files, and runs shell commands.`);
+  console.log(`  • ${chalk.green('Workspace Mesh:')}    Cross-instance peer-to-peer WebSocket RPC across terminal workspaces.`);
+  console.log(`  • ${chalk.green('Instant Abort:')}     Real-time Escape key listener halts generation and subprocesses instantly.`);
+  console.log(`  • ${chalk.green('83+ Models:')}         Google Gemini, DeepSeek, Groq, OpenRouter, and Flagship BYOK.`);
+  console.log(chalk.dim('─'.repeat(74)) + '\n');
 }

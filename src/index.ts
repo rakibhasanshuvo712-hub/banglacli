@@ -28,6 +28,7 @@ import {
   renderSessionStats,
   renderGitStatus,
   renderDirectoryTree,
+  showAbout,
 } from './ui.js';
 import { safetySession, getSessionChanges, undoLastChange, setActiveMeshNode, getActiveMeshNode, executeTool } from './tools.js';
 import { selectAgentModelInteractive, findModelByQuery, applyModelDirect } from './models.js';
@@ -307,6 +308,11 @@ program
 
       if (lowerCmd === '/help') {
         showHelp();
+        continue;
+      }
+
+      if (lowerCmd === '/about' || lowerCmd === '/developer' || lowerCmd === '/creator') {
+        showAbout();
         continue;
       }
 
@@ -816,6 +822,16 @@ program
     console.log(`  ${chalk.green.bold('⚡ BUILD Mode:')} Autonomous full-stack coder. Inspects, writes files & runs terminal commands.`);
     console.log(`  ${chalk.yellow.bold('📋 PLAN Mode:')} Senior Architect. Read-only codebase investigation & architectural planning.\n`);
     console.log(chalk.gray('Use "/mode", "/plan", or "/build" inside interactive chat or launch with "banglacli -M plan".\n'));
+  });
+
+// Explicit about subcommand (Developer, GitHub & Project details)
+program
+  .command('about')
+  .alias('developer')
+  .alias('author')
+  .description('Display creator, developer GitHub profile, and project details')
+  .action(() => {
+    showAbout();
   });
 
 // Explicit doctor subcommand (OpenCode style)
