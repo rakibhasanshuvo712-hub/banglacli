@@ -7,7 +7,7 @@ export interface AgentModelPreset {
   id: string;
   name: string;
   provider: ProviderType;
-  category: 'free' | 'gemini' | 'deepseek' | 'hy4' | 'glm' | 'groq' | 'flagship' | 'local';
+  category: 'free' | 'gemini' | 'deepseek' | 'hy4' | 'glm' | 'groq' | 'flagship' | 'local' | 'zen';
   description: string;
   badge: string;
   baseURL?: string;
@@ -217,6 +217,208 @@ export const AGENT_MODELS: AgentModelPreset[] = [
     badge: 'V3 Free',
     contextLength: '64,000',
     baseURL: 'https://openrouter.ai/api/v1',
+  },
+
+  // ==========================================
+  // ⚡ OpenCode Console & Freebuff Zero-Key Built-in Models ($0 Endpoints)
+  // ==========================================
+  // 1. Zero-Retention / No-Training Models:
+  {
+    id: 'deepseek-v4.1-flash-free',
+    name: 'OpenCode Console: DeepSeek V4.1 Flash Free',
+    provider: 'openrouter',
+    category: 'zen',
+    description: 'Zero-retention / no-training built-in free coding endpoint from OpenCode Console.',
+    badge: 'Zero-Retention',
+    contextLength: '128,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'glm-5.3-flash-free',
+    name: 'OpenCode Console: GLM 5.3 Flash Free',
+    provider: 'openrouter',
+    category: 'zen',
+    description: 'Zero-retention fast instruction-tuned bilingual coder from OpenCode Console.',
+    badge: 'Zero-Retention',
+    contextLength: '128,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'longcat-2.5-preview-free',
+    name: 'OpenCode Console: LongCat 2.5 Preview Free',
+    provider: 'openrouter',
+    category: 'zen',
+    description: 'Zero-retention ultra-long context preview model with zero data storage.',
+    badge: 'Zero-Retention',
+    contextLength: '256,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+
+  // 2. Retained / Training-Enabled Models:
+  {
+    id: 'beam-free',
+    name: 'OpenCode Console: Beam Free',
+    provider: 'openrouter',
+    category: 'zen',
+    description: 'High-reasoning free agent model (retained 30 days, region-flexible).',
+    badge: 'Console Free',
+    contextLength: '128,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'big-pickle',
+    name: 'OpenCode Stealth: Big Pickle',
+    provider: 'openrouter',
+    category: 'zen',
+    description: 'Stealth reasoning model for challenging coding and logic tasks.',
+    badge: 'Stealth Free',
+    contextLength: '128,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'flint-40b-free',
+    name: 'OpenCode Console: Flint 40B MoE Free',
+    provider: 'openrouter',
+    category: 'zen',
+    description: 'Open mixture-of-experts 40B programming model from OpenCode Console.',
+    badge: 'MoE Free',
+    contextLength: '262,144',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'exo-free',
+    name: 'OpenCode Console: Exo Distributed Free',
+    provider: 'openrouter',
+    category: 'zen',
+    description: 'Distributed cluster agent endpoint running without API key limits.',
+    badge: 'Distributed Free',
+    contextLength: '128,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'mimo-v2.6-flash-free',
+    name: 'OpenCode Console: MiMo v2.6 Flash Free',
+    provider: 'openrouter',
+    category: 'zen',
+    description: 'Ultra-low latency sub-second code generation endpoint.',
+    badge: 'Flash Free',
+    contextLength: '128,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'mimo-v2.5-free',
+    name: 'OpenCode Console: MiMo v2.5 Free',
+    provider: 'openrouter',
+    category: 'zen',
+    description: 'Full-stack agentic coding model from OpenCode Console roster.',
+    badge: 'Console Free',
+    contextLength: '128,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+
+  // 3. NVIDIA Trial Endpoints:
+  {
+    id: 'nemotron-3-ultra-free',
+    name: 'NVIDIA Trial: Nemotron 3 Ultra Free',
+    provider: 'openrouter',
+    category: 'zen',
+    description: 'NVIDIA trial endpoint with 1 Million token massive context window.',
+    badge: 'Trial 1M Free',
+    contextLength: '1,000,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'nemotron-3.5-lightning-free',
+    name: 'NVIDIA Trial: Nemotron 3.5 Lightning Free',
+    provider: 'openrouter',
+    category: 'zen',
+    description: 'Ultra-fast inference trial endpoint for instant code completions.',
+    badge: 'Trial Fast Free',
+    contextLength: '1,000,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'nemotron-3.5-super-vl-free',
+    name: 'NVIDIA Trial: Nemotron 3.5 Super VL Free',
+    provider: 'openrouter',
+    category: 'zen',
+    description: 'Multimodal vision and code trial endpoint from NVIDIA.',
+    badge: 'Trial Vision Free',
+    contextLength: '1,000,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+
+  // 4. Freebuff Allowance Models:
+  {
+    id: 'solar-mini-4',
+    name: 'Freebuff Allowance: Upstage Solar Mini 4',
+    provider: 'openrouter',
+    category: 'zen',
+    description: 'Unmetered high-efficiency coding model from Upstage on Freebuff.',
+    badge: 'Unmetered Free',
+    contextLength: '64,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'solar-pro-4',
+    name: 'Freebuff Allowance: Upstage Solar Pro 4',
+    provider: 'openrouter',
+    category: 'zen',
+    description: 'Frontier reasoning and codebase generation agent.',
+    badge: 'Freebuff Pro',
+    contextLength: '128,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'mimo-2.5-pro',
+    name: 'Freebuff Allowance: MiMo 2.5 Pro',
+    provider: 'openrouter',
+    category: 'zen',
+    description: 'Autonomous coding builder from Freebuff daily allowance roster.',
+    badge: 'Freebuff Pro',
+    contextLength: '128,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'minimax-m3',
+    name: 'Freebuff Allowance: MiniMax M3',
+    provider: 'openrouter',
+    category: 'zen',
+    description: 'Massive 1M token context reasoning and architecture agent.',
+    badge: '1M Context',
+    contextLength: '1,000,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'gpt-6-luna',
+    name: 'Freebuff Allowance: GPT-6 Luna Preview',
+    provider: 'openrouter',
+    category: 'zen',
+    description: 'Next-gen frontier reasoning model preview from Freebuff allowance.',
+    badge: 'Frontier Free',
+    contextLength: '128,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+
+  // 5. Tencent CodeBuddy CLI & Antigravity Models:
+  {
+    id: 'tencent/hunyuan-hy3',
+    name: 'CodeBuddy CLI: Tencent Hunyuan Hy3',
+    provider: 'openrouter',
+    category: 'hy4',
+    description: 'High-speed bilingual Chinese & English coding model from Tencent CodeBuddy.',
+    badge: 'CodeBuddy Free',
+    contextLength: '128,000',
+    baseURL: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'gemini-4-argon',
+    name: 'Antigravity CLI: Gemini 4 Argon Frontier',
+    provider: 'gemini',
+    category: 'gemini',
+    description: 'Frontier multi-agent reasoning model with 2M token context from Antigravity.',
+    badge: 'Frontier 2M',
+    contextLength: '2,097,152',
   },
 
   // ==========================================
@@ -669,6 +871,9 @@ export const AGENT_MODELS: AgentModelPreset[] = [
  */
 export const OPENROUTER_FREE_CASCADE_CHAIN = [
   'openrouter/free',
+  'deepseek-v4.1-flash-free',
+  'glm-5.3-flash-free',
+  'solar-mini-4',
   'google/lyria-3-pro-preview',
   'google/lyria-3-clip-preview',
   'meta-llama/llama-3.3-70b-instruct:free',
@@ -691,6 +896,7 @@ export const OPENROUTER_FREE_CASCADE_CHAIN = [
 ];
 
 export const GEMINI_CASCADE_CHAIN = [
+  'gemini-4-argon',
   'gemini-2.0-flash',
   'gemini-2.0-flash-lite',
   'gemini-2.5-flash',
@@ -755,6 +961,11 @@ export async function selectAgentModelInteractive(
         value: 'free',
         label: `${chalk.bold.green('🌟 100% Free Tier Agents')} ${chalk.dim('(OpenRouter Free, Particle-1, Gemma, Nemotron)')}`,
         hint: '13+ verified zero-plan free models',
+      },
+      {
+        value: 'zen',
+        label: `${chalk.bold.hex('#00E5FF')('⚡ OpenCode & Freebuff Built-in Free Roster')} ${chalk.dim('(DeepSeek V4.1 Free, GLM 5.3 Free, Solar, MiMo)')}`,
+        hint: 'Built-in $0 endpoints: Zero-Retention, NVIDIA Trials, Freebuff allowances',
       },
       {
         value: 'live_sync',

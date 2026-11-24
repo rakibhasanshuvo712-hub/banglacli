@@ -294,7 +294,7 @@ export function showHelp(): void {
   console.log(`  ${chalk.cyan('/mode')}        - Toggle or select between BUILD mode and PLAN mode`);
   console.log(`  ${chalk.cyan('/plan')}        - Switch instantly to PLAN mode (architectural read-only)`);
   console.log(`  ${chalk.cyan('/build')}       - Switch instantly to BUILD mode (autonomous coding & execution)`);
-  console.log(`  ${chalk.cyan('/agent')}       - OpenCode AI agent & model selector (Free, Gemini, DeepSeek, HY4, GLM, Groq)`);
+  console.log(`  ${chalk.cyan('/agent')}       - OpenCode AI agent & model selector (Free, Zen Roster, Gemini, DeepSeek, HY4, GLM, Groq)`);
   console.log(`  ${chalk.cyan('/model')}       - Alias for /agent (also /models, /agents) to switch models anytime`);
   console.log(`  ${chalk.cyan('/provider')}    - Switch AI provider (Gemini, OpenRouter, Custom)`);
   console.log(`  ${chalk.cyan('/doctor')}      - Run automated environment & configuration diagnostic health check`);

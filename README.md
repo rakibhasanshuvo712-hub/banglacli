@@ -97,9 +97,10 @@ If it's your first time, the interactive setup wizard will guide you to select a
 1. **Google Gemini (Free Tier - Recommended)**
    - Get key: [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
    - Flagship free models: `gemini-2.0-flash` (🌟 Flagship Coder), `gemini-2.0-flash-lite` (30 RPM Ultra-Fast), `gemini-2.5-flash` / `gemini-2.5-pro` (2M Context Preview), `gemini-3.5-flash-lite` / `gemini-1.5-flash` (1M token context, 1,500 RPD free)
-2. **OpenRouter (100% Free Coding Models)**
+2. **OpenRouter (100% Free Coding Models & OpenCode Zen Roster)**
    - Get key: [openrouter.ai/keys](https://openrouter.ai/keys)
    - Auto-router: `openrouter/free` (zero downtime)
+   - Built-in OpenCode / Freebuff Zero-Key endpoints: `deepseek-v4.1-flash-free` (Zero-Retention), `glm-5.3-flash-free`, `longcat-2.5-preview-free`, `beam-free`, `big-pickle`, `flint-40b-free`, `exo-free`, `mimo-v2.6-flash-free`, `nemotron-3-ultra-free`, `solar-mini-4`, `solar-pro-4`, `minimax-m3`, `gpt-6-luna`, `tencent/hunyuan-hy3`
    - 1M token free models: `google/lyria-3-pro-preview`, `google/lyria-3-clip-preview`, `particle-ai/particle-1:free`, `nvidia/nemotron-3-ultra-550b-a55b:free`, `baidu/ernie-5.5-flash-preview:free`, `inclusionai/ling-3.2-flash:free`, `google/gemma-4-31b-it:free`
 3. **Custom OpenAI-Compatible (Groq, Ollama, DeepSeek)**
    - Groq Cloud (Free): [console.groq.com/keys](https://console.groq.com/keys) (Base URL: `https://api.groq.com/openai/v1`)
