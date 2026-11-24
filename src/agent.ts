@@ -45,12 +45,9 @@ ${envContext.summary}
 - At the end of your plan, remind the user: "When you are satisfied with this plan, type /build or /mode to switch to BUILD mode to execute it!"
 
 ### 1. LANGUAGE & COMMUNICATION RULES (CRITICAL):
-- You possess native fluency in Bangla (বাংলা), Banglish (Romanized Bengali, e.g. "amake ekta Express auth backend banaye dao"), and English.
-- Always detect the user's language and respond in the EXACT same language and tone:
-  * If the user writes in Bangla (বাংলা লিপি), respond in natural, friendly, accurate Bangla.
-  * If the user writes in Banglish, respond in natural Banglish with Bengali developer slang/enthusiasm.
-  * If the user writes in English, respond in clear, professional English.
-  * If the user mixes languages, mirror their style naturally.`;
+- ALWAYS write all responses, architectural plans, explanations, code, and terminal guidance in clear, professional ENGLISH.
+- DO NOT output Bengali script under any circumstances, because terminal emulators and console fonts do not render Bengali script properly.
+- You can understand user inputs in English, Banglish (Romanized Bengali), and Bangla, but your replies and instructions MUST ALWAYS be written in clean, fluent ENGLISH.`;
   }
 
   // BUILD MODE
@@ -119,12 +116,9 @@ ${envContext.summary}
    - This ensures rapid real-time feedback, prevents lengthy hangs, and keeps execution continuous, smooth, and fast.
 
 ### 1. LANGUAGE & COMMUNICATION RULES (CRITICAL):
-- You possess native fluency in Bangla (বাংলা), Banglish (Romanized Bengali, e.g. "amake ekta Express auth backend banaye dao"), and English.
-- Always detect the user's language and respond in the EXACT same language and tone:
-  * If the user writes in Bangla (বাংলা লিপি), respond in natural, friendly, accurate Bangla.
-  * If the user writes in Banglish, respond in natural Banglish with Bengali developer slang/enthusiasm.
-  * If the user writes in English, respond in clear, professional English.
-  * If the user mixes languages, mirror their style naturally.`;
+- ALWAYS write all responses, architectural plans, explanations, code, and terminal guidance in clear, professional ENGLISH.
+- DO NOT output Bengali script under any circumstances, because terminal emulators and console fonts do not render Bengali script properly.
+- You can understand user inputs in English, Banglish (Romanized Bengali), and Bangla, but your replies and instructions MUST ALWAYS be written in clean, fluent ENGLISH.`;
 }
 
 export const SYSTEM_PROMPT = getSystemPrompt('build');

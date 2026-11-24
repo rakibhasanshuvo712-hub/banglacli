@@ -193,7 +193,7 @@ program
       if (input === null) {
         deactivateFixedDock();
         restoreTerminalViewport();
-        console.log(chalk.yellow('\nবিদায়! Goodbye! Exiting banglacli.\n'));
+        console.log(chalk.yellow('\nGoodbye! Exiting banglacli.\n'));
         process.exit(0);
       }
 
@@ -206,7 +206,7 @@ program
       if (trimmed === '/exit' || trimmed === '/quit') {
         deactivateFixedDock();
         restoreTerminalViewport();
-        console.log(chalk.hex('#00FF7F')('\nধন্যবাদ! Thanks for using banglacli. Happy coding! 🚀\n'));
+        console.log(chalk.hex('#00FF7F')('\nThanks for using banglacli. Happy coding! 🚀\n'));
         process.exit(0);
       }
 
@@ -434,7 +434,7 @@ program
 
       if (trimmed === '/clear') {
         agent.resetHistory();
-        console.log(chalk.green('✔ Conversation history cleared! / কথোপকথনের মেমোরি রিসেট করা হয়েছে।\n'));
+        console.log(chalk.green('✔ Conversation history cleared! Session memory reset.\n'));
         continue;
       }
 

@@ -52,8 +52,8 @@ export function printBanner(provider?: string, model?: string, workspace?: strin
     )}`
   );
   console.log(
-    `  ${dim('Speaks natural')} ${chalk.bold.hex('#FFDF00')('বাংলা (Bangla)')}${dim(',')} ` +
-      `${chalk.bold.cyan('Banglish')}${dim(', &')} ${chalk.bold.white('English')}`
+    `  ${dim('Speaks natural')} ${chalk.bold.white('English')}${dim(',')} ` +
+      `${chalk.bold.cyan('Banglish')}${dim(', & understands ')} ${chalk.bold.hex('#FFDF00')('Bangla')}`
   );
   console.log(
     `  ${dim('Developer:')} ${chalk.bold.hex('#00FF7F')('Rakib Hasan Shuvo')} ${dim('(@rakibhasanshuvo712-hub)')}\n`
@@ -308,7 +308,7 @@ export function showHelp(): void {
   console.log(`  ${chalk.cyan('/compact')}     - Compact conversation history to free context window`);
   console.log(`  ${chalk.cyan('/session')}     - View active session status, files touched & memory`);
   console.log(`  ${chalk.cyan('/limits')}      - View free token limits, context windows & RPM/RPD`);
-  console.log(`  ${chalk.cyan('/guide')}       - Direct free API links & models guide (ফ্রি API গাইড)`);
+  console.log(`  ${chalk.cyan('/guide')}       - Direct free API links & models guide (Free API Guide)`);
   console.log(`  ${chalk.cyan('/config')}      - Full interactive configuration wizard`);
   console.log(`  ${chalk.cyan('/clear')}       - Clear conversation history / reset memory`);
   console.log(`  ${chalk.cyan('/exit')}        - Exit banglacli session`);
@@ -332,10 +332,10 @@ export function showHelp(): void {
   console.log(`  8. ${chalk.bold('fetch_url')}    - Fetches web/API documentation directly`);
   console.log(`  9. ${chalk.bold('web_search')}   - Autonomous web search for docs, APIs & solutions`);
 
-  console.log(`\n${chalk.yellow.bold('Language Support:')}`);
-  console.log(`  • ${chalk.green('Bangla:')}   "একটি React Counter অ্যাপ বানিয়ে দাও"`);
-  console.log(`  • ${chalk.green('Banglish:')} "Express diye ekta REST API banaw auth soho"`);
+  console.log(`\n${chalk.yellow.bold('Language Support (Outputs strictly in English):')}`);
   console.log(`  • ${chalk.green('English:')}  "Build a full-stack Next.js portfolio website"`);
+  console.log(`  • ${chalk.green('Banglish:')} "Express diye ekta REST API banaw auth soho"`);
+  console.log(`  • ${chalk.green('Bangla:')}   "Ekta React counter component baniye daw" (Input accepted, instructions in English)`);
   console.log(`\n  ${chalk.gray('Lead Developer & Creator:')} ${chalk.hex('#00FF7F').bold('Rakib Hasan Shuvo')} ${chalk.dim('(https://github.com/rakibhasanshuvo712-hub)')}`);
   console.log(chalk.dim('─'.repeat(70)) + '\n');
 }
@@ -345,7 +345,7 @@ export function showHelp(): void {
  */
 export function showFreeApiKeyGuide(): void {
   const line = chalk.dim('─'.repeat(78));
-  console.log('\n' + chalk.bgHex('#006A4E').white.bold(' 🔑 FREE API KEYS & MODELS GUIDE (১০০% ফ্রি কোডিং গাইড) '));
+  console.log('\n' + chalk.bgHex('#006A4E').white.bold(' 🔑 FREE API KEYS & MODELS GUIDE (100% Free Coding Tier) '));
   console.log(chalk.gray('Get free API keys with generous quotas for banglaCLI - no credit card required!\n'));
 
   // 1. Google Gemini
@@ -423,7 +423,7 @@ export function showFreeApiKeyGuide(): void {
  */
 export function showTokenLimitsGuide(): void {
   const line = chalk.dim('─'.repeat(82));
-  console.log('\n' + chalk.bgHex('#0047AB').white.bold(' 📊 FREE TOKEN LIMITS & RATE LIMITS GUIDE (টোকেন ও রেট লিমিট) '));
+  console.log('\n' + chalk.bgHex('#0047AB').white.bold(' 📊 FREE TOKEN LIMITS & RATE LIMITS GUIDE (Quota & Rates) '));
   console.log(chalk.gray('Exact quotas and context windows for each free provider in banglaCLI:\n'));
 
   // 1. Google Gemini Free Tier Limits
