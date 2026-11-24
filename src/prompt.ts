@@ -308,33 +308,19 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
       } catch {}
     };
 
-    // Cleanly erase the box borders from screen so no empty ghost boxes ever remain in history
-    const eraseBox = () => {
-      const linesUpToTop = cursorLine + 1;
-      process.stdout.write(`\x1b[${linesUpToTop}A\r\x1b[J`);
-    };
-
     const submit = () => {
       cleanup();
       const fullContent = bufferLines.join('\n').trim();
-
-      // Erase box borders in-place
-      eraseBox();
-
-      // Print clean user prompt in standard transcript format
-      const promptArrow = isBuildMode ? chalk.hex('#00FF7F').bold('❯ ') : chalk.hex('#FFB300').bold('❯ ');
-      for (let i = 0; i < bufferLines.length; i++) {
-        const pfx = i === 0 ? promptArrow : chalk.dim('· ');
-        process.stdout.write(`${pfx}${chalk.white.bold(bufferLines[i])}\n`);
-      }
-      process.stdout.write('\n');
-
+      // Move cursor down past the bottom border then onto new line
+      const downLines = (bufferLines.length - cursorLine);
+      process.stdout.write(`\x1b[${downLines}B\r\n`);
       resolve(fullContent);
     };
 
     const cancel = () => {
       cleanup();
-      eraseBox();
+      const downLines = (bufferLines.length - cursorLine);
+      process.stdout.write(`\x1b[${downLines}B\r\n`);
       resolve(null);
     };
 
@@ -408,7 +394,8 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
       // 3. Ctrl+C
       if (str === '\x03') {
         cleanup();
-        eraseBox();
+        const downLinesC = (bufferLines.length - cursorLine);
+        process.stdout.write(`\x1b[${downLinesC}B\r\n`);
         process.stdout.write(chalk.yellow('Exiting banglacli...\n'));
         process.exit(0);
       }
@@ -416,7 +403,8 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
       // Tab key or F2: Instant Model Selector Switcher
       if (str === '\t' || str === '\x09' || str === '\x1bOQ' || str === '\x1b[12~') {
         cleanup();
-        eraseBox();
+        const downLinesT = (bufferLines.length - cursorLine);
+        process.stdout.write(`\x1b[${downLinesT}B\r\n`);
         resolve('/model');
         return;
       }
