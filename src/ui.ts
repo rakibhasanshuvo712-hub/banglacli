@@ -310,7 +310,7 @@ export function showHelp(): void {
   console.log(`  ${chalk.cyan('/peers')}       - View connected cross-instance mesh peers (e.g. backend, frontend)`);
   console.log(`  ${chalk.cyan('/role')}        - View or change instance role (/role frontend, /role backend)`);
   console.log(`  ${chalk.cyan('/send')}        - Send direct message to a peer (/send backend <message>)`);
-  console.log(`  ${chalk.cyan('/limits')}      - View free token limits, context windows & RPM/RPD`);
+  console.log(`  ${chalk.cyan('/limits')}      - View complete token limits, context windows & rate limits for all models (alias: /limit, /tokens)`);
   console.log(`  ${chalk.cyan('/renewal')}     - Display live token renewal countdown timer and reset schedules (alias: /countdown)`);
   console.log(`  ${chalk.cyan('/guide')}       - Direct free API links & models guide (Free API Guide)`);
   console.log(`  ${chalk.cyan('/config')}      - Full interactive configuration wizard`);
@@ -427,51 +427,119 @@ export function showFreeApiKeyGuide(): void {
 }
 
 /**
- * Show detailed free token limits and rate limits for all supported providers.
+ * Show detailed token limits, context windows, and rate limits for ALL supported models across all providers.
  */
 export function showTokenLimitsGuide(): void {
-  const line = chalk.dim('─'.repeat(82));
-  console.log('\n' + chalk.bgHex('#0047AB').white.bold(' 📊 FREE TOKEN LIMITS & RATE LIMITS GUIDE (Quota & Rates) '));
-  console.log(chalk.gray('Exact quotas and context windows for each free provider in banglaCLI:\n'));
+  const line = chalk.dim('─'.repeat(88));
+  console.log('\n' + chalk.bgHex('#0047AB').white.bold(' 📊 COMPLETE TOKEN LIMITS & RATE LIMITS GUIDE (ALL MODELS) '));
+  console.log(chalk.gray('Exact context window tokens, rate limits (RPM/TPM), and daily quotas for all 83+ models in banglaCLI:\n'));
 
-  // 1. Google Gemini Free Tier Limits
-  console.log(chalk.bold.hex('#00FF7F')('1. Google Gemini (Google AI Studio Free Tier)'));
+  // 1. Google Gemini Suite
+  console.log(chalk.bold.hex('#00FF7F')('1. Google Gemini Suite (Google AI Studio Free Tier)'));
   console.log(chalk.dim('┌────────────────────────┬────────────────┬──────────────┬──────────────┬──────────────┐'));
-  console.log(chalk.dim('│') + chalk.bold(' Model                  ') + chalk.dim('│') + chalk.bold(' Context Window ') + chalk.dim('│') + chalk.bold(' Req / Minute ') + chalk.dim('│') + chalk.bold(' Tokens / Min ') + chalk.dim('│') + chalk.bold(' Req / Day    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.bold(' Model                  ') + chalk.dim('│') + chalk.bold(' Context Window ') + chalk.dim('│') + chalk.bold(' Req / Minute ') + chalk.dim('│') + chalk.bold(' Tokens / Min ') + chalk.dim('│') + chalk.bold(' Daily Quota  ') + chalk.dim('│'));
   console.log(chalk.dim('├────────────────────────┼────────────────┼──────────────┼──────────────┼──────────────┤'));
   console.log(chalk.dim('│') + chalk.green(' gemini-2.0-flash       ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
   console.log(chalk.dim('│') + chalk.green(' gemini-2.0-flash-lite  ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 30 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
   console.log(chalk.dim('│') + chalk.green(' gemini-2.5-flash       ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' gemini-2.5-pro         ') + chalk.dim('│') + chalk.cyan(' 2,097,152 toks ') + chalk.dim('│') + chalk.yellow(' 5 RPM        ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.yellow(' 50 RPD       ') + chalk.dim('│'));
   console.log(chalk.dim('│') + chalk.green(' gemini-1.5-flash       ') + chalk.dim('│') + chalk.white(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 15 RPM       ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.green(' 1,500 RPD    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' gemini-1.5-pro         ') + chalk.dim('│') + chalk.cyan(' 2,097,152 toks ') + chalk.dim('│') + chalk.yellow(' 5 RPM        ') + chalk.dim('│') + chalk.cyan(' 1,000,000 TPM') + chalk.dim('│') + chalk.yellow(' 50 RPD       ') + chalk.dim('│'));
   console.log(chalk.dim('└────────────────────────┴────────────────┴──────────────┴──────────────┴──────────────┘'));
-  console.log(chalk.gray('ℹ️ 1M Tokens/min is equivalent to ~750,000 words per minute! Gemini 2.0/1.5 Flash are best for 0% downtime.\n'));
+  console.log(chalk.gray('ℹ️ Daily resets at 00:00 UTC. Gemini 2.0 Flash is the primary autonomous coding model.\n'));
 
-  // 2. OpenRouter Free Models Limits
-  console.log(chalk.bold.hex('#00FF7F')('2. OpenRouter (Free Models Ending in :free)'));
+  // 2. OpenRouter 100% Free Suite
+  console.log(chalk.bold.hex('#00FF7F')('2. 100% Free OpenRouter Models (Zero-Plan Coding Fleet)'));
+  console.log(chalk.dim('┌────────────────────────────────────────────────┬────────────────┬──────────────┬──────────────┐'));
+  console.log(chalk.dim('│') + chalk.bold(' Model                                          ') + chalk.dim('│') + chalk.bold(' Context Window ') + chalk.dim('│') + chalk.bold(' Rate Limit   ') + chalk.dim('│') + chalk.bold(' Free Tier    ') + chalk.dim('│'));
+  console.log(chalk.dim('├────────────────────────────────────────────────┼────────────────┼──────────────┼──────────────┤'));
+  console.log(chalk.dim('│') + chalk.green(' openrouter/free                                ') + chalk.dim('│') + chalk.white(' 200,000 toks   ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' 100% Free    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' particle-ai/particle-1:free                    ') + chalk.dim('│') + chalk.cyan(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' 1M Free      ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' nvidia/nemotron-3-ultra-550b:free              ') + chalk.dim('│') + chalk.cyan(' 1,000,000 toks ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' 1M Free      ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' google/gemma-4-31b-it:free                     ') + chalk.dim('│') + chalk.white(' 262,144 toks   ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' 256K Free    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' google/gemma-4-26b-a4b-it:free                 ') + chalk.dim('│') + chalk.white(' 262,144 toks   ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' MoE Free     ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' nvidia/nemotron-3.5-lightning:free             ') + chalk.dim('│') + chalk.cyan(' 1,000,000 toks ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' Fast 1M Free ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' nvidia/nemotron-3.5-super-vl:free              ') + chalk.dim('│') + chalk.cyan(' 1,000,000 toks ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' Vision 1M    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' nvidia/nemotron-3-nano-omni-30b-a3b:free       ') + chalk.dim('│') + chalk.white(' 256,000 toks   ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' Reasoning    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' baidu/ernie-5.5-flash-preview:free             ') + chalk.dim('│') + chalk.cyan(' 1,024,000 toks ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' 1M Free      ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' inclusionai/ling-3.2-flash:free                ') + chalk.dim('│') + chalk.cyan(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' 1M Free      ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' meta-llama/llama-3.3-70b-instruct:free         ') + chalk.dim('│') + chalk.white(' 131,072 toks   ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' 128K Free    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' qwen/qwen-2.5-coder-32b-instruct:free         ') + chalk.dim('│') + chalk.white(' 32,768 toks    ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' Code 32K     ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' mistralai/mistral-small-24b-instruct-2501:free ') + chalk.dim('│') + chalk.white(' 32,768 toks    ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' Small 32K    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' deepseek/deepseek-r1:free                      ') + chalk.dim('│') + chalk.white(' 163,840 toks   ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' R1 Free      ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' deepseek/deepseek-chat:free                    ') + chalk.dim('│') + chalk.white(' 64,000 toks    ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' Chat Free    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' mistralai/devstral-2512:free                   ') + chalk.dim('│') + chalk.white(' 131,072 toks   ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' 128K Free    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' liquid/lfm-3-1.7b:free                         ') + chalk.dim('│') + chalk.white(' 32,768 toks    ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' Edge Free    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' recursive/flint-v1.0:free                      ') + chalk.dim('│') + chalk.white(' 131,072 toks   ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' 128K Free    ') + chalk.dim('│'));
+  console.log(chalk.dim('└────────────────────────────────────────────────┴────────────────┴──────────────┴──────────────┘'));
+  console.log(chalk.gray('ℹ️ 100% Free on OpenRouter with zero credit card required. Free tier rate limits reset daily.\n'));
+
+  // 3. OpenCode & Freebuff Built-in Free Roster
+  console.log(chalk.bold.hex('#00FF7F')('3. OpenCode & Freebuff Built-in Free Mirror Roster'));
   console.log(chalk.dim('┌──────────────────────────────────────┬────────────────┬──────────────┬──────────────┐'));
-  console.log(chalk.dim('│') + chalk.bold(' Model                                ') + chalk.dim('│') + chalk.bold(' Context Window ') + chalk.dim('│') + chalk.bold(' Rate Limit   ') + chalk.dim('│') + chalk.bold(' Cost         ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.bold(' Model                                ') + chalk.dim('│') + chalk.bold(' Context Window ') + chalk.dim('│') + chalk.bold(' Rate Limit   ') + chalk.dim('│') + chalk.bold(' Quota Status ') + chalk.dim('│'));
   console.log(chalk.dim('├──────────────────────────────────────┼────────────────┼──────────────┼──────────────┤'));
-  console.log(chalk.dim('│') + chalk.green(' openrouter/free                      ') + chalk.dim('│') + chalk.white(' 200,000 toks   ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' $0.00 (Free) ') + chalk.dim('│'));
-  console.log(chalk.dim('│') + chalk.green(' particle-ai/particle-1:free          ') + chalk.dim('│') + chalk.cyan(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' $0.00 (Free) ') + chalk.dim('│'));
-  console.log(chalk.dim('│') + chalk.green(' nvidia/nemotron-3-ultra-550b:free    ') + chalk.dim('│') + chalk.cyan(' 1,000,000 toks ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' $0.00 (Free) ') + chalk.dim('│'));
-  console.log(chalk.dim('│') + chalk.green(' google/gemma-4-31b-it:free           ') + chalk.dim('│') + chalk.white(' 262,144 toks   ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' $0.00 (Free) ') + chalk.dim('│'));
-  console.log(chalk.dim('│') + chalk.green(' nvidia/nemotron-3.5-lightning:free   ') + chalk.dim('│') + chalk.cyan(' 1,000,000 toks ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' $0.00 (Free) ') + chalk.dim('│'));
-  console.log(chalk.dim('│') + chalk.green(' baidu/ernie-5.5-flash-preview:free   ') + chalk.dim('│') + chalk.cyan(' 1,024,000 toks ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' $0.00 (Free) ') + chalk.dim('│'));
-  console.log(chalk.dim('│') + chalk.green(' inclusionai/ling-3.2-flash:free      ') + chalk.dim('│') + chalk.cyan(' 1,048,576 toks ') + chalk.dim('│') + chalk.yellow(' 20 RPM        ') + chalk.dim('│') + chalk.green(' $0.00 (Free) ') + chalk.dim('│'));
-  console.log(chalk.dim('└──────────────────────────────────────┴────────────────┴──────────────┴──────────────┘'));
-  console.log(chalk.gray('ℹ️ OpenRouter free models have zero 503 errors and are great backups when Google has high traffic spikes.\n'));
+  console.log(chalk.dim('│') + chalk.green(' opencode/deepseek-v4.1-free          ') + chalk.dim('│') + chalk.white(' 131,072 toks   ') + chalk.dim('│') + chalk.yellow(' 30 RPM        ') + chalk.dim('│') + chalk.green(' Free SOTA    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' opencode/glm-5.3-free                ') + chalk.dim('│') + chalk.white(' 131,072 toks   ') + chalk.dim('│') + chalk.yellow(' 30 RPM        ') + chalk.dim('│') + chalk.green(' Free GLM     ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' freebuff/solar-10.7b-free            ') + chalk.dim('│') + chalk.white(' 32,768 toks    ') + chalk.dim('│') + chalk.yellow(' 30 RPM        ') + chalk.dim('│') + chalk.green(' Free Solar   ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' freebuff/mimo-7b-free                ') + chalk.dim('│') + chalk.white(' 32,768 toks    ') + chalk.dim('│') + chalk.yellow(' 30 RPM        ') + chalk.dim('│') + chalk.green(' Free MiMo    ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' opencode/katana-14b-free             ') + chalk.dim('│') + chalk.white(' 65,536 toks    ') + chalk.dim('│') + chalk.yellow(' 30 RPM        ') + chalk.dim('│') + chalk.green(' Free Katana  ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' freebuff/trinity-40b-free            ') + chalk.dim('│') + chalk.white(' 131,072 toks   ') + chalk.dim('│') + chalk.yellow(' 30 RPM        ') + chalk.dim('│') + chalk.green(' Free Trinity ') + chalk.dim('│'));
+  console.log(chalk.dim('└──────────────────────────────────────┴────────────────┴──────────────┴──────────────┘\n'));
 
-  // 3. Groq Cloud Free Limits
-  console.log(chalk.bold.hex('#00FF7F')('3. Groq Cloud (Free Tier - Ultra High Speed)'));
-  console.log(`   • ${chalk.white('llama-3.3-70b-versatile:')} 30 Requests/min | 6,000 Tokens/min | ${chalk.green('14,400 Requests/day')}`);
-  console.log(`   • ${chalk.white('qwen-2.5-coder-32b:')} 30 Requests/min | 6,000 Tokens/min | ${chalk.green('14,400 Requests/day')}\n`);
+  // 4. DeepSeek Platform Frontier Models
+  console.log(chalk.bold.hex('#00FF7F')('4. DeepSeek Platform Models (platform.deepseek.com)'));
+  console.log(`   • ${chalk.white('deepseek-chat')} (V3.2/V4.1) : ${chalk.cyan('128,000 tokens')} context | Rolling RPM | ${chalk.green('5,000,000 Free Starter Tokens')}`);
+  console.log(`   • ${chalk.white('deepseek-reasoner')} (R1)   : ${chalk.cyan('128,000 tokens')} context | Deep CoT reasoning | ${chalk.green('5,000,000 Free Starter Tokens')}`);
+  console.log(`   • ${chalk.white('deepseek-coder-v2')}        : ${chalk.cyan('128,000 tokens')} context | Specialized coding engine | ${chalk.green('5,000,000 Free Starter Tokens')}`);
+  console.log(`   • ${chalk.white('deepseek-v3-671b')}         : ${chalk.cyan('128,000 tokens')} context | 671B frontier MoE | ${chalk.green('5,000,000 Free Starter Tokens')}\n`);
 
-  // 4. Local Offline (Ollama)
-  console.log(chalk.bold.hex('#00FF7F')('4. Local Offline Models (Ollama)'));
-  console.log(`   • ${chalk.green('100% UNLIMITED:')} Zero rate limits, zero tokens per minute ceiling. Depends only on your machine's hardware.\n`);
+  // 5. Tencent Hunyuan (HY4) Suite
+  console.log(chalk.bold.hex('#00FF7F')('5. Tencent Hunyuan (HY4) Suite (Tencent Cloud)'));
+  console.log(`   • ${chalk.white('tencent/hy4-flash')}        : ${chalk.cyan('256,000 tokens')} context | 60 RPM | ${chalk.green('100,000 Free Daily Tokens')}`);
+  console.log(`   • ${chalk.white('tencent/hy4-1m-frontier')}  : ${chalk.cyan('1,000,000 tokens')} context | 30 RPM | Free Tier Starter`);
+  console.log(`   • ${chalk.white('tencent/hy4-preview')}      : ${chalk.cyan('256,000 tokens')} context | 30 RPM | Free Tier Starter`);
+  console.log(`   • ${chalk.white('tencent/hunyuan-pro')}      : ${chalk.cyan('128,000 tokens')} context | 30 RPM | Standard Free Tier\n`);
+
+  // 6. Zhipu AI GLM 5.3 Suite
+  console.log(chalk.bold.hex('#00FF7F')('6. Zhipu AI GLM 5.3 Suite (BigModel Platform)'));
+  console.log(`   • ${chalk.white('zhipu/glm-5.3-flash')}      : ${chalk.cyan('128,000 tokens')} context | 60 RPM | ${chalk.green('100% Free & Unlimited API Calls')}`);
+  console.log(`   • ${chalk.white('zhipu/glm-5.3-1m')}         : ${chalk.cyan('1,048,576 tokens')} context | 30 RPM | Free Trial Quota`);
+  console.log(`   • ${chalk.white('zhipu/glm-5.3-flashx')}     : ${chalk.cyan('128,000 tokens')} context | 60 RPM | Ultra High-Speed Free`);
+  console.log(`   • ${chalk.white('zhipu/glm-4-plus')}         : ${chalk.cyan('128,000 tokens')} context | 30 RPM | Free Starter Tier\n`);
+
+  // 7. Groq Cloud Ultra-Fast Free Suite
+  console.log(chalk.bold.hex('#00FF7F')('7. Groq Cloud Free Tier (console.groq.com)'));
+  console.log(chalk.dim('┌──────────────────────────────┬────────────────┬──────────────┬──────────────┬──────────────┐'));
+  console.log(chalk.dim('│') + chalk.bold(' Model                        ') + chalk.dim('│') + chalk.bold(' Context Window ') + chalk.dim('│') + chalk.bold(' Req / Minute ') + chalk.dim('│') + chalk.bold(' Tokens / Min ') + chalk.dim('│') + chalk.bold(' Daily Quota  ') + chalk.dim('│'));
+  console.log(chalk.dim('├──────────────────────────────┼────────────────┼──────────────┼──────────────┼──────────────┤'));
+  console.log(chalk.dim('│') + chalk.green(' llama-3.3-70b-versatile      ') + chalk.dim('│') + chalk.white(' 128,000 toks   ') + chalk.dim('│') + chalk.yellow(' 30 RPM       ') + chalk.dim('│') + chalk.cyan(' 6,000 TPM    ') + chalk.dim('│') + chalk.green(' 14,400 RPD   ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' qwen-2.5-coder-32b           ') + chalk.dim('│') + chalk.white(' 128,000 toks   ') + chalk.dim('│') + chalk.yellow(' 30 RPM       ') + chalk.dim('│') + chalk.cyan(' 6,000 TPM    ') + chalk.dim('│') + chalk.green(' 14,400 RPD   ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' llama-3.1-8b-instant         ') + chalk.dim('│') + chalk.white(' 128,000 toks   ') + chalk.dim('│') + chalk.yellow(' 30 RPM       ') + chalk.dim('│') + chalk.cyan(' 20,000 TPM   ') + chalk.dim('│') + chalk.green(' 14,400 RPD   ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' mixtral-8x7b-32768           ') + chalk.dim('│') + chalk.white(' 32,768 toks    ') + chalk.dim('│') + chalk.yellow(' 30 RPM       ') + chalk.dim('│') + chalk.cyan(' 5,000 TPM    ') + chalk.dim('│') + chalk.green(' 14,400 RPD   ') + chalk.dim('│'));
+  console.log(chalk.dim('│') + chalk.green(' gemma2-9b-it                 ') + chalk.dim('│') + chalk.white(' 8,192 toks     ') + chalk.dim('│') + chalk.yellow(' 30 RPM       ') + chalk.dim('│') + chalk.cyan(' 15,000 TPM   ') + chalk.dim('│') + chalk.green(' 14,400 RPD   ') + chalk.dim('│'));
+  console.log(chalk.dim('└──────────────────────────────┴────────────────┴──────────────┴──────────────┴──────────────┘'));
+  console.log(chalk.gray('ℹ️ Groq delivers 500+ tokens/second inference with a generous 14,400 requests/day free quota!\n'));
+
+  // 8. Frontier Flagship Coding Agents (BYOK)
+  console.log(chalk.bold.hex('#00FF7F')('8. Frontier Flagship Coding Agents (OpenRouter / BYOK)'));
+  console.log(`   • ${chalk.white('anthropic/claude-3.5-sonnet')} : ${chalk.cyan('200,000 tokens')} context | Top-ranked coding benchmark model`);
+  console.log(`   • ${chalk.white('openai/gpt-4o')}               : ${chalk.cyan('128,000 tokens')} context | Flagship multimodal developer agent`);
+  console.log(`   • ${chalk.white('openai/o3-mini')}             : ${chalk.cyan('200,000 tokens')} context | Deep STEM & competitive reasoning`);
+  console.log(`   • ${chalk.white('mistralai/codestral-2501')}   : ${chalk.cyan('256,000 tokens')} context | Dedicated 256K software engineering model`);
+  console.log(`   • ${chalk.white('google/gemini-2.5-pro')}       : ${chalk.cyan('2,097,152 tokens')} context | Massive 2 Million token long-context frontier\n`);
+
+  // 9. Local Offline Models (Ollama)
+  console.log(chalk.bold.hex('#00FF7F')('9. Local Offline Models (Ollama - localhost:11434)'));
+  console.log(`   • ${chalk.white('deepseek-r1')} & ${chalk.white('qwen2.5-coder')} : ${chalk.green.bold('100% UNLIMITED TOKENS, ZERO RATE LIMITS')}`);
+  console.log(`     Runs 100% private and offline on your local CPU/GPU with no internet required!\n`);
 
   console.log(line);
-  console.log(chalk.cyan(`💡 Quick Switch: Type ${chalk.yellow.bold('/provider')} in chat to instantly hop between providers!\n`));
+  console.log(
+    chalk.cyan(
+      `💡 Switch Model Anytime: Run ${chalk.yellow.bold('/agent')} or ${chalk.yellow.bold('/model [name]')} | Check Token Renewal Countdown: ${chalk.yellow.bold('/renewal')}\n`
+    )
+  );
 }
 
 /**

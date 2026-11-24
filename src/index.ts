@@ -385,7 +385,19 @@ program
         continue;
       }
 
-      if (lowerCmd === '/limits' || lowerCmd === '/tokens') {
+      const cleanCmd = lowerCmd.replace(/[\s\-_]+/g, '');
+      if (
+        cleanCmd === '/limits' ||
+        cleanCmd === '/limit' ||
+        cleanCmd === '/tokens' ||
+        cleanCmd === '/token' ||
+        cleanCmd === '/quota' ||
+        cleanCmd === '/quotas' ||
+        lowerCmd.startsWith('/limits') ||
+        lowerCmd.startsWith('/limit') ||
+        lowerCmd.startsWith('/ limits') ||
+        lowerCmd.startsWith('/ limit')
+      ) {
         showTokenLimitsGuide();
         continue;
       }
@@ -800,8 +812,12 @@ program
 // Explicit limits subcommand
 program
   .command('limits')
+  .alias('limit')
   .alias('tokens')
-  .description('Display free token limits, context windows, and rate limits')
+  .alias('token')
+  .alias('quota')
+  .alias('quotas')
+  .description('Display free token limits, context windows, and rate limits for all models')
   .action(() => {
     showTokenLimitsGuide();
   });
