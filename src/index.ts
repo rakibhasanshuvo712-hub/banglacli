@@ -265,21 +265,24 @@ program
         trimmed = trimmed.replace(/^[>❯$#\s]+/, '').trim();
       }
 
+      // Case-insensitive normalized command
+      const lowerCmd = trimmed.toLowerCase();
+
       // Handle Slash Commands
-      if (trimmed === '/exit' || trimmed === '/quit') {
+      if (lowerCmd === '/exit' || lowerCmd === '/quit') {
         deactivateFixedDock();
         restoreTerminalViewport();
         console.log(chalk.hex('#00FF7F')('\nThanks for using banglacli. Happy coding! 🚀\n'));
         process.exit(0);
       }
 
-      if (trimmed === '/help') {
+      if (lowerCmd === '/help') {
         showHelp();
         continue;
       }
 
       // Mode Switching (OpenCode Style)
-      if (trimmed === '/mode') {
+      if (lowerCmd === '/mode') {
         prepareInteractiveArea(
           PROVIDER_LABELS[config.provider] || config.provider,
           config.model,
@@ -311,21 +314,10 @@ program
           config.model,
           agent.getMode()
         );
-        if (!p.isCancel(modeChoice)) {
-          if (modeChoice === 'build') {
-            console.log(
-              chalk.green('✔ Switched to ⚡ BUILD MODE (Autonomous Builder: file writes & commands enabled)\n')
-            );
-          } else {
-            console.log(
-              chalk.yellow('✔ Switched to 📋 PLAN MODE (Senior Architect: read-only analysis & planning)\n')
-            );
-          }
-        }
         continue;
       }
 
-      if (trimmed === '/plan') {
+      if (lowerCmd === '/plan') {
         agent.setMode('plan');
         meshNode?.updateState({ mode: 'plan' });
         updateDockedModel(
@@ -333,13 +325,10 @@ program
           config.model,
           'plan'
         );
-        console.log(
-          chalk.yellow('\n✔ Switched to 📋 PLAN MODE (Senior Architect: read-only analysis & planning enabled)\n')
-        );
         continue;
       }
 
-      if (trimmed === '/build') {
+      if (lowerCmd === '/build') {
         agent.setMode('build');
         meshNode?.updateState({ mode: 'build' });
         updateDockedModel(
@@ -347,23 +336,20 @@ program
           config.model,
           'build'
         );
-        console.log(
-          chalk.green('\n✔ Switched to ⚡ BUILD MODE (Autonomous Builder: file writes & commands enabled)\n')
-        );
         continue;
       }
 
-      if (trimmed === '/guide' || trimmed === '/keys') {
+      if (lowerCmd === '/guide' || lowerCmd === '/keys') {
         showFreeApiKeyGuide();
         continue;
       }
 
-      if (trimmed === '/limits' || trimmed === '/tokens') {
+      if (lowerCmd === '/limits' || lowerCmd === '/tokens') {
         showTokenLimitsGuide();
         continue;
       }
 
-      if (trimmed === '/stats' || trimmed === '/cost') {
+      if (lowerCmd === '/stats' || lowerCmd === '/cost') {
         const metrics = agent.getSessionMetrics();
         const changes = getSessionChanges();
         renderSessionStats({
@@ -576,7 +562,7 @@ program
         continue;
       }
 
-      if (trimmed === '/provider') {
+      if (lowerCmd === '/provider') {
         prepareInteractiveArea(
           PROVIDER_LABELS[config.provider] || config.provider,
           config.model,
@@ -592,17 +578,10 @@ program
           config.model,
           agent.getMode()
         );
-        if (newConfig) {
-          console.log(
-            chalk.green(
-              `✔ Active Provider: ${chalk.bold(PROVIDER_LABELS[config.provider])} (${chalk.bold(config.model)})\n`
-            )
-          );
-        }
         continue;
       }
 
-      if (trimmed === '/config') {
+      if (lowerCmd === '/config') {
         prepareInteractiveArea(
           PROVIDER_LABELS[config.provider] || config.provider,
           config.model,
@@ -616,23 +595,49 @@ program
           config.model,
           agent.getMode()
         );
-        console.log(chalk.green(`✔ Config updated: ${PROVIDER_LABELS[config.provider]} (${config.model})\n`));
+        continue;
+      }
+
+      // Quick Category Direct Shortcuts
+      const directCategoryShortcuts: Record<string, string> = {
+        '/gemini': 'gemini',
+        '/deepseek': 'deepseek',
+        '/groq': 'groq',
+        '/free': 'free',
+        '/openrouter': 'free',
+        '/flagship': 'flagship',
+        '/local': 'local',
+        '/ollama': 'local',
+      };
+
+      if (directCategoryShortcuts[lowerCmd]) {
+        const targetCategory = directCategoryShortcuts[lowerCmd];
+        const newConfig = await selectAgentModelInteractive(config, agent.getMode(), targetCategory);
+        if (newConfig) {
+          config = newConfig;
+          agent.updateConfig(newConfig);
+        }
+        activateFixedDock(
+          PROVIDER_LABELS[config.provider] || config.provider,
+          config.model,
+          agent.getMode()
+        );
         continue;
       }
 
       const isModelCommand =
-        trimmed === '/model' ||
-        trimmed === '/models' ||
-        trimmed === '/agent' ||
-        trimmed === '/agents' ||
-        trimmed === '/m' ||
-        trimmed === '/select-model' ||
-        trimmed === '/choose-model' ||
-        trimmed.startsWith('/model ') ||
-        trimmed.startsWith('/models ') ||
-        trimmed.startsWith('/agent ') ||
-        trimmed.startsWith('/agents ') ||
-        trimmed.startsWith('/m ');
+        lowerCmd === '/model' ||
+        lowerCmd === '/models' ||
+        lowerCmd === '/agent' ||
+        lowerCmd === '/agents' ||
+        lowerCmd === '/m' ||
+        lowerCmd === '/select-model' ||
+        lowerCmd === '/choose-model' ||
+        lowerCmd.startsWith('/model ') ||
+        lowerCmd.startsWith('/models ') ||
+        lowerCmd.startsWith('/agent ') ||
+        lowerCmd.startsWith('/agents ') ||
+        lowerCmd.startsWith('/m ');
 
       if (isModelCommand) {
         const parts = trimmed.split(/\s+/);
@@ -650,17 +655,19 @@ program
                 config.model,
                 agent.getMode()
               );
-              console.log(
-                chalk.green(
-                  `✔ Active Model: ${chalk.bold(match.name)} (${chalk.cyan(match.id)}) [${chalk.bold(PROVIDER_LABELS[config.provider])}]\n`
-                )
-              );
             }
             continue;
-          } else {
-            console.log(
-              chalk.yellow(`\n⚠️ No preset found matching "${query}". Opening interactive model selector...\n`)
+          } else if (query.includes('/') || query.startsWith('gemini-') || query.startsWith('gpt-')) {
+            // Apply custom model slug directly
+            config.model = query;
+            saveConfig(config);
+            agent.updateConfig(config);
+            updateDockedModel(
+              PROVIDER_LABELS[config.provider] || config.provider,
+              config.model,
+              agent.getMode()
             );
+            continue;
           }
         }
 
@@ -674,13 +681,6 @@ program
           config.model,
           agent.getMode()
         );
-        if (newConfig) {
-          console.log(
-            chalk.green(
-              `✔ Active Model: ${chalk.bold(config.model)} (${PROVIDER_LABELS[config.provider]})\n`
-            )
-          );
-        }
         continue;
       }
 

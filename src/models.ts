@@ -951,7 +951,8 @@ export async function fetchLiveOpenRouterFreeModels(): Promise<AgentModelPreset[
  */
 export async function selectAgentModelInteractive(
   currentConfig: BanglaCLIConfig,
-  mode: 'build' | 'plan' = 'build'
+  mode: 'build' | 'plan' = 'build',
+  initialCategory?: string
 ): Promise<BanglaCLIConfig | null> {
   const headerHeight = prepareInteractiveArea(
     PROVIDER_LABELS[currentConfig.provider] || currentConfig.provider,
@@ -963,77 +964,86 @@ export async function selectAgentModelInteractive(
   const availableRows = Math.max(4, termRows - headerHeight - 6);
   const selectMaxItems = Math.max(3, Math.min(6, availableRows));
 
+  const currentPreset = AGENT_MODELS.find((m) => m.id === currentConfig.model);
+  const defaultCategory =
+    currentPreset?.category ||
+    (currentConfig.provider === 'gemini' ? 'gemini' : currentConfig.provider === 'openrouter' ? 'free' : 'free');
+
   p.intro(chalk.bold.hex('#00FF7F')('🤖 OpenCode AI Agent & Model Selector'));
 
-  // 1. Choose Category
-  const categoryChoice = (await p.select({
-    message: chalk.cyan('Select Agent Category:'),
-    maxItems: selectMaxItems,
-    options: [
-      {
-        value: 'free',
-        label: `${chalk.bold.green('🌟 100% Free Tier Agents')} ${chalk.dim('(OpenRouter Free, Particle-1, Gemma, Nemotron)')}`,
-        hint: '13+ verified zero-plan free models',
-      },
-      {
-        value: 'zen',
-        label: `${chalk.bold.hex('#00E5FF')('⚡ OpenCode & Freebuff Built-in Free Roster')} ${chalk.dim('(DeepSeek V4.1 Free, GLM 5.3 Free, Solar, MiMo)')}`,
-        hint: 'Built-in $0 endpoints: Zero-Retention, NVIDIA Trials, Freebuff allowances',
-      },
-      {
-        value: 'live_sync',
-        label: `${chalk.bold.hex('#00FFFF')('🔄 Live Sync: Fetch ALL Free Models from OpenRouter')} ${chalk.dim('(Real-time)')}`,
-        hint: 'Queries OpenRouter API live for every free model active right now',
-      },
-      {
-        value: 'gemini',
-        label: `${chalk.bold.yellow('🔷 Google Gemini Free Suite')} ${chalk.dim('(Gemini 2.0/2.5/3.5 Flash & Pro, 1.5 Flash)')}`,
-        hint: '1M - 2M tokens context, 1,500 req/day 100% free',
-      },
-      {
-        value: 'deepseek',
-        label: `${chalk.bold.hex('#00D2FF')('🧠 DeepSeek Frontier Models')} ${chalk.dim('(DeepSeek V4.1, R1 Reasoner, Distill 70B)')}`,
-        hint: '5M free tokens on DeepSeek platform, Groq & OpenRouter',
-      },
-      {
-        value: 'hy4',
-        label: `${chalk.bold.hex('#FF6D00')('⚡ Tencent HY4 Suite')} ${chalk.dim('(Hy4 Flash, Hy4 1M Frontier, Hy4 Preview)')}`,
-        hint: '1M tokens context, free promotional tokens',
-      },
-      {
-        value: 'glm',
-        label: `${chalk.bold.hex('#7C4DFF')('🚀 Zhipu AI GLM 5.3 Suite')} ${chalk.dim('(GLM 5.3 Flash, GLM 5.3 1M, FlashX, Prime)')}`,
-        hint: '1M tokens, daily free tokens on BigModel & OpenRouter',
-      },
-      {
-        value: 'groq',
-        label: `${chalk.bold.hex('#FF9900')('⚡ Groq Cloud Free Tier')} ${chalk.dim('(Llama 3.3 70B, Qwen Coder)')}`,
-        hint: '14,400 requests/day, 500+ tokens/sec',
-      },
-      {
-        value: 'flagship',
-        label: `${chalk.bold.hex('#FFD700')('👑 Frontier Flagship Coding Agents')} ${chalk.dim('(Claude 3.5 Sonnet, GPT-4o, o3-mini, Codestral)')}`,
-        hint: 'OpenCode SOTA benchmark models (OpenRouter BYOK)',
-      },
-      {
-        value: 'local',
-        label: `${chalk.bold.magenta('💻 Local Offline Models')} ${chalk.dim('(Ollama: Qwen Coder, DeepSeek R1)')}`,
-        hint: 'Runs offline on localhost:11434',
-      },
-      {
-        value: 'all',
-        label: `${chalk.bold('📋 Browse All Zero-Plan Free Models')}`,
-        hint: 'View complete list of all presets',
-      },
-      {
-        value: 'custom',
-        label: `${chalk.bold('✏️  Enter Custom Model ID Manually')}`,
-        hint: 'Type any model slug (e.g. mistralai/mistral-large:free)',
-      },
-    ],
-  })) as string;
+  // 1. Choose Category (or use initialCategory shortcut)
+  let categoryChoice = initialCategory;
+  if (!categoryChoice) {
+    categoryChoice = (await p.select({
+      message: chalk.cyan('Select Agent Category:'),
+      initialValue: defaultCategory,
+      maxItems: selectMaxItems,
+      options: [
+        {
+          value: 'free',
+          label: `${chalk.bold.green('🌟 100% Free Tier Agents')} ${chalk.dim('(OpenRouter Free, Particle-1, Gemma, Nemotron)')}`,
+          hint: '13+ verified zero-plan free models',
+        },
+        {
+          value: 'zen',
+          label: `${chalk.bold.hex('#00E5FF')('⚡ OpenCode & Freebuff Built-in Free Roster')} ${chalk.dim('(DeepSeek V4.1 Free, GLM 5.3 Free, Solar, MiMo)')}`,
+          hint: 'Built-in $0 endpoints: Zero-Retention, NVIDIA Trials, Freebuff allowances',
+        },
+        {
+          value: 'live_sync',
+          label: `${chalk.bold.hex('#00FFFF')('🔄 Live Sync: Fetch ALL Free Models from OpenRouter')} ${chalk.dim('(Real-time)')}`,
+          hint: 'Queries OpenRouter API live for every free model active right now',
+        },
+        {
+          value: 'gemini',
+          label: `${chalk.bold.yellow('🔷 Google Gemini Free Suite')} ${chalk.dim('(Gemini 2.0/2.5/3.5 Flash & Pro, 1.5 Flash)')}`,
+          hint: '1M - 2M tokens context, 1,500 req/day 100% free',
+        },
+        {
+          value: 'deepseek',
+          label: `${chalk.bold.hex('#00D2FF')('🧠 DeepSeek Frontier Models')} ${chalk.dim('(DeepSeek V4.1, R1 Reasoner, Distill 70B)')}`,
+          hint: '5M free tokens on DeepSeek platform, Groq & OpenRouter',
+        },
+        {
+          value: 'hy4',
+          label: `${chalk.bold.hex('#FF6D00')('⚡ Tencent HY4 Suite')} ${chalk.dim('(Hy4 Flash, Hy4 1M Frontier, Hy4 Preview)')}`,
+          hint: '1M tokens context, free promotional tokens',
+        },
+        {
+          value: 'glm',
+          label: `${chalk.bold.hex('#7C4DFF')('🚀 Zhipu AI GLM 5.3 Suite')} ${chalk.dim('(GLM 5.3 Flash, GLM 5.3 1M, FlashX, Prime)')}`,
+          hint: '1M tokens, daily free tokens on BigModel & OpenRouter',
+        },
+        {
+          value: 'groq',
+          label: `${chalk.bold.hex('#FF9900')('⚡ Groq Cloud Free Tier')} ${chalk.dim('(Llama 3.3 70B, Qwen Coder)')}`,
+          hint: '14,400 requests/day, 500+ tokens/sec',
+        },
+        {
+          value: 'flagship',
+          label: `${chalk.bold.hex('#FFD700')('👑 Frontier Flagship Coding Agents')} ${chalk.dim('(Claude 3.5 Sonnet, GPT-4o, o3-mini, Codestral)')}`,
+          hint: 'OpenCode SOTA benchmark models (OpenRouter BYOK)',
+        },
+        {
+          value: 'local',
+          label: `${chalk.bold.magenta('💻 Local Offline Models')} ${chalk.dim('(Ollama: Qwen Coder, DeepSeek R1)')}`,
+          hint: 'Runs offline on localhost:11434',
+        },
+        {
+          value: 'all',
+          label: `${chalk.bold('📋 Browse All Zero-Plan Free Models')}`,
+          hint: 'View complete list of all presets',
+        },
+        {
+          value: 'custom',
+          label: `${chalk.bold('✏️  Enter Custom Model ID Manually')}`,
+          hint: 'Type any model slug (e.g. mistralai/mistral-large:free)',
+        },
+      ],
+    })) as string;
 
-  if (p.isCancel(categoryChoice)) return null;
+    if (p.isCancel(categoryChoice)) return null;
+  }
 
   // Handle custom input
   if (categoryChoice === 'custom') {
@@ -1230,6 +1240,12 @@ export async function applyModelDirect(
       targetApiKey = saved.apiKey;
       targetBaseURL = preset.baseURL || saved.baseURL;
     } else {
+      prepareInteractiveArea(
+        PROVIDER_LABELS[currentConfig.provider] || currentConfig.provider,
+        currentConfig.model,
+        'build'
+      );
+
       const serviceName = preset.baseURL?.includes('groq.com')
         ? 'Groq Cloud'
         : preset.baseURL?.includes('deepseek.com')
