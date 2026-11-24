@@ -376,9 +376,11 @@ export class BanglaAgent {
       return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
     }
 
+    const englishEnforcedInput = `[CRITICAL: You must provide all explanations, responses, and terminal output strictly in clear ENGLISH. Do not use Bengali script under any circumstances.]\n\n${userInput}`;
+
     try {
       if (this.config.provider === 'gemini') {
-        const reply = await this.chatGemini(userInput, options);
+        const reply = await this.chatGemini(englishEnforcedInput, options);
         if (options?.signal?.aborted) {
           return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
         }
@@ -511,6 +513,10 @@ export class BanglaAgent {
       }
 
       turnCount++;
+      updateFixedBottomStatus(
+        turnCount === 1 ? 'Thinking with Gemini...' : `Working (step ${turnCount})...`,
+        { mode: this.mode, model: this.config.model }
+      );
       const spinner = createSpinner(
         turnCount === 1 ? 'banglacli thinking...' : `banglacli working (step ${turnCount})...`
       );
@@ -530,14 +536,20 @@ export class BanglaAgent {
         while (attempts < maxModelAttempts) {
           attempts++;
           try {
-            response = await this.geminiClient.models.generateContent({
-              model: candidateModel,
-              contents: this.geminiContents,
-              config: {
-                systemInstruction: getSystemPrompt(this.mode),
-                tools: (this.mode === 'plan' ? PLAN_GEMINI_TOOLS : BUILD_GEMINI_TOOLS) as any,
-              },
-            });
+            const timeoutPromise = new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('Gemini API request timed out (35s)')), 35000)
+            );
+            response = await Promise.race([
+              this.geminiClient.models.generateContent({
+                model: candidateModel,
+                contents: this.geminiContents,
+                config: {
+                  systemInstruction: getSystemPrompt(this.mode),
+                  tools: (this.mode === 'plan' ? PLAN_GEMINI_TOOLS : BUILD_GEMINI_TOOLS) as any,
+                },
+              }),
+              timeoutPromise,
+            ]);
 
             if (candidateModel !== this.config.model) {
               renderCascadeNotice(this.config.model, candidateModel, 'Gemini high demand / 503 failover');
@@ -559,6 +571,8 @@ export class BanglaAgent {
               errMsg.includes('RESOURCE_EXHAUSTED') ||
               errMsg.includes('no longer available') ||
               errMsg.includes('NOT_FOUND') ||
+              errMsg.includes('timed out') ||
+              errMsg.includes('timeout') ||
               errMsg.includes('404');
 
             if (!isTemporary) {
@@ -701,6 +715,12 @@ export class BanglaAgent {
       }
 
       turnCount++;
+      updateFixedBottomStatus(
+        turnCount === 1
+          ? `Thinking with [${this.config.model}]...`
+          : `Executing with [${this.config.model}] (step ${turnCount})...`,
+        { mode: this.mode, model: this.config.model }
+      );
       const spinner = createSpinner(
         turnCount === 1
           ? `banglacli thinking with [${this.config.model}]...`
@@ -728,6 +748,7 @@ export class BanglaAgent {
             },
             {
               signal: options?.signal,
+              timeout: 35000,
             }
           );
           break;

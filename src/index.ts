@@ -78,10 +78,9 @@ function attachEscapeListener(onEscape: () => void): () => void {
   return () => {
     process.stdin.removeListener('keypress', keypressHandler);
     try {
-      if (!wasRaw) {
+      if (!wasRaw && process.stdin.isTTY) {
         process.stdin.setRawMode(false);
       }
-      process.stdin.pause();
     } catch {}
   };
 }
@@ -164,6 +163,7 @@ program
         }
       } finally {
         detachEscape();
+        updateFixedBottomStatus('', { mode: agent.getMode(), model: config.model });
       }
       return;
     }
@@ -593,6 +593,7 @@ program
         }
       } finally {
         detachEscape();
+        updateFixedBottomStatus('', { mode: agent.getMode(), model: config.model });
       }
     }
   });

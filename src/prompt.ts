@@ -303,6 +303,13 @@ export function prepareInteractiveArea(
   const rows = process.stdout.rows || 24;
   const cols = process.stdout.columns || 80;
 
+  try {
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(false);
+    }
+    process.stdin.resume();
+  } catch {}
+
   process.stdout.write('\x1b[r\x1b[?25h');
   process.stdout.write('\x1b[2J\x1b[H');
 
@@ -375,6 +382,12 @@ export function activateFixedDock(
 
   // Position cursor inside input box
   process.stdout.write(`\x1b[${rows - 2};5H\x1b[?25h`);
+
+  try {
+    if (process.stdin.isTTY) {
+      process.stdin.resume();
+    }
+  } catch {}
 
   process.stdout.removeListener('resize', onDockedResize);
   process.stdout.on('resize', onDockedResize);
@@ -498,8 +511,7 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
       try { process.stdout.write('\x1b[?2004l'); } catch {}
       process.stdin.removeListener('data', onData);
       try {
-        if (!wasRaw) process.stdin.setRawMode(false);
-        process.stdin.pause();
+        if (!wasRaw && process.stdin.isTTY) process.stdin.setRawMode(false);
       } catch {}
     };
 
@@ -507,9 +519,14 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
       cleanup();
       const fullContent = bufferLines.join('\n').trim();
 
-      // Show processing status line in dock
-      const statusLine = renderStatusLine(boxWidth, 'Processing request...', borderColor);
-      process.stdout.write(`\x1b[${contentRow};1H\x1b[2K${statusLine}`);
+      // Only show processing status line in dock for actual prompts, NOT for slash commands!
+      if (!fullContent.startsWith('/')) {
+        const statusLine = renderStatusLine(boxWidth, 'Processing request...', borderColor);
+        process.stdout.write(`\x1b[${contentRow};1H\x1b[2K${statusLine}`);
+      } else {
+        const emptyLine = renderContentLine(boxWidth, '', true, isBuildMode, borderColor);
+        process.stdout.write(`\x1b[${contentRow};1H\x1b[2K${emptyLine}`);
+      }
 
       // Print prompt into scrolling workspace
       const promptArrow = isBuildMode
@@ -823,8 +840,7 @@ async function readInlinePrompt(options: OpenCodePromptOptions): Promise<string 
       try { process.stdout.write('\x1b[?2004l'); } catch {}
       process.stdin.removeListener('data', onData);
       try {
-        if (!wasRaw) process.stdin.setRawMode(false);
-        process.stdin.pause();
+        if (!wasRaw && process.stdin.isTTY) process.stdin.setRawMode(false);
       } catch {}
     };
 
