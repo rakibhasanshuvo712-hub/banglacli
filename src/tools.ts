@@ -172,7 +172,10 @@ export async function readFile(filePath: string): Promise<string> {
 /**
  * 3. write_file: Write or update a file (with safety confirmation)
  */
-export async function writeFile(filePath: string, content: string): Promise<string> {
+export async function writeFile(filePath: string, content: string, signal?: AbortSignal): Promise<string> {
+  if (signal?.aborted) {
+    return 'Action cancelled by user (Escape key pressed).';
+  }
   const rootDir = process.cwd();
   const targetFile = path.resolve(rootDir, filePath);
   const dirName = path.dirname(targetFile);
@@ -224,7 +227,15 @@ export async function writeFile(filePath: string, content: string): Promise<stri
  * 3b. edit_file: Surgically edits an existing file by replacing a unique target text block.
  * Avoids rewriting entire large files, saves tokens, and tracks reversible session history.
  */
-export async function editFile(filePath: string, target: string, replacement: string): Promise<string> {
+export async function editFile(
+  filePath: string,
+  target: string,
+  replacement: string,
+  signal?: AbortSignal
+): Promise<string> {
+  if (signal?.aborted) {
+    return 'Action cancelled by user (Escape key pressed).';
+  }
   const rootDir = process.cwd();
   const targetFile = path.resolve(rootDir, filePath);
 
@@ -813,10 +824,10 @@ export async function executeTool(
         result = await readFile(args.filePath);
         break;
       case 'write_file':
-        result = await writeFile(args.filePath, args.content);
+        result = await writeFile(args.filePath, args.content, signal);
         break;
       case 'edit_file':
-        result = await editFile(args.filePath, args.target, args.replacement);
+        result = await editFile(args.filePath, args.target, args.replacement, signal);
         break;
       case 'run_command':
         result = await runCommand(args.command, signal);

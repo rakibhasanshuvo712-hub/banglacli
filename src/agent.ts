@@ -559,15 +559,34 @@ export class BanglaAgent {
       const modelCandidates = [this.config.model, ...fallbacks.filter((m) => m !== this.config.model)];
 
       for (const candidateModel of modelCandidates) {
+        if (options?.signal?.aborted) {
+          spinner.stop();
+          return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
+        }
+
         let attempts = 0;
         const maxModelAttempts = 2;
 
         while (attempts < maxModelAttempts) {
+          if (options?.signal?.aborted) {
+            spinner.stop();
+            return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
+          }
+
           attempts++;
           try {
+            const abortPromise = new Promise<never>((_, reject) => {
+              if (options?.signal?.aborted) {
+                reject(new Error('ABORTED_BY_USER'));
+                return;
+              }
+              options?.signal?.addEventListener('abort', () => reject(new Error('ABORTED_BY_USER')), { once: true });
+            });
+
             const timeoutPromise = new Promise<never>((_, reject) =>
               setTimeout(() => reject(new Error('Gemini API request timed out (35s)')), 35000)
             );
+
             response = await Promise.race([
               this.geminiClient.models.generateContent({
                 model: candidateModel,
@@ -578,6 +597,7 @@ export class BanglaAgent {
                 },
               }),
               timeoutPromise,
+              abortPromise,
             ]);
 
             if (candidateModel !== this.config.model) {
@@ -590,6 +610,11 @@ export class BanglaAgent {
             lastError = null;
             break;
           } catch (err: any) {
+            if (options?.signal?.aborted || err?.message === 'ABORTED_BY_USER') {
+              spinner.stop();
+              return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
+            }
+
             lastError = err;
             const errMsg = err?.message || String(err);
             const isTemporary =
@@ -768,21 +793,32 @@ export class BanglaAgent {
         }
 
         try {
-          completion = await this.openAIClient.chat.completions.create(
-            {
-              model: this.config.model,
-              messages: this.openAIMessages,
-              tools: this.mode === 'plan' ? PLAN_OPENAI_TOOLS : BUILD_OPENAI_TOOLS,
-              tool_choice: 'auto',
-            },
-            {
-              signal: options?.signal,
-              timeout: 35000,
+          const abortPromise = new Promise<never>((_, reject) => {
+            if (options?.signal?.aborted) {
+              reject(new Error('ABORTED_BY_USER'));
+              return;
             }
-          );
+            options?.signal?.addEventListener('abort', () => reject(new Error('ABORTED_BY_USER')), { once: true });
+          });
+
+          completion = await Promise.race([
+            this.openAIClient.chat.completions.create(
+              {
+                model: this.config.model,
+                messages: this.openAIMessages,
+                tools: this.mode === 'plan' ? PLAN_OPENAI_TOOLS : BUILD_OPENAI_TOOLS,
+                tool_choice: 'auto',
+              },
+              {
+                signal: options?.signal,
+                timeout: 35000,
+              }
+            ),
+            abortPromise,
+          ]);
           break;
         } catch (err: any) {
-          if (options?.signal?.aborted) {
+          if (options?.signal?.aborted || err?.message === 'ABORTED_BY_USER') {
             spinner.stop();
             return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
           }

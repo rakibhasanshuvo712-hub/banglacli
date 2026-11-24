@@ -70,19 +70,42 @@ function attachEscapeListener(onEscape: () => void): () => void {
     process.stdin.resume();
   } catch {}
 
-  const keypressHandler = (_str: string, key: any) => {
-    if (key) {
-      if (key.name === 'escape') {
-        onEscape();
-      } else if (key.ctrl && key.name === 'c') {
-        process.exit(0);
-      }
+  let triggered = false;
+  const triggerEscape = () => {
+    if (triggered) return;
+    triggered = true;
+    onEscape();
+  };
+
+  const onData = (chunk: Buffer | string) => {
+    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    // Escape key is single byte 0x1B (ESC)
+    if (buf.length === 1 && buf[0] === 0x1b) {
+      triggerEscape();
+    } else if (buf.length === 1 && buf[0] === 0x03) {
+      // Ctrl+C
+      process.exit(0);
     }
   };
 
+  const keypressHandler = (str: string, key: any) => {
+    if (
+      (key && key.name === 'escape') ||
+      str === '\x1b' ||
+      str === '\u001b' ||
+      (key && key.sequence === '\x1b')
+    ) {
+      triggerEscape();
+    } else if (key && key.ctrl && key.name === 'c') {
+      process.exit(0);
+    }
+  };
+
+  process.stdin.on('data', onData);
   process.stdin.on('keypress', keypressHandler);
 
   return () => {
+    process.stdin.removeListener('data', onData);
     process.stdin.removeListener('keypress', keypressHandler);
     try {
       if (!wasRaw && process.stdin.isTTY) {
@@ -204,7 +227,13 @@ program
       );
       console.log(chalk.white(options.prompt) + '\n');
       const abortController = new AbortController();
-      const detachEscape = attachEscapeListener(() => abortController.abort());
+      let hasAborted = false;
+      const detachEscape = attachEscapeListener(() => {
+        if (hasAborted) return;
+        hasAborted = true;
+        abortController.abort();
+        renderInterruptedNotice();
+      });
       try {
         const { expandedPrompt } = await expandOpenCodeMentions(options.prompt);
         const reply = await agent.chat(expandedPrompt, { signal: abortController.signal });
@@ -706,21 +735,29 @@ program
 
       // Real-time Escape-to-cancel agent chat execution
       const abortController = new AbortController();
+      let hasAborted = false;
       const detachEscape = attachEscapeListener(() => {
+        if (hasAborted) return;
+        hasAborted = true;
         abortController.abort();
+        renderInterruptedNotice();
+        updateFixedBottomStatus('⏹️ Stopped by Escape key', {
+          mode: agent.getMode(),
+          model: config?.model || 'unknown',
+        });
       });
 
       try {
         const reply = await agent.chat(expandedPrompt, { signal: abortController.signal });
-        if (abortController.signal.aborted) {
-          renderInterruptedNotice();
+        if (abortController.signal.aborted || hasAborted) {
+          // Notice already rendered immediately upon Escape press
         } else {
           console.log('\n' + chalk.bold.hex('#00FF7F')('banglacli:'));
           console.log(renderMarkdown(reply) + '\n');
         }
       } catch (err: any) {
-        if (abortController.signal.aborted) {
-          renderInterruptedNotice();
+        if (abortController.signal.aborted || hasAborted) {
+          // Notice already rendered immediately upon Escape press
         } else {
           console.error(chalk.red(`\n✖ Agent Error: ${err.message}\n`));
         }
