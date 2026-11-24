@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import * as p from '@clack/prompts';
 import { ProviderType, BanglaCLIConfig, saveConfig, PROVIDER_LABELS, PROVIDER_KEY_URLS } from './config.js';
 import { createSpinner } from './ui.js';
+import { prepareInteractiveArea } from './prompt.js';
 
 export interface AgentModelPreset {
   id: string;
@@ -949,13 +950,25 @@ export async function fetchLiveOpenRouterFreeModels(): Promise<AgentModelPreset[
  * OpenCode-style interactive AI Agent Model Selector.
  */
 export async function selectAgentModelInteractive(
-  currentConfig: BanglaCLIConfig
+  currentConfig: BanglaCLIConfig,
+  mode: 'build' | 'plan' = 'build'
 ): Promise<BanglaCLIConfig | null> {
+  const headerHeight = prepareInteractiveArea(
+    PROVIDER_LABELS[currentConfig.provider] || currentConfig.provider,
+    currentConfig.model,
+    mode
+  );
+
+  const termRows = process.stdout.rows || 24;
+  const availableRows = Math.max(4, termRows - headerHeight - 6);
+  const selectMaxItems = Math.max(3, Math.min(6, availableRows));
+
   p.intro(chalk.bold.hex('#00FF7F')('🤖 OpenCode AI Agent & Model Selector'));
 
   // 1. Choose Category
   const categoryChoice = (await p.select({
     message: chalk.cyan('Select Agent Category:'),
+    maxItems: selectMaxItems,
     options: [
       {
         value: 'free',
@@ -1074,6 +1087,7 @@ export async function selectAgentModelInteractive(
   const selectedModelId = (await p.select({
     message: chalk.cyan('Select AI Model:'),
     initialValue: safeInitialValue,
+    maxItems: selectMaxItems,
     options: modelOptions,
   })) as string;
 

@@ -271,7 +271,7 @@ function renderStickyHeaderLines(
   return lines;
 }
 
-function writeStickyHeader(
+export function writeStickyHeader(
   cols: number,
   rows: number,
   provider: string,
@@ -286,6 +286,32 @@ function writeStickyHeader(
   const spacerRow = lines.length + 1;
   process.stdout.write(`\x1b[${spacerRow};1H\x1b[2K`);
   return spacerRow; // returns total height used by header (including spacer)
+}
+
+/**
+ * Prepares the screen for interactive prompts (e.g. model selector, mode picker).
+ * Pinned upper header is drawn at rows 1..H, everything below row H is cleared,
+ * and the cursor is placed at row H+1 for clean in-place execution.
+ * Prevents overlapping, terminal buffer corruption, and displacement of the pinned header.
+ */
+export function prepareInteractiveArea(
+  provider: string,
+  model: string,
+  mode: 'build' | 'plan'
+): number {
+  deactivateFixedDock();
+  const rows = process.stdout.rows || 24;
+  const cols = process.stdout.columns || 80;
+
+  process.stdout.write('\x1b[r\x1b[?25h');
+  process.stdout.write('\x1b[2J\x1b[H');
+
+  const headerHeight = writeStickyHeader(cols, rows, provider, model, mode);
+  _dockedHeaderHeight = headerHeight;
+
+  // Clear everything from row headerHeight + 1 down to the bottom
+  process.stdout.write(`\x1b[${headerHeight + 1};1H\x1b[J`);
+  return headerHeight;
 }
 
 function writeDockedBox(rows: number, cols: number, model: string, mode: 'build' | 'plan'): void {
@@ -350,6 +376,7 @@ export function activateFixedDock(
   // Position cursor inside input box
   process.stdout.write(`\x1b[${rows - 2};5H\x1b[?25h`);
 
+  process.stdout.removeListener('resize', onDockedResize);
   process.stdout.on('resize', onDockedResize);
   return true;
 }

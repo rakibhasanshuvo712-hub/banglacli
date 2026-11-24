@@ -31,7 +31,7 @@ import {
 } from './ui.js';
 import { safetySession, getSessionChanges, undoLastChange } from './tools.js';
 import { selectAgentModelInteractive, findModelByQuery, applyModelDirect } from './models.js';
-import { readOpenCodePrompt, expandOpenCodeMentions, restoreTerminalViewport, updateFixedBottomStatus, activateFixedDock, deactivateFixedDock, updateDockedModel } from './prompt.js';
+import { readOpenCodePrompt, expandOpenCodeMentions, restoreTerminalViewport, updateFixedBottomStatus, activateFixedDock, deactivateFixedDock, updateDockedModel, prepareInteractiveArea } from './prompt.js';
 import { detectProjectContext } from './detector.js';
 
 // Ensure terminal viewport is cleanly restored on process exit
@@ -217,8 +217,11 @@ program
 
       // Mode Switching (OpenCode Style)
       if (trimmed === '/mode') {
-        deactivateFixedDock();
-        restoreTerminalViewport();
+        prepareInteractiveArea(
+          PROVIDER_LABELS[config.provider] || config.provider,
+          config.model,
+          agent.getMode()
+        );
         const modeChoice = (await p.select({
           message: chalk.cyan('Select Agent Mode (OpenCode Style):'),
           initialValue: agent.getMode(),
@@ -238,21 +241,23 @@ program
 
         if (!p.isCancel(modeChoice)) {
           agent.setMode(modeChoice);
-          if (modeChoice === 'build') {
-            console.log(
-              chalk.green('\n✔ Switched to ⚡ BUILD MODE (Autonomous Builder: file writes & commands enabled)\n')
-            );
-          } else {
-            console.log(
-              chalk.yellow('\n✔ Switched to 📋 PLAN MODE (Senior Architect: read-only analysis & planning)\n')
-            );
-          }
         }
         activateFixedDock(
           PROVIDER_LABELS[config.provider] || config.provider,
           config.model,
           agent.getMode()
         );
+        if (!p.isCancel(modeChoice)) {
+          if (modeChoice === 'build') {
+            console.log(
+              chalk.green('✔ Switched to ⚡ BUILD MODE (Autonomous Builder: file writes & commands enabled)\n')
+            );
+          } else {
+            console.log(
+              chalk.yellow('✔ Switched to 📋 PLAN MODE (Senior Architect: read-only analysis & planning)\n')
+            );
+          }
+        }
         continue;
       }
 
@@ -439,38 +444,46 @@ program
       }
 
       if (trimmed === '/provider') {
-        deactivateFixedDock();
-        restoreTerminalViewport();
+        prepareInteractiveArea(
+          PROVIDER_LABELS[config.provider] || config.provider,
+          config.model,
+          agent.getMode()
+        );
         const newConfig = await switchProviderInteractive(config);
         if (newConfig) {
           config = newConfig;
           agent.updateConfig(newConfig);
-          console.log(
-            chalk.green(
-              `\n✔ Active Provider: ${chalk.bold(PROVIDER_LABELS[config.provider])} (${chalk.bold(config.model)})\n`
-            )
-          );
         }
         activateFixedDock(
           PROVIDER_LABELS[config.provider] || config.provider,
           config.model,
           agent.getMode()
         );
+        if (newConfig) {
+          console.log(
+            chalk.green(
+              `✔ Active Provider: ${chalk.bold(PROVIDER_LABELS[config.provider])} (${chalk.bold(config.model)})\n`
+            )
+          );
+        }
         continue;
       }
 
       if (trimmed === '/config') {
-        deactivateFixedDock();
-        restoreTerminalViewport();
+        prepareInteractiveArea(
+          PROVIDER_LABELS[config.provider] || config.provider,
+          config.model,
+          agent.getMode()
+        );
         const newConfig = await promptConfig(false);
         config = newConfig;
         agent.updateConfig(newConfig);
-        console.log(chalk.green(`\n✔ Config updated: ${PROVIDER_LABELS[config.provider]} (${config.model})\n`));
         activateFixedDock(
           PROVIDER_LABELS[config.provider] || config.provider,
           config.model,
           agent.getMode()
         );
+        console.log(chalk.green(`✔ Config updated: ${PROVIDER_LABELS[config.provider]} (${config.model})\n`));
         continue;
       }
 
@@ -506,8 +519,7 @@ program
               );
               console.log(
                 chalk.green(
-                  `\n✔ Active Model switched to: ${chalk.bold(match.name)} (${chalk.cyan(match.id)})\n` +
-                    `Provider: ${chalk.bold(PROVIDER_LABELS[config.provider])}\n`
+                  `✔ Active Model: ${chalk.bold(match.name)} (${chalk.cyan(match.id)}) [${chalk.bold(PROVIDER_LABELS[config.provider])}]\n`
                 )
               );
             }
@@ -519,23 +531,23 @@ program
           }
         }
 
-        deactivateFixedDock();
-        restoreTerminalViewport();
-        const newConfig = await selectAgentModelInteractive(config);
+        const newConfig = await selectAgentModelInteractive(config, agent.getMode());
         if (newConfig) {
           config = newConfig;
           agent.updateConfig(newConfig);
-          console.log(
-            chalk.green(
-              `\n✔ Active Model switched to: ${chalk.bold(config.model)} (${PROVIDER_LABELS[config.provider]})\n`
-            )
-          );
         }
         activateFixedDock(
           PROVIDER_LABELS[config.provider] || config.provider,
           config.model,
           agent.getMode()
         );
+        if (newConfig) {
+          console.log(
+            chalk.green(
+              `✔ Active Model: ${chalk.bold(config.model)} (${PROVIDER_LABELS[config.provider]})\n`
+            )
+          );
+        }
         continue;
       }
 
@@ -621,7 +633,7 @@ program
     if (!config) {
       config = await promptConfig(true);
     }
-    await selectAgentModelInteractive(config);
+    await selectAgentModelInteractive(config, 'build');
   });
 
 // Explicit mode subcommand
