@@ -43,23 +43,29 @@ function renderTopBorder(width: number, isBuild: boolean, model: string, borderC
   const modeWidth = getDisplayWidth(modeText);
 
   let rightText = ' (Tab: model • Esc: clear) ';
-  if (width < 76) rightText = ' (Tab: model) ';
-  if (width < 56) rightText = '';
-  const rightWidth = getDisplayWidth(rightText);
+  if (width < 80) rightText = ' (Tab: model) ';
+  if (width < 60) rightText = '';
+  let rightWidth = getDisplayWidth(rightText);
 
-  let modelDisplay = model;
-  let availForModel = width - 12 - modeWidth - rightWidth;
+  // Fixed border overhead: '╭── ' (4) + ' ── ' (4) + ' ' (1) + rightBorder '──╮' (3) + min 1 dash (1) = 13
+  let availForModel = width - 13 - modeWidth - rightWidth;
   if (availForModel < 10) {
     rightText = '';
-    availForModel = width - 12 - modeWidth;
-  }
-  if (getDisplayWidth(' 🤖 ' + modelDisplay + ' ') > availForModel) {
-    const short = modelDisplay.includes('/') ? modelDisplay.split('/').pop() || modelDisplay : modelDisplay;
-    const maxLen = Math.max(5, availForModel - 6);
-    modelDisplay = short.slice(0, maxLen) + '…';
+    rightWidth = 0;
+    availForModel = width - 13 - modeWidth;
   }
 
-  const modelText = ` 🤖 ${modelDisplay} `;
+  let modelDisplay = model;
+  let modelText = ` 🤖 ${modelDisplay} `;
+  if (getDisplayWidth(modelText) > availForModel) {
+    let short = modelDisplay.includes('/') ? modelDisplay.split('/').pop() || modelDisplay : modelDisplay;
+    while (short.length > 0 && getDisplayWidth(` 🤖 ${short}… `) > availForModel) {
+      short = short.slice(0, -1);
+    }
+    modelDisplay = short ? short + '…' : '…';
+    modelText = ` 🤖 ${modelDisplay} `;
+  }
+
   const modelBadge = chalk.bgHex('#1A237E').white.bold(modelText);
   const modelWidth = getDisplayWidth(modelText);
 
@@ -75,9 +81,9 @@ function renderTopBorder(width: number, isBuild: boolean, model: string, borderC
 
 function renderBottomBorder(width: number, borderColor: (str: string) => string): string {
   let hintText = ' Enter: send • Tab: switch model • Shift+Enter: newline • /help ';
-  if (width < 82) hintText = ' Enter: send • Tab: model • Shift+Enter: newline • /help ';
-  if (width < 70) hintText = ' Enter: send • Tab: model • /help ';
-  if (width < 54) hintText = ' Enter: send • Tab: model ';
+  if (width < 84) hintText = ' Enter: send • Tab: model • Shift+Enter: newline • /help ';
+  if (width < 72) hintText = ' Enter: send • Tab: model • /help ';
+  if (width < 56) hintText = ' Enter: send • Tab: model ';
   if (width < 44) hintText = ' Enter: send ';
 
   const prefixColored = borderColor('╰── ');
@@ -85,14 +91,22 @@ function renderBottomBorder(width: number, borderColor: (str: string) => string)
   const suffixColored = borderColor('──╯');
   const suffixWidth = 3;
 
-  let hintWidth = getDisplayWidth(hintText);
-  if (hintWidth > width - prefixWidth - suffixWidth - 2) {
-    hintText = ' Enter ';
-    hintWidth = getDisplayWidth(hintText);
+  // Minimum 1 dash => max allowed hintWidth is width - 4 - 3 - 1 = width - 8
+  while (getDisplayWidth(hintText) > width - 8 && hintText.length > 0) {
+    if (hintText.includes('•')) {
+      hintText = hintText.slice(0, hintText.lastIndexOf('•')).trim() + ' ';
+    } else {
+      hintText = ' Enter ';
+      if (getDisplayWidth(hintText) > width - 8) {
+        hintText = '';
+      }
+      break;
+    }
   }
 
+  const hintWidth = getDisplayWidth(hintText);
   const dashesCount = Math.max(1, width - prefixWidth - hintWidth - suffixWidth);
-  return prefixColored + chalk.gray(hintText) + borderColor('─'.repeat(dashesCount)) + suffixColored;
+  return prefixColored + (hintText ? chalk.gray(hintText) : '') + borderColor('─'.repeat(dashesCount)) + suffixColored;
 }
 
 function renderContentLine(
@@ -110,7 +124,7 @@ function renderContentLine(
   const prefixWidth = 4;
   const rightBorder = borderColor(' │');
   const rightWidth = 2;
-  const textCapacity = Math.max(10, width - prefixWidth - rightWidth);
+  const textCapacity = Math.max(1, width - prefixWidth - rightWidth);
 
   // Fit text within capacity using display width so emojis or wide chars never break borders
   let visibleText = lineText;
@@ -202,29 +216,27 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
 
     // Update active line in-place without touching any other line
     const updateActiveLineInPlace = () => {
-      const curWidth = getSafeBoxWidth();
       const lineStr = renderContentLine(
-        curWidth,
+        boxWidth,
         bufferLines[cursorLine],
         cursorLine === 0,
         isBuildMode,
         borderColor
       );
-      const activeCol = 5 + Math.min(cursorCol, curWidth - 8);
+      const activeCol = 5 + Math.min(cursorCol, boxWidth - 8);
       process.stdout.write(`\r${lineStr}\r\x1b[${activeCol}G`);
     };
 
     // Redraw content lines and bottom border from startLine down
     const redrawContentFrom = (startLine: number) => {
-      const curWidth = getSafeBoxWidth();
       const linesToDraw: string[] = [];
 
       for (let i = startLine; i < bufferLines.length; i++) {
         linesToDraw.push(
-          renderContentLine(curWidth, bufferLines[i], i === 0, isBuildMode, borderColor)
+          renderContentLine(boxWidth, bufferLines[i], i === 0, isBuildMode, borderColor)
         );
       }
-      linesToDraw.push(renderBottomBorder(curWidth, borderColor));
+      linesToDraw.push(renderBottomBorder(boxWidth, borderColor));
 
       // Overwrite from startLine down and clear any leftovers
       process.stdout.write('\r\x1b[J');
@@ -232,7 +244,7 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
 
       // Move cursor back up from bottom border to cursorLine
       const linesUpFromBottom = (bufferLines.length - cursorLine);
-      const activeCol = 5 + Math.min(cursorCol, curWidth - 8);
+      const activeCol = 5 + Math.min(cursorCol, boxWidth - 8);
       process.stdout.write(`\x1b[${linesUpFromBottom}A\x1b[${activeCol}G`);
     };
 
@@ -433,14 +445,12 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
         // Left arrow
         if (cursorCol > 0) {
           cursorCol--;
-          const curWidth = getSafeBoxWidth();
-          const activeCol = 5 + Math.min(cursorCol, curWidth - 8);
+          const activeCol = 5 + Math.min(cursorCol, boxWidth - 8);
           process.stdout.write(`\x1b[${activeCol}G`);
         } else if (cursorLine > 0) {
           cursorLine--;
           cursorCol = bufferLines[cursorLine].length;
-          const curWidth = getSafeBoxWidth();
-          const activeCol = 5 + Math.min(cursorCol, curWidth - 8);
+          const activeCol = 5 + Math.min(cursorCol, boxWidth - 8);
           process.stdout.write(`\x1b[1A\x1b[${activeCol}G`);
         }
         return;
@@ -449,8 +459,7 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
         // Right arrow
         if (cursorCol < bufferLines[cursorLine].length) {
           cursorCol++;
-          const curWidth = getSafeBoxWidth();
-          const activeCol = 5 + Math.min(cursorCol, curWidth - 8);
+          const activeCol = 5 + Math.min(cursorCol, boxWidth - 8);
           process.stdout.write(`\x1b[${activeCol}G`);
         } else if (cursorLine < bufferLines.length - 1) {
           cursorLine++;
@@ -464,8 +473,7 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
         if (cursorLine > 0) {
           cursorLine--;
           cursorCol = Math.min(cursorCol, bufferLines[cursorLine].length);
-          const curWidth = getSafeBoxWidth();
-          const activeCol = 5 + Math.min(cursorCol, curWidth - 8);
+          const activeCol = 5 + Math.min(cursorCol, boxWidth - 8);
           process.stdout.write(`\x1b[1A\x1b[${activeCol}G`);
         }
         return;
@@ -475,8 +483,7 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
         if (cursorLine < bufferLines.length - 1) {
           cursorLine++;
           cursorCol = Math.min(cursorCol, bufferLines[cursorLine].length);
-          const curWidth = getSafeBoxWidth();
-          const activeCol = 5 + Math.min(cursorCol, curWidth - 8);
+          const activeCol = 5 + Math.min(cursorCol, boxWidth - 8);
           process.stdout.write(`\x1b[1B\x1b[${activeCol}G`);
         }
         return;
