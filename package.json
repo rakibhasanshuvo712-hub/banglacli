@@ -5,8 +5,8 @@
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
-    "banglacli": "./dist/index.js",
-    "banglaCLI": "./dist/index.js"
+    "banglacli": "dist/index.js",
+    "banglaCLI": "dist/index.js"
   },
   "files": [
     "dist"
