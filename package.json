@@ -41,6 +41,7 @@
     "marked-terminal": "^8.0.0",
     "openai": "^7.62.0",
     "ora": "^10.0.0",
+    "string-width": "^4.2.3",
     "tsup": "^9.0.0",
     "typescript": "^7.0.2"
   },

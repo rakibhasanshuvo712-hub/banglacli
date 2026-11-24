@@ -1,31 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import chalk from 'chalk';
+import stringWidth from 'string-width';
 
 export interface OpenCodePromptOptions {
   mode: 'build' | 'plan';
   model: string;
   provider?: string;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Display-width helper: handles ANSI strips, surrogates, wide chars, emojis
-// ─────────────────────────────────────────────────────────────────────────────
-function getDisplayWidth(str: string): number {
-  const clean = str.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
-  let len = 0;
-  for (let i = 0; i < clean.length; i++) {
-    const code = clean.charCodeAt(i);
-    if (code >= 0xd800 && code <= 0xdbff) {
-      len += 2;
-      i++;
-    } else if (code > 0x2e80) {
-      len += 2;
-    } else {
-      len += 1;
-    }
-  }
-  return len;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -37,8 +18,9 @@ function getSafeBoxWidth(): number {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Border renderers
+// 100% Mathematically Exact Border Renderers (using string-width)
 // ─────────────────────────────────────────────────────────────────────────────
+
 function renderTopBorder(
   width: number,
   isBuild: boolean,
@@ -49,36 +31,46 @@ function renderTopBorder(
   const modeBadge = isBuild
     ? chalk.bgHex('#00C853').black.bold(modeText)
     : chalk.bgHex('#FFB300').black.bold(modeText);
-  const modeWidth = getDisplayWidth(modeText);
+  const modeWidth = stringWidth(modeText);
 
+  // Responsive right hint
   let rightText = ' (Tab: model • Esc: clear) ';
-  if (width < 80) rightText = ' (Tab: model) ';
-  if (width < 60) rightText = '';
-  let rightWidth = getDisplayWidth(rightText);
+  if (width < 86) rightText = ' (Tab: model) ';
+  if (width < 66) rightText = '';
 
-  // Overhead: '╭── ' (4) + ' ── ' (4) + ' ' (1) + '──╮' (3) + min 1 dash (1) = 13
-  let availForModel = width - 13 - modeWidth - rightWidth;
-  if (availForModel < 10) {
+  let rightWidth = stringWidth(rightText);
+
+  // Available room for model badge
+  // Overhead: '╭── ' (4) + modeWidth + ' ── ' (4) + ' ' (1) + min 1 dash (1) + rightWidth + '──╮' (3)
+  let availForModel = width - (4 + modeWidth + 4 + 1 + 1 + rightWidth + 3);
+  if (availForModel < 8) {
     rightText = '';
     rightWidth = 0;
-    availForModel = width - 13 - modeWidth;
+    availForModel = width - (4 + modeWidth + 4 + 1 + 1 + rightWidth + 3);
   }
 
+  // Model text truncation
   let modelDisplay = model;
   let modelText = ` 🤖 ${modelDisplay} `;
-  if (getDisplayWidth(modelText) > availForModel) {
+  if (stringWidth(modelText) > availForModel) {
     let short = modelDisplay.includes('/')
       ? modelDisplay.split('/').pop() || modelDisplay
       : modelDisplay;
-    while (short.length > 0 && getDisplayWidth(` 🤖 ${short}… `) > availForModel) {
+    while (short.length > 0 && stringWidth(` 🤖 ${short}… `) > availForModel) {
       short = short.slice(0, -1);
     }
-    modelDisplay = short ? short + '…' : '…';
+    modelDisplay = short ? `${short}…` : '…';
     modelText = ` 🤖 ${modelDisplay} `;
   }
 
+  // Ultra-narrow fallback
+  while (stringWidth(modelText) > availForModel && modelDisplay.length > 1) {
+    modelDisplay = modelDisplay.slice(0, -1);
+    modelText = ` 🤖 ${modelDisplay}… `;
+  }
+
   const modelBadge = chalk.bgHex('#1A237E').white.bold(modelText);
-  const modelWidth = getDisplayWidth(modelText);
+  const modelWidth = stringWidth(modelText);
 
   const leftPrefix =
     borderColor('╭── ') + modeBadge + borderColor(' ── ') + modelBadge + borderColor(' ');
@@ -97,25 +89,34 @@ function renderBottomBorder(
 ): string {
   let hintText =
     customHint || ' Enter: send • Tab: switch model • Shift+Enter: newline • /help ';
+
   if (!customHint) {
-    if (width < 84) hintText = ' Enter: send • Tab: model • Shift+Enter: newline • /help ';
-    if (width < 72) hintText = ' Enter: send • Tab: model • /help ';
-    if (width < 56) hintText = ' Enter: send • Tab: model ';
-    if (width < 44) hintText = ' Enter: send ';
+    if (width < 90) hintText = ' Enter: send • Tab: model • Shift+Enter: newline • /help ';
+    if (width < 76) hintText = ' Enter: send • Tab: model • /help ';
+    if (width < 60) hintText = ' Enter: send • Tab: model ';
+    if (width < 46) hintText = ' Enter: send ';
   }
 
-  while (getDisplayWidth(hintText) > width - 8 && hintText.length > 0) {
+  const prefixWidth = 4; // '╰── '
+  const suffixWidth = 3; // '──╯'
+  const minDashes = 1;
+  const maxHintWidth = width - prefixWidth - suffixWidth - minDashes;
+
+  while (stringWidth(hintText) > maxHintWidth && hintText.length > 0) {
     if (hintText.includes('•')) {
       hintText = hintText.slice(0, hintText.lastIndexOf('•')).trim() + ' ';
     } else {
       hintText = ' Enter ';
-      if (getDisplayWidth(hintText) > width - 8) hintText = '';
+      if (stringWidth(hintText) > maxHintWidth) {
+        hintText = '';
+      }
       break;
     }
   }
 
-  const hintWidth = getDisplayWidth(hintText);
-  const dashesCount = Math.max(1, width - 4 - hintWidth - 3);
+  const hintWidth = stringWidth(hintText);
+  const dashesCount = Math.max(1, width - prefixWidth - hintWidth - suffixWidth);
+
   return (
     borderColor('╰── ') +
     (hintText ? chalk.gray(hintText) : '') +
@@ -137,18 +138,18 @@ function renderContentLine(
   const prefix = isFirst
     ? borderColor('│ ') + promptArrow
     : borderColor('│ ') + chalk.dim('· ');
-  // prefixWidth = 4 cells always (│ + space + ❯/· + space)
   const prefixWidth = 4;
   const rightBorder = borderColor(' │');
   const rightWidth = 2;
   const textCapacity = Math.max(1, width - prefixWidth - rightWidth);
 
   let visibleText = lineText;
-  while (getDisplayWidth(visibleText) > textCapacity) {
+  while (stringWidth(visibleText) > textCapacity && visibleText.length > 0) {
     visibleText = visibleText.slice(1);
   }
 
-  const padding = Math.max(0, textCapacity - getDisplayWidth(visibleText));
+  const textWidth = stringWidth(visibleText);
+  const padding = Math.max(0, textCapacity - textWidth);
   return prefix + chalk.white(visibleText) + ' '.repeat(padding) + rightBorder;
 }
 
@@ -164,16 +165,17 @@ function renderStatusLine(
   const textCapacity = Math.max(1, width - prefixWidth - rightWidth);
 
   let visibleText = statusText;
-  while (getDisplayWidth(visibleText) > textCapacity) {
+  while (stringWidth(visibleText) > textCapacity && visibleText.length > 0) {
     visibleText = visibleText.slice(1);
   }
 
-  const padding = Math.max(0, textCapacity - getDisplayWidth(visibleText));
+  const textWidth = stringWidth(visibleText);
+  const padding = Math.max(0, textCapacity - textWidth);
   return prefix + chalk.yellow(visibleText) + ' '.repeat(padding) + rightBorder;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// restoreTerminalViewport: reset scroll margins + show cursor (called on exit)
+// restoreTerminalViewport: reset scroll margins + show cursor
 // ─────────────────────────────────────────────────────────────────────────────
 export function restoreTerminalViewport(): void {
   try {
@@ -182,35 +184,36 @@ export function restoreTerminalViewport(): void {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// updateFixedBottomStatus: update status line in fixed dock (TTY only)
+// updateFixedBottomStatus: update status line inside fixed dock
 // ─────────────────────────────────────────────────────────────────────────────
 export function updateFixedBottomStatus(
   statusText: string,
   options?: { mode?: 'build' | 'plan'; model?: string }
 ): void {
-  if (!process.stdout.isTTY || !process.stdout.rows || process.stdout.rows < 12) return;
+  if (!process.stdout.isTTY || !process.stdout.rows || process.stdout.rows < 14) return;
   const H = process.stdout.rows;
   const boxWidth = getSafeBoxWidth();
   const isBuildMode = (options?.mode || 'build') === 'build';
   const borderColor = isBuildMode ? chalk.hex('#00FF7F') : chalk.hex('#FFB300');
   const statusLine = renderStatusLine(boxWidth, statusText, borderColor);
-  process.stdout.write(`\x1b[s\x1b[${H - 1};1H\x1b[2K${statusLine}\x1b[u`);
+  process.stdout.write(`\x1b[s\x1b[${H - 2};1H\x1b[2K${statusLine}\x1b[u`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STICKY HEADER SYSTEM
+// STICKY HEADER & FIXED DOCK SYSTEM (OpenCode / Antigravity Style)
 //
-// On TTY: writes a 2-line mini-header at row 1 (above scroll region).
-// On non-TTY: no-op (the full banner was already printed at startup).
+// Top Rows 1-3: Permanently Pinned Header (Banner & Developer Info)
+//   Row 1: 🇧🇩 BANGLACLI v2.0  •  Developer: Rakib Hasan Shuvo (@rakibhasanshuvo712-hub)
+//   Row 2: Next-Gen Autonomous BYOK Coding Agent • Speaks বাংলা, Banglish & English
+//   Row 3: ───────────────────────────────────────────────────────────────────────
 //
-// Header format:
-//   Row 1: ▌ BANGLACLI v2  🇧🇩  Developer: Rakib Hasan Shuvo ──────────── (cwd)
-//   Row 2: ─────────────────────────────────────────────────────────────────
+// Middle Rows 4..(H - 4): Active Workspace (DECSTBM Scrolling Region)
+//   All execution, streaming chat, markdown, and tools render here cleanly.
 //
-// The scroll region (DECSTBM) is set to rows 3..H-4 to leave room for:
-//   - 2 header rows at top
-//   - 1 blank separator row
-//   - 4 box rows at bottom (top border + 1 content line + bottom border + 1 blank)
+// Bottom Rows (H - 3)..(H - 1): Permanently Pinned Docked Box
+//   Row H - 3: ╭── ⚡ BUILD ── 🤖 model ───────────────────────── (Tab: model) ──╮
+//   Row H - 2: │ ❯ input...                                                      │
+//   Row H - 1: ╰── Enter: send • Tab: switch model • Shift+Enter: newline ───────╯
 // ─────────────────────────────────────────────────────────────────────────────
 
 let _dockedActive = false;
@@ -219,41 +222,45 @@ let _dockedCols = 0;
 let _dockedModel = '';
 let _dockedMode: 'build' | 'plan' = 'build';
 
-const HEADER_ROWS = 3; // 2 header lines + 1 separator blank
-const BOX_ROWS = 4;    // top border + content + bottom border + 1 blank gap
+const HEADER_ROWS = 3; // rows 1, 2, 3
+const BOX_ROWS = 4;    // blank gap + top border + content + bottom border
 
 function writeStickyHeader(cols: number): void {
   const w = cols;
-  const name = chalk.hex('#00FF7F').bold('BANGLACLI');
-  const v = chalk.dim(' v2.0 ');
-  const flag = '🇧🇩 ';
+
+  // Row 1: Brand badge, developer name, workspace
+  const badge = chalk.bgHex('#006A4E').white.bold(' 🇧🇩 BANGLACLI v2.0 ');
   const devLabel = chalk.dim(' Developer: ');
   const devName = chalk.bold.hex('#00FF7F')('Rakib Hasan Shuvo');
   const devHandle = chalk.dim(' (@rakibhasanshuvo712-hub)');
+  const row1Left = `${badge} ${devLabel}${devName}${devHandle}`;
+  const row1LeftWidth = stringWidth(' 🇧🇩 BANGLACLI v2.0  Developer: Rakib Hasan Shuvo (@rakibhasanshuvo712-hub)');
 
-  const leftContent = name + v + flag + devLabel + devName + devHandle;
-  const leftWidth = getDisplayWidth('BANGLACLI v2.0 🇧🇩  Developer: Rakib Hasan Shuvo (@rakibhasanshuvo712-hub)');
-
-  const cwdStr = process.cwd();
-  const maxCwdWidth = Math.max(0, w - leftWidth - 3);
-  let cwd = cwdStr;
-  if (cwd.length > maxCwdWidth && maxCwdWidth > 6) {
-    cwd = '…' + cwd.slice(-(maxCwdWidth - 1));
-  } else if (maxCwdWidth <= 6) {
+  let cwd = process.cwd();
+  const maxCwdWidth = Math.max(0, w - row1LeftWidth - 5);
+  if (stringWidth(cwd) > maxCwdWidth && maxCwdWidth > 8) {
+    cwd = '…' + cwd.slice(-(maxCwdWidth - 2));
+  } else if (maxCwdWidth <= 8) {
     cwd = '';
   }
-  const cwdColored = cwd ? chalk.dim(' ' + cwd) : '';
+  const cwdTag = cwd ? chalk.dim(` 📁 ${cwd}`) : '';
+  const row1Padding = Math.max(0, w - row1LeftWidth - (cwd ? stringWidth(` 📁 ${cwd}`) : 0));
 
-  // Fill remaining width with spaces to clear any old content
-  const fillWidth = Math.max(0, w - leftWidth - getDisplayWidth(cwd ? ' ' + cwd : ''));
-  const fill = ' '.repeat(fillWidth);
+  // Row 2: Subtitle & capabilities
+  const subText = chalk.dim('Next-Gen Autonomous BYOK Coding Agent • Speaks ') +
+    chalk.hex('#FFDF00').bold('বাংলা') + chalk.dim(', ') +
+    chalk.cyan.bold('Banglish') + chalk.dim(' & ') +
+    chalk.white.bold('English');
+  const subPlain = 'Next-Gen Autonomous BYOK Coding Agent • Speaks বাংলা, Banglish & English';
+  const row2Padding = Math.max(0, w - stringWidth(subPlain));
 
-  // Row 1: header content
-  process.stdout.write(`\x1b[1;1H\x1b[2K${leftContent}${cwdColored}${fill}`);
-  // Row 2: solid separator line
-  process.stdout.write(`\x1b[2;1H\x1b[2K${chalk.hex('#00FF7F').dim('─'.repeat(w))}`);
-  // Row 3: blank separator
-  process.stdout.write(`\x1b[3;1H\x1b[2K`);
+  // Row 3: Accent border line
+  const divider = chalk.hex('#00FF7F').dim('─'.repeat(Math.max(1, w)));
+
+  // Write all 3 rows cleanly
+  process.stdout.write(`\x1b[1;1H\x1b[2K${row1Left}${' '.repeat(row1Padding)}${cwdTag}`);
+  process.stdout.write(`\x1b[2;1H\x1b[2K  ${subText}${' '.repeat(Math.max(0, row2Padding - 2))}`);
+  process.stdout.write(`\x1b[3;1H\x1b[2K${divider}`);
 }
 
 function writeDockedBox(rows: number, cols: number, model: string, mode: 'build' | 'plan'): void {
@@ -261,32 +268,31 @@ function writeDockedBox(rows: number, cols: number, model: string, mode: 'build'
   const borderColor = isBuild ? chalk.hex('#00FF7F') : chalk.hex('#FFB300');
   const boxWidth = Math.max(42, Math.min(cols - 4, 94));
 
-  const topRow = rows - BOX_ROWS + 1;
-  const contentRow = rows - BOX_ROWS + 2;
-  const bottomRow = rows - BOX_ROWS + 3;
+  const topRow = rows - 3;
+  const contentRow = rows - 2;
+  const bottomRow = rows - 1;
 
   const topBorder = renderTopBorder(boxWidth, isBuild, model, borderColor);
   const contentLine = renderContentLine(boxWidth, '', true, isBuild, borderColor);
   const bottomBorder = renderBottomBorder(boxWidth, borderColor);
 
-  // Write blank gap above box
+  // Clear blank separator above box
   process.stdout.write(`\x1b[${topRow - 1};1H\x1b[2K`);
-  // Write box rows
+  // Render box lines
   process.stdout.write(`\x1b[${topRow};1H\x1b[2K${topBorder}`);
   process.stdout.write(`\x1b[${contentRow};1H\x1b[2K${contentLine}`);
   process.stdout.write(`\x1b[${bottomRow};1H\x1b[2K${bottomBorder}`);
-  // Write blank row at very bottom (last row)
+  // Clear bottom-most line
   process.stdout.write(`\x1b[${rows};1H\x1b[2K`);
 }
 
 /**
- * Activates fixed-dock layout (DECSTBM scroll region).
- * Call once at startup on TTY terminals.
+ * Activates fixed-dock layout with DECSTBM scrolling region.
  */
 export function activateFixedDock(model: string, mode: 'build' | 'plan'): boolean {
   const rows = process.stdout.rows;
   const cols = process.stdout.columns;
-  if (!process.stdout.isTTY || !rows || rows < 12 || !cols) return false;
+  if (!process.stdout.isTTY || !rows || rows < 14 || !cols) return false;
 
   _dockedActive = true;
   _dockedRows = rows;
@@ -294,32 +300,26 @@ export function activateFixedDock(model: string, mode: 'build' | 'plan'): boolea
   _dockedModel = model;
   _dockedMode = mode;
 
-  // Hide cursor during setup
-  process.stdout.write('\x1b[?25l');
+  process.stdout.write('\x1b[?25l'); // hide cursor
 
-  // Write sticky header at rows 1-3
+  // Write sticky top header
   writeStickyHeader(cols);
 
-  // Write docked box at bottom rows
+  // Write docked bottom box
   writeDockedBox(rows, cols, model, mode);
 
-  // Set scroll region: rows 4..(rows - BOX_ROWS - 1)
-  const scrollTop = HEADER_ROWS + 1;      // row 4
-  const scrollBottom = rows - BOX_ROWS - 1; // leave 5 rows for gap+box+blank
+  // Set DECSTBM scroll region: rows 4..(rows - 4)
+  const scrollTop = HEADER_ROWS + 1;  // row 4
+  const scrollBottom = rows - BOX_ROWS; // row H - 4
 
   if (scrollBottom > scrollTop) {
     process.stdout.write(`\x1b[${scrollTop};${scrollBottom}r`);
   }
 
-  // Move cursor to end of scroll region (ready for new output)
-  process.stdout.write(`\x1b[${scrollBottom};1H`);
+  // Position cursor inside scroll region
+  process.stdout.write(`\x1b[${scrollBottom};1H\x1b[?25h`);
 
-  // Show cursor
-  process.stdout.write('\x1b[?25h');
-
-  // Listen for resize
   process.stdout.on('resize', onDockedResize);
-
   return true;
 }
 
@@ -327,27 +327,23 @@ function onDockedResize(): void {
   if (!_dockedActive) return;
   const rows = process.stdout.rows;
   const cols = process.stdout.columns;
-  if (!rows || !cols || rows < 12) return;
+  if (!rows || !cols || rows < 14) return;
 
   _dockedRows = rows;
   _dockedCols = cols;
 
   process.stdout.write('\x1b[?25l');
-
   writeStickyHeader(cols);
   writeDockedBox(rows, cols, _dockedModel, _dockedMode);
 
   const scrollTop = HEADER_ROWS + 1;
-  const scrollBottom = rows - BOX_ROWS - 1;
+  const scrollBottom = rows - BOX_ROWS;
   if (scrollBottom > scrollTop) {
     process.stdout.write(`\x1b[${scrollTop};${scrollBottom}r`);
   }
   process.stdout.write(`\x1b[${scrollBottom};1H\x1b[?25h`);
 }
 
-/**
- * Updates the docked box model/mode badge without redrawing scroll region.
- */
 export function updateDockedModel(model: string, mode: 'build' | 'plan'): void {
   _dockedModel = model;
   _dockedMode = mode;
@@ -358,13 +354,10 @@ export function updateDockedModel(model: string, mode: 'build' | 'plan'): void {
   const isBuild = mode === 'build';
   const borderColor = isBuild ? chalk.hex('#00FF7F') : chalk.hex('#FFB300');
   const boxWidth = Math.max(42, Math.min(cols - 4, 94));
-  const topRow = rows - BOX_ROWS + 1;
+  const topRow = rows - 3;
   process.stdout.write(`\x1b[s\x1b[${topRow};1H\x1b[2K${renderTopBorder(boxWidth, isBuild, model, borderColor)}\x1b[u`);
 }
 
-/**
- * Deactivates fixed-dock layout (restores full scroll region).
- */
 export function deactivateFixedDock(): void {
   if (!_dockedActive) return;
   _dockedActive = false;
@@ -373,7 +366,7 @@ export function deactivateFixedDock(): void {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DOCKED PROMPT — reads input inside the fixed bottom box
+// DOCKED PROMPT — Interactive reader inside the fixed bottom box
 // ─────────────────────────────────────────────────────────────────────────────
 async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string | null> {
   const isBuildMode = options.mode === 'build';
@@ -384,26 +377,22 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
     const cols = process.stdout.columns!;
     const boxWidth = Math.max(42, Math.min(cols - 4, 94));
 
-    // Box row positions (absolute terminal rows)
-    const topRow = rows - BOX_ROWS + 1;      // top border
-    const contentRowBase = rows - BOX_ROWS + 2; // first content line
-    const bottomRow = rows - BOX_ROWS + 3;    // bottom border
+    const topRow = rows - 3;
+    const contentRow = rows - 2;
+    const bottomRow = rows - 1;
+    const startCol = 5; // after '│ ❯ '
 
-    // Render initial empty input box
+    // Reset input box to empty
     const topBorder = renderTopBorder(boxWidth, isBuildMode, options.model, borderColor);
     const line0 = renderContentLine(boxWidth, '', true, isBuildMode, borderColor);
     const bottom = renderBottomBorder(boxWidth, borderColor);
 
-    process.stdout.write('\x1b[?25l'); // hide cursor during draw
+    process.stdout.write('\x1b[?25l');
     process.stdout.write(`\x1b[${topRow};1H\x1b[2K${topBorder}`);
-    process.stdout.write(`\x1b[${contentRowBase};1H\x1b[2K${line0}`);
+    process.stdout.write(`\x1b[${contentRow};1H\x1b[2K${line0}`);
     process.stdout.write(`\x1b[${bottomRow};1H\x1b[2K${bottom}`);
+    process.stdout.write(`\x1b[${contentRow};${startCol}H\x1b[?25h`);
 
-    // Position cursor at first char of content
-    const startCol = 5; // after '│ ❯ '
-    process.stdout.write(`\x1b[${contentRowBase};${startCol}H\x1b[?25h`);
-
-    // ── State ──
     let bufferLines = [''];
     let cursorLine = 0;
     let cursorCol = 0;
@@ -414,36 +403,10 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
     try {
       process.stdin.setRawMode(true);
       process.stdin.resume();
-      process.stdout.write('\x1b[?2004h'); // bracketed paste on
+      process.stdout.write('\x1b[?2004h');
     } catch {}
 
-    // ── Helper: redraw all content lines + bottom border ──
-    const redrawAll = (fromLine: number) => {
-      process.stdout.write('\x1b[?25l');
-      // Expand scroll region temporarily if multi-line
-      const totalContentRows = bufferLines.length;
-      // Clamp to available rows in dock area (we keep it to 3 content lines max visually)
-      for (let i = fromLine; i < totalContentRows; i++) {
-        const absRow = contentRowBase + i;
-        if (absRow >= bottomRow) break;
-        const line = renderContentLine(boxWidth, bufferLines[i], i === 0, isBuildMode, borderColor);
-        process.stdout.write(`\x1b[${absRow};1H\x1b[2K${line}`);
-      }
-      // Always redraw bottom border at correct row
-      const botAbsRow = contentRowBase + bufferLines.length;
-      // If multi-line pushes bottom border down, clamp it
-      const actualBotRow = Math.min(botAbsRow, bottomRow);
-      process.stdout.write(`\x1b[${actualBotRow};1H\x1b[2K${bottom}`);
-
-      // Reposition cursor
-      const cursorAbsRow = Math.min(contentRowBase + cursorLine, bottomRow - 1);
-      const cursorAbsCol = startCol + Math.min(cursorCol, boxWidth - 8);
-      process.stdout.write(`\x1b[${cursorAbsRow};${cursorAbsCol}H\x1b[?25h`);
-    };
-
-    // ── Helper: update active line in-place ──
     const updateActiveLine = () => {
-      const absRow = Math.min(contentRowBase + cursorLine, bottomRow - 1);
       const lineStr = renderContentLine(
         boxWidth,
         bufferLines[cursorLine],
@@ -452,10 +415,9 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
         borderColor
       );
       const absCol = startCol + Math.min(cursorCol, boxWidth - 8);
-      process.stdout.write(`\x1b[${absRow};1H\x1b[2K${lineStr}\x1b[${absRow};${absCol}H`);
+      process.stdout.write(`\x1b[${contentRow};1H\x1b[2K${lineStr}\x1b[${contentRow};${absCol}H`);
     };
 
-    // ── Helper: cleanup stdin ──
     const cleanup = () => {
       try { process.stdout.write('\x1b[?2004l'); } catch {}
       process.stdin.removeListener('data', onData);
@@ -465,24 +427,20 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
       } catch {}
     };
 
-    // ── Helper: submit — clear box content, leave borders, move cursor to scroll region ──
     const submit = () => {
       cleanup();
       const fullContent = bufferLines.join('\n').trim();
-      // Clear content lines back to empty, redraw borders
-      process.stdout.write('\x1b[?25l');
-      for (let i = 0; i < bufferLines.length; i++) {
-        const absRow = contentRowBase + i;
-        if (absRow >= bottomRow) break;
-        const emptyLine = renderContentLine(boxWidth, '', i === 0, isBuildMode, borderColor);
-        process.stdout.write(`\x1b[${absRow};1H\x1b[2K${emptyLine}`);
-      }
-      process.stdout.write(`\x1b[${bottomRow};1H\x1b[2K${bottom}`);
-      // Move to scroll region bottom, print the user's input as transcript
-      const scrollBottom = rows - BOX_ROWS - 1;
+
+      // Show temporary status inside dock while output streams above
+      const statusLine = renderStatusLine(boxWidth, 'Processing request...', borderColor);
+      process.stdout.write(`\x1b[${contentRow};1H\x1b[2K${statusLine}`);
+
+      // Write user transcript line into scrolling workspace
+      const scrollBottom = rows - BOX_ROWS;
       const promptArrow = isBuildMode
         ? chalk.hex('#00FF7F').bold('❯ ')
         : chalk.hex('#FFB300').bold('❯ ');
+
       process.stdout.write(`\x1b[${scrollBottom};1H`);
       for (let i = 0; i < bufferLines.length; i++) {
         const pfx = i === 0 ? promptArrow : chalk.dim('· ');
@@ -494,38 +452,26 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
 
     const cancel = () => {
       cleanup();
-      // Reset box to empty
       const emptyLine = renderContentLine(boxWidth, '', true, isBuildMode, borderColor);
-      process.stdout.write(`\x1b[${contentRowBase};1H\x1b[2K${emptyLine}`);
-      process.stdout.write(`\x1b[${contentRowBase};${startCol}H\x1b[?25h`);
+      process.stdout.write(`\x1b[${contentRow};1H\x1b[2K${emptyLine}`);
+      process.stdout.write(`\x1b[${contentRow};${startCol}H\x1b[?25h`);
       resolve(null);
     };
 
-    // ── Paste handling ──
     const handlePastedText = (pasted: string) => {
       const normalized = pasted.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
       const pastedLines = normalized.split('\n');
+      const cur = bufferLines[cursorLine];
       if (pastedLines.length === 1) {
-        const cur = bufferLines[cursorLine];
         bufferLines[cursorLine] = cur.slice(0, cursorCol) + pastedLines[0] + cur.slice(cursorCol);
         cursorCol += pastedLines[0].length;
-        updateActiveLine();
       } else {
-        const cur = bufferLines[cursorLine];
-        const before = cur.slice(0, cursorCol);
-        const after = cur.slice(cursorCol);
-        bufferLines[cursorLine] = before + pastedLines[0];
-        const middle = pastedLines.slice(1, -1);
-        const last = pastedLines[pastedLines.length - 1];
-        const prevLine = cursorLine;
-        bufferLines.splice(cursorLine + 1, 0, ...middle, last + after);
-        cursorLine += pastedLines.length - 1;
-        cursorCol = last.length;
-        redrawAll(prevLine);
+        bufferLines[cursorLine] = cur.slice(0, cursorCol) + pastedLines.join(' ') + cur.slice(cursorCol);
+        cursorCol += pastedLines.join(' ').length;
       }
+      updateActiveLine();
     };
 
-    // ── Main key handler ──
     const onData = (data: Buffer) => {
       const str = data.toString('utf-8');
 
@@ -564,7 +510,7 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
         return;
       }
 
-      // Ctrl+C
+      // Ctrl+C: Exit
       if (str === '\x03') {
         cleanup();
         deactivateFixedDock();
@@ -572,13 +518,12 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
         process.exit(0);
       }
 
-      // Tab / F2: open model selector
+      // Tab / F2: Model switcher
       if (str === '\t' || str === '\x09' || str === '\x1bOQ' || str === '\x1b[12~') {
         cleanup();
-        // Clear box content
         const emptyLine = renderContentLine(boxWidth, '', true, isBuildMode, borderColor);
-        process.stdout.write(`\x1b[${contentRowBase};1H\x1b[2K${emptyLine}`);
-        process.stdout.write(`\x1b[${contentRowBase};${startCol}H`);
+        process.stdout.write(`\x1b[${contentRow};1H\x1b[2K${emptyLine}`);
+        process.stdout.write(`\x1b[${contentRow};${startCol}H`);
         resolve('/model');
         return;
       }
@@ -591,36 +536,16 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
         }
       }
 
-      // Escape
+      // Escape: clear input
       if (str === '\x1b') {
         if (bufferLines.join('').length > 0) {
           bufferLines = [''];
           cursorLine = 0;
           cursorCol = 0;
-          redrawAll(0);
+          updateActiveLine();
         } else {
           cancel();
         }
-        return;
-      }
-
-      // Shift+Enter / Alt+Enter / Ctrl+J — newline inside box
-      if (
-        str === '\x0a' ||
-        str === '\x1b\x0d' ||
-        str === '\x1b\r' ||
-        str === '\x1b[13;2u' ||
-        str === '\x1b[13;5u'
-      ) {
-        const cur = bufferLines[cursorLine];
-        const before = cur.slice(0, cursorCol);
-        const after = cur.slice(cursorCol);
-        const prevLine = cursorLine;
-        bufferLines[cursorLine] = before;
-        bufferLines.splice(cursorLine + 1, 0, after);
-        cursorLine++;
-        cursorCol = 0;
-        redrawAll(prevLine);
         return;
       }
 
@@ -638,14 +563,6 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
           bufferLines[cursorLine] = cur.slice(0, cursorCol - 1) + cur.slice(cursorCol);
           cursorCol--;
           updateActiveLine();
-        } else if (cursorLine > 0) {
-          const cur = bufferLines[cursorLine];
-          const prev = bufferLines[cursorLine - 1];
-          cursorCol = prev.length;
-          bufferLines[cursorLine - 1] = prev + cur;
-          bufferLines.splice(cursorLine, 1);
-          cursorLine--;
-          redrawAll(cursorLine);
         }
         return;
       }
@@ -654,57 +571,24 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
       if (str === '\x1b[D') { // Left
         if (cursorCol > 0) {
           cursorCol--;
-          const absRow = contentRowBase + cursorLine;
           const absCol = startCol + Math.min(cursorCol, boxWidth - 8);
-          process.stdout.write(`\x1b[${absRow};${absCol}H`);
-        } else if (cursorLine > 0) {
-          cursorLine--;
-          cursorCol = bufferLines[cursorLine].length;
-          const absRow = contentRowBase + cursorLine;
-          const absCol = startCol + Math.min(cursorCol, boxWidth - 8);
-          process.stdout.write(`\x1b[${absRow};${absCol}H`);
+          process.stdout.write(`\x1b[${contentRow};${absCol}H`);
         }
         return;
       }
       if (str === '\x1b[C') { // Right
         if (cursorCol < bufferLines[cursorLine].length) {
           cursorCol++;
-          const absRow = contentRowBase + cursorLine;
           const absCol = startCol + Math.min(cursorCol, boxWidth - 8);
-          process.stdout.write(`\x1b[${absRow};${absCol}H`);
-        } else if (cursorLine < bufferLines.length - 1) {
-          cursorLine++;
-          cursorCol = 0;
-          const absRow = contentRowBase + cursorLine;
-          process.stdout.write(`\x1b[${absRow};${startCol}H`);
-        }
-        return;
-      }
-      if (str === '\x1b[A') { // Up
-        if (cursorLine > 0) {
-          cursorLine--;
-          cursorCol = Math.min(cursorCol, bufferLines[cursorLine].length);
-          const absRow = contentRowBase + cursorLine;
-          const absCol = startCol + Math.min(cursorCol, boxWidth - 8);
-          process.stdout.write(`\x1b[${absRow};${absCol}H`);
-        }
-        return;
-      }
-      if (str === '\x1b[B') { // Down
-        if (cursorLine < bufferLines.length - 1) {
-          cursorLine++;
-          cursorCol = Math.min(cursorCol, bufferLines[cursorLine].length);
-          const absRow = contentRowBase + cursorLine;
-          const absCol = startCol + Math.min(cursorCol, boxWidth - 8);
-          process.stdout.write(`\x1b[${absRow};${absCol}H`);
+          process.stdout.write(`\x1b[${contentRow};${absCol}H`);
         }
         return;
       }
 
-      // Ignore unhandled escape sequences
+      // Ignore escape sequences
       if (str.startsWith('\x1b[')) return;
 
-      // Printable characters
+      // Printable character
       if (str.length === 1 && str.charCodeAt(0) >= 32) {
         const cur = bufferLines[cursorLine];
         bufferLines[cursorLine] = cur.slice(0, cursorCol) + str + cur.slice(cursorCol);
@@ -713,7 +597,7 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
         return;
       }
 
-      // Multi-char (unicode / fast typing)
+      // Multi-char text
       if (str.length > 0 && !str.includes('\x1b')) {
         const cur = bufferLines[cursorLine];
         bufferLines[cursorLine] = cur.slice(0, cursorCol) + str + cur.slice(cursorCol);
@@ -728,8 +612,7 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// INLINE PROMPT — fallback when terminal is not a TTY / too small
-// (classic downLines-based submit, no DECSTBM, proven stable)
+// INLINE PROMPT — Fallback for small screens or non-TTY
 // ─────────────────────────────────────────────────────────────────────────────
 async function readInlinePrompt(options: OpenCodePromptOptions): Promise<string | null> {
   const isBuildMode = options.mode === 'build';
@@ -766,7 +649,6 @@ async function readInlinePrompt(options: OpenCodePromptOptions): Promise<string 
 
     const boxWidth = getSafeBoxWidth();
 
-    // Print initial box
     process.stdout.write(renderTopBorder(boxWidth, isBuildMode, options.model, borderColor) + '\n');
     process.stdout.write(renderContentLine(boxWidth, '', true, isBuildMode, borderColor) + '\n');
     process.stdout.write(renderBottomBorder(boxWidth, borderColor));
@@ -967,7 +849,6 @@ async function readInlinePrompt(options: OpenCodePromptOptions): Promise<string 
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PUBLIC API: readOpenCodePrompt
-// Routes to docked prompt (TTY, rows >= 12) or inline prompt (fallback)
 // ─────────────────────────────────────────────────────────────────────────────
 export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promise<string | null> {
   if (_dockedActive) {
@@ -977,7 +858,7 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// expandOpenCodeMentions: @file and URL ingestion
+// expandOpenCodeMentions: @file and URL auto-ingestion
 // ─────────────────────────────────────────────────────────────────────────────
 export async function expandOpenCodeMentions(rawPrompt: string): Promise<{
   expandedPrompt: string;
