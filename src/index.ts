@@ -30,7 +30,7 @@ import {
   renderDirectoryTree,
 } from './ui.js';
 import { safetySession, getSessionChanges, undoLastChange } from './tools.js';
-import { selectAgentModelInteractive } from './models.js';
+import { selectAgentModelInteractive, findModelByQuery, applyModelDirect } from './models.js';
 import { readOpenCodePrompt, expandOpenCodeMentions } from './prompt.js';
 import { detectProjectContext } from './detector.js';
 
@@ -415,14 +415,46 @@ program
         continue;
       }
 
-      if (
+      const isModelCommand =
         trimmed === '/model' ||
         trimmed === '/models' ||
         trimmed === '/agent' ||
         trimmed === '/agents' ||
+        trimmed === '/m' ||
         trimmed === '/select-model' ||
-        trimmed === '/choose-model'
-      ) {
+        trimmed === '/choose-model' ||
+        trimmed.startsWith('/model ') ||
+        trimmed.startsWith('/models ') ||
+        trimmed.startsWith('/agent ') ||
+        trimmed.startsWith('/agents ') ||
+        trimmed.startsWith('/m ');
+
+      if (isModelCommand) {
+        const parts = trimmed.split(/\s+/);
+        const query = parts.length > 1 ? parts.slice(1).join(' ').trim() : '';
+
+        if (query.length > 0) {
+          const match = findModelByQuery(query);
+          if (match) {
+            const newConfig = await applyModelDirect(match, config);
+            if (newConfig) {
+              config = newConfig;
+              agent.updateConfig(newConfig);
+              console.log(
+                chalk.green(
+                  `\n✔ Active Model switched to: ${chalk.bold(match.name)} (${chalk.cyan(match.id)})\n` +
+                    `Provider: ${chalk.bold(PROVIDER_LABELS[config.provider])}\n`
+                )
+              );
+            }
+            continue;
+          } else {
+            console.log(
+              chalk.yellow(`\n⚠️ No preset found matching "${query}". Opening interactive model selector...\n`)
+            );
+          }
+        }
+
         const newConfig = await selectAgentModelInteractive(config);
         if (newConfig) {
           config = newConfig;

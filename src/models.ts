@@ -1165,3 +1165,106 @@ export async function selectAgentModelInteractive(
 
   return updatedConfig;
 }
+
+/**
+ * Search for an available preset by model ID or fuzzy name.
+ */
+export function findModelByQuery(query: string): AgentModelPreset | null {
+  const q = query.trim().toLowerCase();
+  if (!q) return null;
+
+  // 1. Exact ID
+  const exact = AGENT_MODELS.find((m) => m.id.toLowerCase() === q);
+  if (exact) return exact;
+
+  // 2. Starts with ID
+  const starts = AGENT_MODELS.find((m) => m.id.toLowerCase().startsWith(q));
+  if (starts) return starts;
+
+  // 3. Substring ID
+  const sub = AGENT_MODELS.find((m) => m.id.toLowerCase().includes(q));
+  if (sub) return sub;
+
+  // 4. Name substring
+  const nameSub = AGENT_MODELS.find((m) => m.name.toLowerCase().includes(q));
+  if (nameSub) return nameSub;
+
+  return null;
+}
+
+/**
+ * Switch model directly to a target preset without showing the full interactive menu.
+ */
+export async function applyModelDirect(
+  preset: AgentModelPreset,
+  currentConfig: BanglaCLIConfig
+): Promise<BanglaCLIConfig | null> {
+  const targetProvider = preset.provider;
+  let targetApiKey = currentConfig.apiKey;
+  let targetBaseURL = preset.baseURL || currentConfig.baseURL;
+
+  const isCustomBaseUrlChange =
+    targetProvider === 'custom' &&
+    preset.baseURL &&
+    currentConfig.baseURL &&
+    preset.baseURL !== currentConfig.baseURL;
+
+  if (targetProvider !== currentConfig.provider || isCustomBaseUrlChange) {
+    const saved = currentConfig.savedProviders?.[targetProvider];
+
+    if (saved && saved.apiKey && !isCustomBaseUrlChange) {
+      targetApiKey = saved.apiKey;
+      targetBaseURL = preset.baseURL || saved.baseURL;
+    } else {
+      const serviceName = preset.baseURL?.includes('groq.com')
+        ? 'Groq Cloud'
+        : preset.baseURL?.includes('deepseek.com')
+        ? 'DeepSeek'
+        : preset.baseURL?.includes('cerebras.ai')
+        ? 'Cerebras'
+        : PROVIDER_LABELS[targetProvider];
+
+      const serviceUrl = preset.baseURL?.includes('groq.com')
+        ? 'https://console.groq.com/keys'
+        : preset.baseURL?.includes('deepseek.com')
+        ? 'https://platform.deepseek.com/api_keys'
+        : preset.baseURL?.includes('cerebras.ai')
+        ? 'https://cloud.cerebras.ai'
+        : PROVIDER_KEY_URLS[targetProvider];
+
+      p.note(
+        `${chalk.white('Get API key for ' + serviceName + ':')}\n` +
+          `${chalk.bold.underline.cyan(serviceUrl)}\n`,
+        chalk.bold('API Key Required')
+      );
+
+      const enteredKey = (await p.password({
+        message: chalk.cyan(`Enter API Key for ${serviceName}:`),
+        validate: (v) => (!v || v.trim().length === 0 ? 'Key cannot be empty!' : undefined),
+      })) as string;
+
+      if (p.isCancel(enteredKey)) return null;
+      targetApiKey = enteredKey.trim();
+      targetBaseURL = preset.baseURL;
+    }
+  }
+
+  const updatedConfig: BanglaCLIConfig = {
+    ...currentConfig,
+    provider: targetProvider,
+    apiKey: targetApiKey,
+    model: preset.id,
+    baseURL: targetBaseURL,
+    savedProviders: {
+      ...currentConfig.savedProviders,
+      [targetProvider]: {
+        apiKey: targetApiKey,
+        model: preset.id,
+        baseURL: targetBaseURL,
+      },
+    },
+  };
+
+  saveConfig(updatedConfig);
+  return updatedConfig;
+}

@@ -31,25 +31,27 @@ function getDisplayWidth(str: string): number {
 
 function getSafeBoxWidth(): number {
   const termCols = process.stdout.columns || 80;
-  // Leave a safe margin of 4 columns so Windows console auto-wrap is never triggered
-  return Math.max(34, Math.min(termCols - 4, 82));
+  // Responsive box width: scales gracefully between 42 and 94 columns
+  return Math.max(42, Math.min(termCols - 4, 94));
 }
 
 function renderTopBorder(width: number, isBuild: boolean, model: string, borderColor: (str: string) => string): string {
+  const modeText = isBuild ? ' ⚡ BUILD ' : ' 📋 PLAN ';
   const modeBadge = isBuild
-    ? chalk.bgHex('#00C853').black.bold(' ⚡ BUILD ')
-    : chalk.bgHex('#FFB300').black.bold(' 📋 PLAN ');
-  const modeRaw = isBuild ? ' ⚡ BUILD ' : ' 📋 PLAN ';
+    ? chalk.bgHex('#00C853').black.bold(modeText)
+    : chalk.bgHex('#FFB300').black.bold(modeText);
+  const modeWidth = getDisplayWidth(modeText);
 
-  let escText = ' (Esc to cancel) ';
-  if (width < 70) escText = ' (Esc) ';
-  if (width < 54) escText = '';
+  let rightText = ' (Tab: model • Esc: clear) ';
+  if (width < 76) rightText = ' (Tab: model) ';
+  if (width < 56) rightText = '';
+  const rightWidth = getDisplayWidth(rightText);
 
   let modelDisplay = model;
-  let availForModel = width - 12 - getDisplayWidth(modeRaw) - getDisplayWidth(escText);
+  let availForModel = width - 12 - modeWidth - rightWidth;
   if (availForModel < 10) {
-    escText = '';
-    availForModel = width - 12 - getDisplayWidth(modeRaw);
+    rightText = '';
+    availForModel = width - 12 - modeWidth;
   }
   if (getDisplayWidth(' 🤖 ' + modelDisplay + ' ') > availForModel) {
     const short = modelDisplay.includes('/') ? modelDisplay.split('/').pop() || modelDisplay : modelDisplay;
@@ -57,37 +59,40 @@ function renderTopBorder(width: number, isBuild: boolean, model: string, borderC
     modelDisplay = short.slice(0, maxLen) + '…';
   }
 
-  const modelBadge = chalk.bgHex('#1A237E').white.bold(` 🤖 ${modelDisplay} `);
-  const modelRaw = ` 🤖 ${modelDisplay} `;
+  const modelText = ` 🤖 ${modelDisplay} `;
+  const modelBadge = chalk.bgHex('#1A237E').white.bold(modelText);
+  const modelWidth = getDisplayWidth(modelText);
 
-  const prefixColored = borderColor('╭─ ') + modeBadge + borderColor(' ─ ') + modelBadge;
-  const prefixWidth = 3 + getDisplayWidth(modeRaw) + 3 + getDisplayWidth(modelRaw);
-  const suffixColored = (escText ? chalk.gray(escText) : '') + borderColor('─╮');
-  const suffixWidth = getDisplayWidth(escText) + 2;
+  // Balanced top line: ╭── [MODE] ── [MODEL] ─────── (Tab: model) ──╮
+  const leftPrefix = borderColor('╭── ') + modeBadge + borderColor(' ── ') + modelBadge + borderColor(' ');
+  const leftWidth = 4 + modeWidth + 4 + modelWidth + 1;
+  const rightSuffix = (rightText ? chalk.dim(rightText) : '') + borderColor('──╮');
+  const rightTotalWidth = rightWidth + 3;
 
-  const dashesCount = Math.max(1, width - prefixWidth - suffixWidth);
-  return prefixColored + borderColor('─'.repeat(dashesCount)) + suffixColored;
+  const dashesCount = Math.max(1, width - leftWidth - rightTotalWidth);
+  return leftPrefix + borderColor('─'.repeat(dashesCount)) + rightSuffix;
 }
 
 function renderBottomBorder(width: number, borderColor: (str: string) => string): string {
-  let hintText = ' Enter: send • Shift+Enter: newline • @file • /help ';
-  if (width < 68) hintText = ' Enter: send • Shift+Enter: newline • /help ';
-  if (width < 52) hintText = ' Enter: send • Esc: cancel ';
-  if (width < 40) hintText = ' Enter: send ';
+  let hintText = ' Enter: send • Tab: switch model • Shift+Enter: newline • /help ';
+  if (width < 82) hintText = ' Enter: send • Tab: model • Shift+Enter: newline • /help ';
+  if (width < 70) hintText = ' Enter: send • Tab: model • /help ';
+  if (width < 54) hintText = ' Enter: send • Tab: model ';
+  if (width < 44) hintText = ' Enter: send ';
 
-  const prefixColored = borderColor('╰─');
-  const prefixWidth = 2;
-  const suffixColored = borderColor('─╯');
-  const suffixWidth = 2;
+  const prefixColored = borderColor('╰── ');
+  const prefixWidth = 4;
+  const suffixColored = borderColor('──╯');
+  const suffixWidth = 3;
 
   let hintWidth = getDisplayWidth(hintText);
-  if (hintWidth > width - prefixWidth - suffixWidth) {
+  if (hintWidth > width - prefixWidth - suffixWidth - 2) {
     hintText = ' Enter ';
     hintWidth = getDisplayWidth(hintText);
   }
 
   const dashesCount = Math.max(1, width - prefixWidth - hintWidth - suffixWidth);
-  return prefixColored + chalk.dim(hintText) + borderColor('─'.repeat(dashesCount)) + suffixColored;
+  return prefixColored + chalk.gray(hintText) + borderColor('─'.repeat(dashesCount)) + suffixColored;
 }
 
 function renderContentLine(
@@ -335,6 +340,15 @@ export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promis
         process.stdout.write(`\x1b[${downLines}B\r\n`);
         process.stdout.write(chalk.yellow('Exiting banglacli...\n'));
         process.exit(0);
+      }
+
+      // Tab key or F2: Instant Model Selector Switcher
+      if (str === '\t' || str === '\x09' || str === '\x1bOQ' || str === '\x1b[12~') {
+        cleanup();
+        const downLines = (bufferLines.length - cursorLine);
+        process.stdout.write(`\x1b[${downLines}B\r\n`);
+        resolve('/model');
+        return;
       }
 
       // Ctrl+D
