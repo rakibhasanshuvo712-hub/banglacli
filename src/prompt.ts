@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import chalk from 'chalk';
+import Conf from 'conf';
 import stringWidth from 'string-width';
 import { getActiveMeshNode } from './tools.js';
 
@@ -11,11 +12,11 @@ export interface OpenCodePromptOptions {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Box width: responsive between 48..126, perfectly sized for modern terminals
+// Box width: clean compact length (max 84 cols) for comfortable terminal reading
 // ─────────────────────────────────────────────────────────────────────────────
 function getSafeBoxWidth(cols?: number): number {
   const termCols = cols || process.stdout.columns || 80;
-  return Math.max(48, Math.min(termCols - 4, 126));
+  return Math.max(48, Math.min(termCols - 4, 84));
 }
 
 function getDockedRows(rows: number): {
@@ -26,11 +27,11 @@ function getDockedRows(rows: number): {
   boxRows: number;
 } {
   const isSpacious = rows >= 22;
-  const boxRows = isSpacious ? 5 : 4;
+  const boxRows = isSpacious ? 6 : 5;
   return {
-    topRow: isSpacious ? rows - 4 : rows - 3,
-    contentRow: isSpacious ? rows - 3 : rows - 2,
-    hintRow: isSpacious ? rows - 2 : null,
+    topRow: rows - boxRows,
+    contentRow: rows - boxRows + 1,
+    hintRow: rows - 2,
     bottomRow: rows - 1,
     boxRows,
   };
@@ -679,8 +680,11 @@ function writeDockedBox(rows: number, cols: number, model: string, mode: 'build'
   process.stdout.write(`\x1b[${topRow - 1};1H\x1b[2K`);
   process.stdout.write(`\x1b[${topRow};1H\x1b[2K${topBorder}`);
   process.stdout.write(`\x1b[${contentRow};1H\x1b[2K${contentLine}`);
+  for (let r = contentRow + 1; r < (hintRow || bottomRow); r++) {
+    process.stdout.write(`\x1b[${r};1H\x1b[2K${borderColor('│ ')}`);
+  }
   if (hintRow) {
-    const hintLine = borderColor('│ ') + chalk.dim('· Shift+Enter: newline • /help for commands');
+    const hintLine = borderColor('│ ') + chalk.dim('· Shift+Enter: newline • /help for commands • ↑/↓: history');
     process.stdout.write(`\x1b[${hintRow};1H\x1b[2K${hintLine}`);
   }
   process.stdout.write(`\x1b[${bottomRow};1H\x1b[2K${bottomBorder}`);
@@ -791,7 +795,14 @@ export function deactivateFixedDock(): void {
 // ─────────────────────────────────────────────────────────────────────────────
 // Persistent Command & Prompt History (Up / Down Arrow Navigation)
 // ─────────────────────────────────────────────────────────────────────────────
-const _commandHistory: string[] = [];
+const historyStore = new Conf<{ history: string[] }>({ projectName: 'banglacli_history' });
+const defaultCommands = ['/help', '/limits', '/doctor', '/mode', '/model', '/renewal', '/about', '/stats'];
+let savedHistory: string[] = [];
+try {
+  savedHistory = historyStore.get('history') || [];
+} catch {}
+
+const _commandHistory: string[] = savedHistory.length > 0 ? savedHistory : [...defaultCommands];
 const MAX_HISTORY = 100;
 
 export function addPromptHistory(cmd: string): void {
@@ -803,6 +814,9 @@ export function addPromptHistory(cmd: string): void {
     if (_commandHistory.length > MAX_HISTORY) {
       _commandHistory.shift();
     }
+    try {
+      historyStore.set('history', _commandHistory.slice(-50));
+    } catch {}
   }
 }
 
@@ -1271,8 +1285,9 @@ async function readInlinePrompt(options: OpenCodePromptOptions): Promise<string 
 
     process.stdout.write(renderTopBorder(boxWidth, isBuildMode, options.model, borderColor) + '\n');
     process.stdout.write(renderContentLine(boxWidth, '', true, isBuildMode, borderColor) + '\n');
+    process.stdout.write(borderColor('│ ') + chalk.dim('· Shift+Enter: newline • /help for commands • ↑/↓: history') + '\n');
     process.stdout.write(renderBottomBorder(boxWidth, borderColor));
-    process.stdout.write('\x1b[1A\x1b[5G');
+    process.stdout.write('\x1b[2A\x1b[5G');
 
     const updateActiveLine = () => {
       const lineStr = renderContentLine(
@@ -1287,10 +1302,11 @@ async function readInlinePrompt(options: OpenCodePromptOptions): Promise<string 
       for (let i = startLine; i < bufferLines.length; i++) {
         lines.push(renderContentLine(boxWidth, bufferLines[i], i === 0, isBuildMode, borderColor));
       }
+      lines.push(borderColor('│ ') + chalk.dim('· Shift+Enter: newline • /help for commands • ↑/↓: history'));
       lines.push(renderBottomBorder(boxWidth, borderColor));
       process.stdout.write('\r\x1b[J');
       process.stdout.write(lines.join('\n'));
-      const linesUp = bufferLines.length - cursorLine;
+      const linesUp = bufferLines.length - cursorLine + 1;
       const activeCol = 5 + Math.min(cursorCol, boxWidth - 8);
       process.stdout.write(`\x1b[${linesUp}A\x1b[${activeCol}G`);
     };
@@ -1311,14 +1327,14 @@ async function readInlinePrompt(options: OpenCodePromptOptions): Promise<string 
       }
       historyIdx = -1;
       savedDraft = '';
-      const downLines = bufferLines.length - cursorLine;
+      const downLines = bufferLines.length - cursorLine + 1;
       process.stdout.write(`\x1b[${downLines}B\r\n`);
       resolve(fullContent);
     };
 
     const cancel = () => {
       cleanup();
-      const downLines = bufferLines.length - cursorLine;
+      const downLines = bufferLines.length - cursorLine + 1;
       process.stdout.write(`\x1b[${downLines}B\r\n`);
       resolve(null);
     };
