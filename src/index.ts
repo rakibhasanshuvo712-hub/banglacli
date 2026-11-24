@@ -31,16 +31,18 @@ import {
 } from './ui.js';
 import { safetySession, getSessionChanges, undoLastChange } from './tools.js';
 import { selectAgentModelInteractive, findModelByQuery, applyModelDirect } from './models.js';
-import { readOpenCodePrompt, expandOpenCodeMentions, restoreTerminalViewport, updateFixedBottomStatus } from './prompt.js';
+import { readOpenCodePrompt, expandOpenCodeMentions, restoreTerminalViewport, updateFixedBottomStatus, activateFixedDock, deactivateFixedDock, updateDockedModel } from './prompt.js';
 import { detectProjectContext } from './detector.js';
 
 // Ensure terminal viewport is cleanly restored on process exit
-process.on('exit', () => restoreTerminalViewport());
+process.on('exit', () => { deactivateFixedDock(); restoreTerminalViewport(); });
 process.on('SIGINT', () => {
+  deactivateFixedDock();
   restoreTerminalViewport();
   process.exit(0);
 });
 process.on('SIGTERM', () => {
+  deactivateFixedDock();
   restoreTerminalViewport();
   process.exit(0);
 });
@@ -164,6 +166,10 @@ program
     // Interactive Chat REPL Loop
     printBanner(PROVIDER_LABELS[config.provider], config.model, process.cwd());
 
+    // Activate fixed-dock layout: sticky header at top + docked input box at bottom.
+    // Gracefully falls back to inline mode on non-TTY or small terminals.
+    activateFixedDock(config.model, initialMode);
+
     let running = true;
     while (running) {
       // OpenCode & Antigravity Interactive Boxed Prompt
@@ -176,6 +182,7 @@ program
       });
 
       if (input === null) {
+        deactivateFixedDock();
         restoreTerminalViewport();
         console.log(chalk.yellow('\nবিদায়! Goodbye! Exiting banglacli.\n'));
         break;
@@ -188,6 +195,7 @@ program
 
       // Handle Slash Commands
       if (trimmed === '/exit' || trimmed === '/quit') {
+        deactivateFixedDock();
         restoreTerminalViewport();
         console.log(chalk.hex('#00FF7F')('\nধন্যবাদ! Thanks for using banglacli. Happy coding! 🚀\n'));
         break;
@@ -200,6 +208,7 @@ program
 
       // Mode Switching (OpenCode Style)
       if (trimmed === '/mode') {
+        deactivateFixedDock();
         restoreTerminalViewport();
         const modeChoice = (await p.select({
           message: chalk.cyan('Select Agent Mode (OpenCode Style):'),
@@ -230,6 +239,7 @@ program
             );
           }
         }
+        activateFixedDock(config.model, agent.getMode());
         continue;
       }
 
@@ -401,13 +411,12 @@ program
 
       if (trimmed === '/clear') {
         agent.resetHistory();
-        console.clear();
-        printBanner(PROVIDER_LABELS[config.provider], config.model, process.cwd());
         console.log(chalk.green('✔ Conversation history cleared! / কথোপকথনের মেমোরি রিসেট করা হয়েছে।\n'));
         continue;
       }
 
       if (trimmed === '/provider') {
+        deactivateFixedDock();
         restoreTerminalViewport();
         const newConfig = await switchProviderInteractive(config);
         if (newConfig) {
@@ -419,15 +428,18 @@ program
             )
           );
         }
+        activateFixedDock(config.model, agent.getMode());
         continue;
       }
 
       if (trimmed === '/config') {
+        deactivateFixedDock();
         restoreTerminalViewport();
         const newConfig = await promptConfig(false);
         config = newConfig;
         agent.updateConfig(newConfig);
         console.log(chalk.green(`\n✔ Config updated: ${PROVIDER_LABELS[config.provider]} (${config.model})\n`));
+        activateFixedDock(config.model, agent.getMode());
         continue;
       }
 
@@ -471,6 +483,7 @@ program
           }
         }
 
+        deactivateFixedDock();
         restoreTerminalViewport();
         const newConfig = await selectAgentModelInteractive(config);
         if (newConfig) {
@@ -482,6 +495,7 @@ program
             )
           );
         }
+        activateFixedDock(config.model, agent.getMode());
         continue;
       }
 
