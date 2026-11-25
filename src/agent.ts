@@ -814,6 +814,36 @@ export class BanglaAgent {
     }
   }
 
+  private shouldNudgePassiveBuildReply(
+    userPrompt: string,
+    replyText: string,
+    toolsExecutedInChat: number,
+    alreadyNudged: boolean
+  ): boolean {
+    if (this.mode !== 'build' || alreadyNudged || toolsExecutedInChat > 0) return false;
+    if (/without calling tools/i.test(userPrompt)) return false;
+
+    const lower = replyText.toLowerCase();
+    const isRefusingOrWaiting =
+      lower.includes('type /build') ||
+      lower.includes('switch to build mode') ||
+      lower.includes('no files have been created') ||
+      lower.includes('system has not switched modes') ||
+      lower.includes('ready to execute');
+    if (isRefusingOrWaiting) return true;
+
+    const asksToImplement =
+      /\b(create|build|write|edit|fix|implement|add|make|update|generate|refactor|delete|run|install)\b/i.test(
+        userPrompt
+      );
+    const dumpsCodeInsteadOfTools = replyText.includes('```') && replyText.length > 350;
+    const asksPermission =
+      lower.includes('would you like me to') ||
+      lower.includes('shall i proceed') ||
+      lower.includes('do you want me to');
+    return asksToImplement && (dumpsCodeInsteadOfTools || asksPermission);
+  }
+
   /**
    * Google Gemini Tool-Calling Loop using @google/genai
    */
@@ -851,6 +881,8 @@ export class BanglaAgent {
 
     const maxTurns = 40;
     let turnCount = 0;
+    let toolsExecutedInChat = 0;
+    let nudgedBuildExecution = false;
 
     while (turnCount < maxTurns) {
       if (options?.signal?.aborted) {
@@ -1066,12 +1098,24 @@ export class BanglaAgent {
         .join('')
         .trim();
 
-      // If no function calls, we have the final assistant response!
+      // If no function calls, check BUILD mode autonomous execution guard or return final answer
       if (!functionCalls || functionCalls.length === 0) {
         if (!directText && turnCount < maxTurns) {
           this.geminiContents.push({
             role: 'user',
             parts: [{ text: 'Please continue and provide your response or call the needed tool.' }],
+          });
+          continue;
+        }
+        if (this.shouldNudgePassiveBuildReply(userInput, directText, toolsExecutedInChat, nudgedBuildExecution) && turnCount < maxTurns) {
+          nudgedBuildExecution = true;
+          this.geminiContents.push({
+            role: 'user',
+            parts: [
+              {
+                text: '[SYSTEM GUARD: You are ALREADY in BUILD MODE with full tool access. Do NOT ask for /build or wait for permission. Call write_file, edit_file, or run_command right now to execute the request!]',
+              },
+            ],
           });
           continue;
         }
@@ -1093,6 +1137,7 @@ export class BanglaAgent {
           model: this.config.model,
         });
 
+        toolsExecutedInChat++;
         const output = await executeTool(toolName, toolArgs, this.mode, options?.signal);
 
         if (options?.signal?.aborted) {
@@ -1169,6 +1214,8 @@ export class BanglaAgent {
 
     const maxTurns = 40;
     let turnCount = 0;
+    let toolsExecutedInChat = 0;
+    let nudgedBuildExecution = false;
 
     while (turnCount < maxTurns) {
       if (options?.signal?.aborted) {
@@ -1214,7 +1261,7 @@ export class BanglaAgent {
           });
 
           const timeoutPromise = new Promise<never>((_, reject) => {
-            timeoutId = setTimeout(() => reject(new Error('Provider API request timed out (22s)')), 22000);
+            timeoutId = setTimeout(() => reject(new Error('Provider API request timed out (18s)')), 18000);
           });
 
           completion = await Promise.race([
@@ -1227,7 +1274,7 @@ export class BanglaAgent {
               },
               {
                 signal: options?.signal,
-                timeout: 22000,
+                timeout: 18000,
               }
             ),
             timeoutPromise,
@@ -1332,7 +1379,7 @@ export class BanglaAgent {
         this.metrics.totalTokens += completion.usage.total_tokens || 0;
       }
 
-      // If no tool calls, this is the final assistant response
+      // If no tool calls, check BUILD mode autonomous execution guard or return final answer
       if (!message.tool_calls || message.tool_calls.length === 0) {
         const rawText = message.content?.trim() || '';
         const reasoningText = ((message as any).reasoning || '').trim();
@@ -1344,7 +1391,17 @@ export class BanglaAgent {
           });
           continue;
         }
-        return message.content || reasoningText || '';
+        const finalCandidate = message.content || reasoningText || '';
+        if (this.shouldNudgePassiveBuildReply(userInput, finalCandidate, toolsExecutedInChat, nudgedBuildExecution) && turnCount < maxTurns) {
+          nudgedBuildExecution = true;
+          this.openAIMessages.push({
+            role: 'user',
+            content:
+              '[SYSTEM GUARD: You are ALREADY in BUILD MODE with full tool access. Do NOT ask for /build or wait for permission. Call write_file, edit_file, or run_command right now to execute the request!]',
+          });
+          continue;
+        }
+        return finalCandidate;
       }
 
       // Process tool calls
@@ -1379,6 +1436,7 @@ export class BanglaAgent {
           model: this.config.model,
         });
 
+        toolsExecutedInChat++;
         const toolResult = await executeTool(fnName, fnArgs, this.mode, options?.signal);
 
         if (options?.signal?.aborted) {

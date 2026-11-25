@@ -420,6 +420,28 @@ export interface InteractiveSelectConfig<T extends string = string> {
 }
 
 /**
+ * Strips non-keystroke terminal control reports (FocusIn/Out, DSR, DA, SGR Mouse)
+ * so they never drop typed commands or corrupt prompt buffers on startup.
+ */
+function stripTerminalControlNoise(raw: string): string {
+  return raw
+    .replace(/\x1b\[[IO]/g, '')
+    .replace(/\x1b\[[0-9;]*R/g, '')
+    .replace(/\x1b\[\?[0-9;]*c/g, '')
+    .replace(/\x1b\[<[0-9;]*[Mm]/g, '');
+}
+
+let _interactiveSelectActive = false;
+
+export function isInteractivePromptActive(): boolean {
+  return _interactiveSelectActive;
+}
+
+export function isDockedPromptWaiting(): boolean {
+  return _dockedPromptActive;
+}
+
+/**
  * 100% resilient terminal interactive selector that works across all operating systems and shells
  * (PowerShell, Windows Terminal, VS Code terminal, cmd.exe, Git Bash, macOS, Linux).
  * 
@@ -435,6 +457,7 @@ export async function interactiveSelect<T extends string = string>(
   }
 
   return new Promise((resolve) => {
+    _interactiveSelectActive = true;
     let cursor = config.options.findIndex((o) => o.value === config.initialValue);
     if (cursor === -1) cursor = 0;
 
@@ -522,6 +545,7 @@ export async function interactiveSelect<T extends string = string>(
     };
 
     const cleanup = () => {
+      _interactiveSelectActive = false;
       process.stdin.removeListener('data', onData);
       process.stdout.removeListener('resize', onResize);
       if (numTimeout) clearTimeout(numTimeout);
@@ -570,7 +594,8 @@ export async function interactiveSelect<T extends string = string>(
     let numTimeout: NodeJS.Timeout | null = null;
 
     const onData = (buf: Buffer) => {
-      const str = buf.toString('utf-8');
+      const str = stripTerminalControlNoise(buf.toString('utf-8'));
+      if (!str) return;
 
       // Ctrl+C
       if (str === '\x03') {
@@ -586,7 +611,7 @@ export async function interactiveSelect<T extends string = string>(
       }
 
       // Enter
-      if (str === '\r' || str === '\n' || str === '\r\n') {
+      if (str === '\r' || str === '\n' || str === '\r\n' || str === '\x1bOM' || str === '\x1b[13~') {
         confirm();
         return;
       }
@@ -928,50 +953,29 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
       }
       historyIdx = -1;
       savedDraft = '';
-      const isSlash = fullContent.startsWith('/') || /^[>❯$#\s]+\//.test(fullContent);
 
-      // Only show processing status line in dock for actual prompts, NOT for slash commands!
-      if (!isSlash) {
-        const statusLine = renderStatusLine(boxWidth, 'Processing request...', borderColor);
-        process.stdout.write(`\x1b[${contentRow};1H\x1b[2K${statusLine}`);
-        if (hintRow) {
-          const subStatus = borderColor('│ ') + chalk.cyan('⚡ ') + chalk.dim('Autonomous agent working...');
-          process.stdout.write(`\x1b[${hintRow};1H\x1b[2K${subStatus}`);
-        }
-      } else {
-        const emptyLine = renderContentLine(boxWidth, '', true, isBuildMode, borderColor);
-        process.stdout.write(`\x1b[${contentRow};1H\x1b[2K${emptyLine}`);
-        if (hintRow) {
-          process.stdout.write(`\x1b[${hintRow};1H\x1b[2K${borderColor('│ ')}`);
-        }
-        if (hintRow) {
-          process.stdout.write(`\x1b[${hintRow};1H\x1b[2K${borderColor('│ ')}`);
-        }
-      }
+      // Clear docked input box cleanly so agent/command output never overlaps bottom borders
+      process.stdout.write(`\x1b[${scrollBottom};1H\x1b[J`);
 
-      // Print prompt into scrolling workspace
+      // Print prompt into scrolling workspace above output
       const promptArrow = isBuildMode
         ? chalk.hex('#00FF7F').bold('❯ ')
         : chalk.hex('#FFB300').bold('❯ ');
 
-      process.stdout.write(`\x1b[${scrollBottom};1H`);
       for (let i = 0; i < bufferLines.length; i++) {
         const pfx = i === 0 ? promptArrow : chalk.dim('· ');
-        process.stdout.write(`\r\n${pfx}${chalk.white.bold(bufferLines[i])}`);
+        process.stdout.write(`${pfx}${chalk.white.bold(bufferLines[i])}\r\n`);
       }
-      process.stdout.write('\r\n\x1b[?25h');
+      process.stdout.write('\x1b[?25h');
       resolve(fullContent);
     };
 
     const cancel = () => {
-      cleanup();
-      const emptyLine = renderContentLine(boxWidth, '', true, isBuildMode, borderColor);
-      process.stdout.write(`\x1b[${contentRow};1H\x1b[2K${emptyLine}`);
-      if (hintRow) {
-        process.stdout.write(`\x1b[${hintRow};1H\x1b[2K${borderColor('│ ')}`);
-      }
-      process.stdout.write(`\x1b[${contentRow};${startCol}H\x1b[?25h`);
-      resolve(null);
+      // Escape clears the prompt buffer without quitting banglacli
+      bufferLines = [''];
+      cursorLine = 0;
+      cursorCol = 0;
+      updateActiveLine();
     };
 
     const handlePastedText = (pasted: string) => {
@@ -995,16 +999,20 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
     };
 
     const onData = (data: Buffer) => {
-      const str = data.toString('utf-8');
+      let str = stripTerminalControlNoise(data.toString('utf-8'));
+      if (!str) return;
 
       if (str.includes('\x1b[200~')) {
         inBracketedPaste = true;
         const afterStart = str.split('\x1b[200~')[1] || '';
         if (afterStart.includes('\x1b[201~')) {
-          const [pastedContent] = afterStart.split('\x1b[201~');
+          const endIdx = afterStart.indexOf('\x1b[201~');
+          const pastedContent = afterStart.slice(0, endIdx);
+          const trailing = afterStart.slice(endIdx + '\x1b[201~'.length);
           inBracketedPaste = false;
-          handlePastedText(pastedContent);
-          return;
+          if (pastedContent) handlePastedText(pastedContent);
+          if (!trailing) return;
+          str = trailing;
         } else {
           pasteBuffer += afterStart;
           return;
@@ -1012,20 +1020,35 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
       }
       if (inBracketedPaste) {
         if (str.includes('\x1b[201~')) {
-          const [beforeEnd] = str.split('\x1b[201~');
+          const endIdx = str.indexOf('\x1b[201~');
+          const beforeEnd = str.slice(0, endIdx);
+          const trailing = str.slice(endIdx + '\x1b[201~'.length);
           pasteBuffer += beforeEnd;
           inBracketedPaste = false;
           const full = pasteBuffer;
           pasteBuffer = '';
-          handlePastedText(full);
-          return;
+          if (full) handlePastedText(full);
+          if (!trailing) return;
+          str = trailing;
         } else {
           pasteBuffer += str;
           return;
         }
       }
 
-      if (str.length > 2 && (str.includes('\n') || str.includes('\r'))) {
+      // Handle fast-typed coalesced chunk ending in Enter vs genuine multiline paste
+      if (str.length > 2 && (str.includes('\n') || str.includes('\r')) && !str.includes('\x1b')) {
+        const endsWithEnter = /[\r\n]$/.test(str);
+        const body = str.replace(/[\r\n]+$/, '');
+        if (endsWithEnter && !body.includes('\r') && !body.includes('\n')) {
+          if (body.length > 0) {
+            handlePastedText(body);
+          }
+          if (bufferLines.join('\n').trim().length > 0) {
+            submit();
+          }
+          return;
+        }
         handlePastedText(str);
         return;
       }
@@ -1041,12 +1064,7 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
       // Tab / F2: Model switcher
       if (str === '\t' || str === '\x09' || str === '\x1bOQ' || str === '\x1b[12~') {
         cleanup();
-        const emptyLine = renderContentLine(boxWidth, '', true, isBuildMode, borderColor);
-        process.stdout.write(`\x1b[${contentRow};1H\x1b[2K${emptyLine}`);
-        if (hintRow) {
-          process.stdout.write(`\x1b[${hintRow};1H\x1b[2K${borderColor('│ ')}`);
-        }
-        process.stdout.write(`\x1b[${contentRow};${startCol}H`);
+        process.stdout.write(`\x1b[${scrollBottom};1H\x1b[J`);
         resolve('/model');
         return;
       }
@@ -1061,16 +1079,9 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
         }
       }
 
-      // Escape: clear input
+      // Escape: clear input (never abruptly kill the CLI)
       if (str === '\x1b') {
-        if (bufferLines.join('').length > 0) {
-          bufferLines = [''];
-          cursorLine = 0;
-          cursorCol = 0;
-          updateActiveLine();
-        } else {
-          cancel();
-        }
+        cancel();
         return;
       }
 
@@ -1094,7 +1105,7 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
       }
 
       // Enter: submit
-      if (str === '\r' || str === '\n' || str === '\r\n') {
+      if (str === '\r' || str === '\n' || str === '\r\n' || str === '\x1bOM' || str === '\x1b[13~') {
         if (bufferLines.join('\n').trim().length === 0) return;
         submit();
         return;
@@ -1256,24 +1267,70 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
 // ─────────────────────────────────────────────────────────────────────────────
 // INLINE PROMPT — Fallback for small screens or non-TTY
 // ─────────────────────────────────────────────────────────────────────────────
+const _nonTtyLineQueue: string[] = [];
+let _nonTtyBuffer = '';
+let _nonTtyReaderInitialized = false;
+let _nonTtyEnded = false;
+let _nonTtyWaiters: Array<(line: string | null) => void> = [];
+
+function nextNonTtyLine(): Promise<string | null> {
+  if (_nonTtyLineQueue.length > 0) {
+    return Promise.resolve(_nonTtyLineQueue.shift()!);
+  }
+  if (_nonTtyEnded || process.stdin.readableEnded) {
+    return Promise.resolve(null);
+  }
+  if (!_nonTtyReaderInitialized) {
+    _nonTtyReaderInitialized = true;
+    process.stdin.setEncoding('utf-8');
+    process.stdin.on('data', (chunk: string) => {
+      _nonTtyBuffer += chunk.replace(/\r\n/g, '\n');
+      let nlIdx = _nonTtyBuffer.indexOf('\n');
+      while (nlIdx !== -1) {
+        const line = _nonTtyBuffer.slice(0, nlIdx);
+        _nonTtyBuffer = _nonTtyBuffer.slice(nlIdx + 1);
+        const waiter = _nonTtyWaiters.shift();
+        if (waiter) {
+          waiter(line);
+        } else {
+          _nonTtyLineQueue.push(line);
+        }
+        nlIdx = _nonTtyBuffer.indexOf('\n');
+      }
+    });
+    process.stdin.on('end', () => {
+      _nonTtyEnded = true;
+      if (_nonTtyBuffer.trim().length > 0) {
+        const rem = _nonTtyBuffer;
+        _nonTtyBuffer = '';
+        const waiter = _nonTtyWaiters.shift();
+        if (waiter) waiter(rem);
+        else _nonTtyLineQueue.push(rem);
+      }
+      while (_nonTtyWaiters.length > 0) {
+        _nonTtyWaiters.shift()!(null);
+      }
+    });
+    process.stdin.resume();
+  }
+  return new Promise((resolve) => {
+    _nonTtyWaiters.push(resolve);
+  });
+}
+
 async function readInlinePrompt(options: OpenCodePromptOptions): Promise<string | null> {
   const isBuildMode = options.mode === 'build';
   const borderColor = isBuildMode ? chalk.hex('#00FF7F') : chalk.hex('#FFB300');
 
-  return new Promise((resolve) => {
-    if (!process.stdin.isTTY) {
-      let nonTtyData = '';
-      process.stdin.setEncoding('utf-8');
-      const onData = (chunk: string) => { nonTtyData += chunk; };
-      const onEnd = () => {
-        process.stdin.removeListener('data', onData);
-        process.stdin.removeListener('end', onEnd);
-        resolve(nonTtyData.trim() || null);
-      };
-      process.stdin.on('data', onData);
-      process.stdin.on('end', onEnd);
-      return;
+  if (!process.stdin.isTTY) {
+    while (true) {
+      const line = await nextNonTtyLine();
+      if (line === null) return null;
+      if (line.trim().length > 0) return line.trim();
     }
+  }
+
+  return new Promise((resolve) => {
 
     try { process.stdout.write('\x1b[?2004h'); } catch {}
 
@@ -1344,10 +1401,11 @@ async function readInlinePrompt(options: OpenCodePromptOptions): Promise<string 
     };
 
     const cancel = () => {
-      cleanup();
-      const downLines = bufferLines.length - cursorLine + 1;
-      process.stdout.write(`\x1b[${downLines}B\r\n`);
-      resolve(null);
+      if (cursorLine > 0) process.stdout.write(`\x1b[${cursorLine}A`);
+      bufferLines = [''];
+      cursorLine = 0;
+      cursorCol = 0;
+      redrawFrom(0);
     };
 
     const handlePastedText = (pasted: string) => {
@@ -1374,29 +1432,44 @@ async function readInlinePrompt(options: OpenCodePromptOptions): Promise<string 
     };
 
     const onData = (data: Buffer) => {
-      const str = data.toString('utf-8');
+      let str = stripTerminalControlNoise(data.toString('utf-8'));
+      if (!str) return;
 
       if (str.includes('\x1b[200~')) {
         inBracketedPaste = true;
         const afterStart = str.split('\x1b[200~')[1] || '';
         if (afterStart.includes('\x1b[201~')) {
-          const [pastedContent] = afterStart.split('\x1b[201~');
+          const endIdx = afterStart.indexOf('\x1b[201~');
+          const pastedContent = afterStart.slice(0, endIdx);
+          const trailing = afterStart.slice(endIdx + '\x1b[201~'.length);
           inBracketedPaste = false;
-          handlePastedText(pastedContent);
-          return;
+          if (pastedContent) handlePastedText(pastedContent);
+          if (!trailing) return;
+          str = trailing;
         } else { pasteBuffer += afterStart; return; }
       }
       if (inBracketedPaste) {
         if (str.includes('\x1b[201~')) {
-          const [beforeEnd] = str.split('\x1b[201~');
+          const endIdx = str.indexOf('\x1b[201~');
+          const beforeEnd = str.slice(0, endIdx);
+          const trailing = str.slice(endIdx + '\x1b[201~'.length);
           pasteBuffer += beforeEnd;
           inBracketedPaste = false;
           const full = pasteBuffer; pasteBuffer = '';
-          handlePastedText(full); return;
+          if (full) handlePastedText(full);
+          if (!trailing) return;
+          str = trailing;
         } else { pasteBuffer += str; return; }
       }
 
-      if (str.length > 2 && (str.includes('\n') || str.includes('\r'))) {
+      if (str.length > 2 && (str.includes('\n') || str.includes('\r')) && !str.includes('\x1b')) {
+        const endsWithEnter = /[\r\n]$/.test(str);
+        const body = str.replace(/[\r\n]+$/, '');
+        if (endsWithEnter && !body.includes('\r') && !body.includes('\n')) {
+          if (body.length > 0) handlePastedText(body);
+          if (bufferLines.join('\n').trim().length > 0) submit();
+          return;
+        }
         handlePastedText(str); return;
       }
 
@@ -1425,11 +1498,7 @@ async function readInlinePrompt(options: OpenCodePromptOptions): Promise<string 
       }
 
       if (str === '\x1b') {
-        if (bufferLines.join('').length > 0) {
-          if (cursorLine > 0) process.stdout.write(`\x1b[${cursorLine}A`);
-          bufferLines = ['']; cursorLine = 0; cursorCol = 0;
-          redrawFrom(0);
-        } else { cancel(); }
+        cancel();
         return;
       }
 
@@ -1443,7 +1512,7 @@ async function readInlinePrompt(options: OpenCodePromptOptions): Promise<string 
         redrawFrom(prevLine); return;
       }
 
-      if (str === '\r' || str === '\n' || str === '\r\n') {
+      if (str === '\r' || str === '\n' || str === '\r\n' || str === '\x1bOM' || str === '\x1b[13~') {
         if (bufferLines.join('\n').trim().length === 0) return;
         submit(); return;
       }

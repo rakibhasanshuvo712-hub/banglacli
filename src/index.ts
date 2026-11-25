@@ -33,7 +33,19 @@ import {
 } from './ui.js';
 import { safetySession, getSessionChanges, undoLastChange, setActiveMeshNode, getActiveMeshNode, executeTool } from './tools.js';
 import { selectAgentModelInteractive, findModelByQuery, applyModelDirect } from './models.js';
-import { readOpenCodePrompt, expandOpenCodeMentions, restoreTerminalViewport, updateFixedBottomStatus, activateFixedDock, deactivateFixedDock, updateDockedModel, prepareInteractiveArea, interactiveSelect } from './prompt.js';
+import {
+  readOpenCodePrompt,
+  expandOpenCodeMentions,
+  restoreTerminalViewport,
+  updateFixedBottomStatus,
+  activateFixedDock,
+  deactivateFixedDock,
+  updateDockedModel,
+  prepareInteractiveArea,
+  interactiveSelect,
+  isInteractivePromptActive,
+  isDockedPromptWaiting,
+} from './prompt.js';
 import { detectProjectContext } from './detector.js';
 import { MeshNode } from './mesh.js';
 import { captureClipboardImage, loadImagePayload, isImageFile, type ImagePayload } from './image.js';
@@ -82,6 +94,7 @@ function attachEscapeListener(onEscape: () => void): () => void {
   };
 
   const onData = (chunk: Buffer | string) => {
+    if (isInteractivePromptActive()) return;
     const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     // Escape key is single byte 0x1B (ESC)
     if (buf.length === 1 && buf[0] === 0x1b) {
@@ -93,6 +106,7 @@ function attachEscapeListener(onEscape: () => void): () => void {
   };
 
   const keypressHandler = (str: string, key: any) => {
+    if (isInteractivePromptActive()) return;
     if (
       (key && key.name === 'escape') ||
       str === '\x1b' ||
@@ -124,7 +138,7 @@ const program = new Command();
 program
   .name('banglacli')
   .description('Next-Gen Autonomous BYOK terminal coding agent that speaks Bangla, Banglish & English.')
-  .version('4.2.5', '-v, --version', 'Output the current version')
+  .version('4.2.6', '-v, --version', 'Output the current version')
   .option('-m, --model <model>', 'Override model for this session')
   .option('-M, --mode <mode>', 'Execution mode: "build" (default) or "plan"', 'build')
   .option('-p, --prompt <prompt>', 'Run a single prompt and exit')
@@ -186,6 +200,14 @@ program
           );
         },
         onPeerConnect: (peer) => {
+          if (isDockedPromptWaiting()) {
+            updateDockedModel(
+              PROVIDER_LABELS[config?.provider || 'gemini'] || config?.provider || 'gemini',
+              config?.model || 'gemini-3.5-flash-lite',
+              agent.getMode()
+            );
+            return;
+          }
           console.log(
             chalk.green(`\n🌐 [Mesh] Connected to peer [${chalk.bold(peer.role)}] (${peer.workspace})\n`)
           );
@@ -195,6 +217,14 @@ program
           });
         },
         onPeerDisconnect: (peer) => {
+          if (isDockedPromptWaiting()) {
+            updateDockedModel(
+              PROVIDER_LABELS[config?.provider || 'gemini'] || config?.provider || 'gemini',
+              config?.model || 'gemini-3.5-flash-lite',
+              agent.getMode()
+            );
+            return;
+          }
           console.log(
             chalk.yellow(`\n🌐 [Mesh] Peer disconnected: [${chalk.bold(peer.role)}] (${peer.workspace})\n`)
           );
@@ -550,7 +580,7 @@ program
         continue;
       }
 
-      if (trimmed === '/doctor' || trimmed === '/check') {
+      if (lowerCmd === '/doctor' || lowerCmd === '/check') {
         const checks: { name: string; status: 'ok' | 'warn' | 'error'; detail: string }[] = [];
 
         // 1. Node runtime
@@ -599,7 +629,7 @@ program
         continue;
       }
 
-      if (trimmed === '/diff' || trimmed === '/changes') {
+      if (lowerCmd === '/diff' || lowerCmd === '/changes') {
         const changes = getSessionChanges();
         if (changes.length === 0) {
           console.log(chalk.yellow('\nℹ️  No file modifications or creations recorded in this session.\n'));
@@ -616,7 +646,7 @@ program
         continue;
       }
 
-      if (trimmed === '/undo') {
+      if (lowerCmd === '/undo') {
         const result = undoLastChange();
         if (result.success) {
           console.log(chalk.green(`\n${result.message}\n`));
@@ -626,17 +656,17 @@ program
         continue;
       }
 
-      if (trimmed === '/git') {
+      if (lowerCmd === '/git') {
         renderGitStatus();
         continue;
       }
 
-      if (trimmed === '/tree') {
+      if (lowerCmd === '/tree') {
         renderDirectoryTree();
         continue;
       }
 
-      if (trimmed === '/detect' || trimmed === '/stack') {
+      if (lowerCmd === '/detect' || lowerCmd === '/stack') {
         const ctx = detectProjectContext();
         console.log('\n' + chalk.bold.hex('#00FF7F')('🔍 Detected Workspace Environment'));
         console.log(chalk.dim('─'.repeat(60)));
@@ -645,7 +675,7 @@ program
         continue;
       }
 
-      if (trimmed === '/compact') {
+      if (lowerCmd === '/compact') {
         const result = agent.compactHistory();
         console.log(
           chalk.green(
@@ -657,7 +687,7 @@ program
         continue;
       }
 
-      if (trimmed === '/session' || trimmed === '/status') {
+      if (lowerCmd === '/session' || lowerCmd === '/status') {
         const changes = getSessionChanges();
         const mem = agent.getHistoryStats();
         console.log('\n' + chalk.bold.hex('#00FF7F')('📊 Active Session Status (OpenCode Style)'));
@@ -673,7 +703,7 @@ program
         continue;
       }
 
-      if (trimmed === '/peers' || trimmed === '/mesh') {
+      if (lowerCmd === '/peers' || lowerCmd === '/mesh') {
         const mesh = getActiveMeshNode();
         if (!mesh) {
           console.log(chalk.yellow('\nℹ️ Cross-instance mesh is disabled on this instance (--no-mesh).\n'));
@@ -705,7 +735,7 @@ program
         continue;
       }
 
-      if (trimmed === '/role' || trimmed.startsWith('/role ')) {
+      if (lowerCmd === '/role' || lowerCmd.startsWith('/role ')) {
         const parts = trimmed.split(/\s+/);
         const mesh = getActiveMeshNode();
         if (!mesh) {
@@ -722,7 +752,7 @@ program
         continue;
       }
 
-      if (trimmed.startsWith('/send ') || trimmed.startsWith('/msg ')) {
+      if (lowerCmd.startsWith('/send ') || lowerCmd.startsWith('/msg ')) {
         const parts = trimmed.split(/\s+/);
         if (parts.length < 3) {
           console.log(chalk.yellow('\nUsage: /send <role|nodeId> <message>\nExample: /send backend Please implement /api/users route.\n'));
@@ -740,7 +770,7 @@ program
         continue;
       }
 
-      if (trimmed === '/clear') {
+      if (lowerCmd === '/clear' || lowerCmd === '/cls' || lowerCmd === '/reset') {
         agent.resetHistory();
         console.log(chalk.green('✔ Conversation history cleared! Session memory reset.\n'));
         continue;
