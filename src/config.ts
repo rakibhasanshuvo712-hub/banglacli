@@ -42,11 +42,74 @@ export const PROVIDER_KEY_URLS: Record<ProviderType, string> = {
 };
 
 /**
- * Retrieve saved configuration.
+ * Read provider API keys from environment variables when available.
+ */
+export function getEnvProviderKey(provider: ProviderType): string | undefined {
+  if (provider === 'gemini') {
+    return (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY)?.trim() || undefined;
+  }
+  if (provider === 'openrouter') {
+    return process.env.OPENROUTER_API_KEY?.trim() || undefined;
+  }
+  if (provider === 'custom') {
+    return (process.env.GROQ_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY)?.trim() || undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Retrieve saved configuration (hydrating any available environment API keys).
  */
 export function getConfig(): BanglaCLIConfig | undefined {
-  const cfg = configStore.get('config');
-  if (cfg && !cfg.savedProviders) {
+  let cfg = configStore.get('config');
+
+  const envGemini = getEnvProviderKey('gemini');
+  const envOpenRouter = getEnvProviderKey('openrouter');
+  const envGroq = process.env.GROQ_API_KEY?.trim() || undefined;
+  const envDeepSeek = process.env.DEEPSEEK_API_KEY?.trim() || undefined;
+
+  if (!cfg) {
+    if (envGemini || envOpenRouter || envGroq || envDeepSeek) {
+      const savedProviders: Partial<Record<ProviderType, ProviderConfig>> = {};
+      if (envGemini) {
+        savedProviders.gemini = { apiKey: envGemini, model: DEFAULT_MODELS.gemini };
+      }
+      if (envOpenRouter) {
+        savedProviders.openrouter = {
+          apiKey: envOpenRouter,
+          model: DEFAULT_MODELS.openrouter,
+          baseURL: 'https://openrouter.ai/api/v1',
+        };
+      }
+      if (envGroq) {
+        savedProviders.custom = {
+          apiKey: envGroq,
+          model: 'llama-3.3-70b-versatile',
+          baseURL: 'https://api.groq.com/openai/v1',
+        };
+      } else if (envDeepSeek) {
+        savedProviders.custom = {
+          apiKey: envDeepSeek,
+          model: 'deepseek-chat',
+          baseURL: 'https://api.deepseek.com/v1',
+        };
+      }
+
+      const primaryProvider: ProviderType = envGemini ? 'gemini' : envOpenRouter ? 'openrouter' : 'custom';
+      const primary = savedProviders[primaryProvider]!;
+      cfg = {
+        provider: primaryProvider,
+        apiKey: primary.apiKey,
+        model: primary.model,
+        baseURL: primary.baseURL,
+        savedProviders,
+      };
+      return cfg;
+    }
+    return undefined;
+  }
+
+  if (!cfg.savedProviders) {
     cfg.savedProviders = {
       [cfg.provider]: {
         apiKey: cfg.apiKey,
@@ -55,6 +118,40 @@ export function getConfig(): BanglaCLIConfig | undefined {
       },
     };
   }
+
+  // Hydrate missing provider keys from environment variables
+  if (envGemini && !cfg.savedProviders.gemini?.apiKey) {
+    cfg.savedProviders.gemini = { apiKey: envGemini, model: DEFAULT_MODELS.gemini };
+  }
+  if (envOpenRouter && !cfg.savedProviders.openrouter?.apiKey) {
+    cfg.savedProviders.openrouter = {
+      apiKey: envOpenRouter,
+      model: DEFAULT_MODELS.openrouter,
+      baseURL: 'https://openrouter.ai/api/v1',
+    };
+  }
+  if (envGroq && !cfg.savedProviders.custom?.apiKey) {
+    cfg.savedProviders.custom = {
+      apiKey: envGroq,
+      model: 'llama-3.3-70b-versatile',
+      baseURL: 'https://api.groq.com/openai/v1',
+    };
+  } else if (envDeepSeek && !cfg.savedProviders.custom?.apiKey) {
+    cfg.savedProviders.custom = {
+      apiKey: envDeepSeek,
+      model: 'deepseek-chat',
+      baseURL: 'https://api.deepseek.com/v1',
+    };
+  }
+
+  // Clean up any stale baseURL attached to Gemini
+  if (cfg.savedProviders.gemini?.baseURL) {
+    delete cfg.savedProviders.gemini.baseURL;
+  }
+  if (cfg.provider === 'gemini' && cfg.baseURL) {
+    delete (cfg as any).baseURL;
+  }
+
   return cfg;
 }
 
@@ -65,10 +162,13 @@ export function saveConfig(config: BanglaCLIConfig): void {
   if (!config.savedProviders) {
     config.savedProviders = {};
   }
+  if (config.provider === 'gemini') {
+    delete (config as any).baseURL;
+  }
   config.savedProviders[config.provider] = {
     apiKey: config.apiKey,
     model: config.model,
-    baseURL: config.baseURL,
+    ...(config.baseURL ? { baseURL: config.baseURL } : {}),
   };
   configStore.set('config', config);
 }
@@ -133,17 +233,15 @@ async function selectModelForProvider(
   } else if (provider === 'openrouter') {
     const openrouterOptions = [
       { value: 'openrouter/free', label: 'openrouter/free (🌟 Recommended - Best Free Model with Tools)' },
-      { value: 'particle-ai/particle-1:free', label: 'particle-ai/particle-1:free (1M Context Free Coder)' },
+      { value: 'nvidia/nemotron-3.5-lightning:free', label: 'nvidia/nemotron-3.5-lightning:free (Free Fast 1M Model)' },
       { value: 'nvidia/nemotron-3-ultra-550b-a55b:free', label: 'nvidia/nemotron-3-ultra-550b-a55b:free (550B MoE 1M)' },
+      { value: 'nvidia/nemotron-3.5-super-vl:free', label: 'nvidia/nemotron-3.5-super-vl:free (Vision + Code 1M Free)' },
+      { value: 'particle-ai/particle-1:free', label: 'particle-ai/particle-1:free (1M Context Free Coder)' },
       { value: 'google/gemma-4-31b-it:free', label: 'google/gemma-4-31b-it:free (Free 31B Coding & Chat)' },
       { value: 'google/gemma-4-26b-a4b-it:free', label: 'google/gemma-4-26b-a4b-it:free (Free Gemma MoE)' },
-      { value: 'nvidia/nemotron-3.5-lightning:free', label: 'nvidia/nemotron-3.5-lightning:free (Free Fast 1M Model)' },
-      { value: 'google/lyria-3-pro-preview', label: 'google/lyria-3-pro-preview (1M Context Free)' },
-      { value: 'google/lyria-3-clip-preview', label: 'google/lyria-3-clip-preview (1M Context Free)' },
-      { value: 'meta-llama/llama-3.3-70b-instruct:free', label: 'meta-llama/llama-3.3-70b-instruct:free (Free 70B Model)' },
-      { value: 'qwen/qwen-2.5-coder-32b-instruct:free', label: 'qwen/qwen-2.5-coder-32b-instruct:free (Free 32B Coder)' },
-      { value: 'deepseek/deepseek-r1:free', label: 'deepseek/deepseek-r1:free (Free Reasoning Model)' },
-      { value: 'deepseek/deepseek-chat:free', label: 'deepseek/deepseek-chat:free (Free 671B Chat/Code)' },
+      { value: 'inclusionai/ling-3.2-flash:free', label: 'inclusionai/ling-3.2-flash:free (1M Hybrid Reasoner Free)' },
+      { value: 'baidu/ernie-5.5-flash-preview:free', label: 'baidu/ernie-5.5-flash-preview:free (1M Flash Free)' },
+      { value: 'recursive/flint-v1.0:free', label: 'recursive/flint-v1.0:free (MoE 262k Free)' },
       { value: 'custom_input', label: 'Enter custom OpenRouter model name...' },
     ];
 
@@ -280,29 +378,38 @@ export async function switchProviderInteractive(
       model = newModel;
     }
   } else {
-    // No saved credentials for this provider
-    p.note(
-      `${chalk.white('Get your free API key here:')}\n` +
-        `${chalk.bold.underline.cyan(PROVIDER_KEY_URLS[provider])}\n\n` +
-        `${chalk.gray('ℹ️ 100% BYOK - Key will be saved locally on your device.')}`,
-      chalk.bold('API Key Required')
-    );
-
-    const enteredKey = (await p.password({
-      message: chalk.cyan(`Enter your ${PROVIDER_LABELS[provider]} API Key:`),
-      validate: (v) => (!v || v.trim().length === 0 ? 'API Key cannot be empty!' : undefined),
-    })) as string;
-
-    if (p.isCancel(enteredKey)) return null;
-    apiKey = enteredKey.trim();
+    // Check environment variable before prompting
+    const envKey = getEnvProviderKey(provider);
 
     if (provider === 'custom') {
       const customURL = (await p.text({
-        message: chalk.cyan('Enter custom baseURL (e.g. https://api.deepseek.com/v1 or http://localhost:11434/v1):'),
-        initialValue: 'https://api.deepseek.com/v1',
+        message: chalk.cyan('Enter custom baseURL (e.g. https://api.groq.com/openai/v1 or http://localhost:11434/v1):'),
+        initialValue: 'http://localhost:11434/v1',
       })) as string;
       if (p.isCancel(customURL)) return null;
       baseURL = customURL.trim();
+    }
+
+    if (provider === 'custom' && baseURL?.includes('localhost')) {
+      apiKey = 'ollama';
+    } else if (envKey) {
+      apiKey = envKey;
+    } else {
+      // No saved or env credentials for this provider
+      p.note(
+        `${chalk.white('Get your free API key here:')}\n` +
+          `${chalk.bold.underline.cyan(PROVIDER_KEY_URLS[provider])}\n\n` +
+          `${chalk.gray('ℹ️ 100% BYOK - Key will be saved locally on your device.')}`,
+        chalk.bold('API Key Required')
+      );
+
+      const enteredKey = (await p.password({
+        message: chalk.cyan(`Enter your ${PROVIDER_LABELS[provider]} API Key:`),
+        validate: (v) => (!v || v.trim().length === 0 ? 'API Key cannot be empty!' : undefined),
+      })) as string;
+
+      if (p.isCancel(enteredKey)) return null;
+      apiKey = enteredKey.trim();
     }
 
     const newModel = await selectModelForProvider(provider, DEFAULT_MODELS[provider]);
@@ -353,61 +460,60 @@ export async function promptConfig(isFirstTime = false): Promise<BanglaCLIConfig
   // 1. Choose Provider
   const provider = await interactiveSelect<ProviderType>({
     message: 'Select your AI Provider:',
-    initialValue: existingConfig?.provider || 'openrouter',
+    initialValue: existingConfig?.provider || 'gemini',
     options: [
       {
-        value: 'openrouter',
-        label: `${chalk.bold('OpenRouter')} ${chalk.green('(100% Free - Most Stable & Reliable)')}`,
-        hint: 'Recommended: openrouter/free (Zero 503 outages)',
+        value: 'gemini',
+        label: `${chalk.bold('Google Gemini')} ${chalk.green('(100% Free - 1,500 Req/Day, Fast & Reliable)')}`,
+        hint: 'Recommended: gemini-3.5-flash-lite, gemini-3.1-flash-lite, gemini-3.5-flash',
       },
       {
-        value: 'gemini',
-        label: `${chalk.bold('Google Gemini')} ${chalk.yellow('(Free Tier - High Quota, Subject to 503 Spikes)')}`,
-        hint: 'gemini-2.0-flash, gemini-2.0-flash-lite, gemini-2.5-flash',
+        value: 'openrouter',
+        label: `${chalk.bold('OpenRouter')} ${chalk.cyan('(Free Models: openrouter/free, Nemotron, Gemma 4)')}`,
+        hint: 'Optional BYOK free router (50-1000 req/day)',
       },
       {
         value: 'custom',
-        label: `${chalk.bold('Custom OpenAI-Compatible')} ${chalk.magenta('(Groq, Ollama Offline, etc.)')}`,
-        hint: 'Custom baseURL + API key',
+        label: `${chalk.bold('Custom OpenAI-Compatible')} ${chalk.magenta('(Groq, Ollama Offline, DeepSeek, etc.)')}`,
+        hint: 'Custom baseURL + API key (Ollama requires no key)',
       },
     ],
   });
 
   if (!provider || p.isCancel(provider)) {
-    p.cancel(chalk.yellow('Setup cancelled.'));
-    process.exit(0);
+    if (isFirstTime) {
+      p.cancel(chalk.yellow('Setup cancelled.'));
+      process.exit(0);
+    }
+    return existingConfig!;
   }
 
-  // 2. Show helpful key retrieval URL
-  p.note(
-    `${chalk.white('Get your free API key here:')}\n` +
-      `${chalk.bold.underline.cyan(PROVIDER_KEY_URLS[provider])}\n\n` +
-      `${chalk.gray('ℹ️ 100% BYOK (Bring Your Own Key) - Your key is saved locally in config store.')}`,
-    chalk.bold('API Key Instructions')
-  );
+  const savedForProvider = existingConfig?.savedProviders?.[provider];
+  let resolvedApiKey = '';
 
-  // 3. Prompt for API Key
-  const apiKey = (await p.password({
-    message: chalk.cyan(`Enter your ${PROVIDER_LABELS[provider]} API Key:`),
-    validate: (value) => {
-      if (!value || value.trim().length === 0) {
-        return 'API Key cannot be empty!';
-      }
-    },
-  })) as string;
-
-  if (p.isCancel(apiKey)) {
-    p.cancel(chalk.yellow('Setup cancelled.'));
-    process.exit(0);
+  if (!isFirstTime && savedForProvider?.apiKey) {
+    const keyChoice = await interactiveSelect<'saved' | 'new'>({
+      message: `Saved API key found for ${PROVIDER_LABELS[provider]}.`,
+      options: [
+        { value: 'saved', label: chalk.green('✔ Keep existing API key') },
+        { value: 'new', label: chalk.yellow('Enter a new API key') },
+      ],
+    });
+    if (!keyChoice || p.isCancel(keyChoice)) {
+      return existingConfig!;
+    }
+    if (keyChoice === 'saved') {
+      resolvedApiKey = savedForProvider.apiKey;
+    }
   }
 
   let baseURL: string | undefined = undefined;
 
-  // 4. Custom baseURL if provider is custom
+  // Custom baseURL before key check so Ollama localhost doesn't prompt unnecessarily
   if (provider === 'custom') {
     const customBaseURL = (await p.text({
-      message: chalk.cyan('Enter custom baseURL (e.g. https://api.deepseek.com/v1 or http://localhost:11434/v1):'),
-      initialValue: existingConfig?.baseURL || 'https://api.deepseek.com/v1',
+      message: chalk.cyan('Enter custom baseURL (e.g. https://api.groq.com/openai/v1 or http://localhost:11434/v1):'),
+      initialValue: savedForProvider?.baseURL || existingConfig?.baseURL || 'http://localhost:11434/v1',
       validate: (value) => {
         if (!value || !value.startsWith('http')) {
           return 'Please provide a valid URL starting with http:// or https://';
@@ -416,36 +522,75 @@ export async function promptConfig(isFirstTime = false): Promise<BanglaCLIConfig
     })) as string;
 
     if (p.isCancel(customBaseURL)) {
-      p.cancel(chalk.yellow('Setup cancelled.'));
-      process.exit(0);
+      if (isFirstTime) {
+        p.cancel(chalk.yellow('Setup cancelled.'));
+        process.exit(0);
+      }
+      return existingConfig!;
     }
     baseURL = customBaseURL.trim();
   } else if (provider === 'openrouter') {
     baseURL = 'https://openrouter.ai/api/v1';
   }
 
+  if (!resolvedApiKey) {
+    if (provider === 'custom' && baseURL?.includes('localhost')) {
+      resolvedApiKey = 'ollama';
+    } else {
+      // 2. Show helpful key retrieval URL
+      p.note(
+        `${chalk.white('Get your free API key here:')}\n` +
+          `${chalk.bold.underline.cyan(PROVIDER_KEY_URLS[provider])}\n\n` +
+          `${chalk.gray('ℹ️ 100% BYOK (Bring Your Own Key) - Your key is saved locally in config store.')}`,
+        chalk.bold('API Key Instructions')
+      );
+
+      // 3. Prompt for API Key
+      const apiKey = (await p.password({
+        message: chalk.cyan(`Enter your ${PROVIDER_LABELS[provider]} API Key:`),
+        validate: (value) => {
+          if (!value || value.trim().length === 0) {
+            return 'API Key cannot be empty!';
+          }
+        },
+      })) as string;
+
+      if (p.isCancel(apiKey)) {
+        if (isFirstTime) {
+          p.cancel(chalk.yellow('Setup cancelled.'));
+          process.exit(0);
+        }
+        return existingConfig!;
+      }
+      resolvedApiKey = apiKey.trim();
+    }
+  }
+
   // 5. Model Selection
   const chosenModel = await selectModelForProvider(
     provider,
-    existingConfig?.provider === provider ? existingConfig?.model : DEFAULT_MODELS[provider]
+    existingConfig?.provider === provider ? existingConfig?.model : savedForProvider?.model || DEFAULT_MODELS[provider]
   );
 
   if (!chosenModel) {
-    p.cancel(chalk.yellow('Setup cancelled.'));
-    process.exit(0);
+    if (isFirstTime) {
+      p.cancel(chalk.yellow('Setup cancelled.'));
+      process.exit(0);
+    }
+    return existingConfig!;
   }
 
   const finalConfig: BanglaCLIConfig = {
     provider,
-    apiKey: apiKey.trim(),
+    apiKey: resolvedApiKey,
     model: chosenModel,
     baseURL,
     savedProviders: {
       ...existingConfig?.savedProviders,
       [provider]: {
-        apiKey: apiKey.trim(),
+        apiKey: resolvedApiKey,
         model: chosenModel,
-        baseURL,
+        ...(baseURL ? { baseURL } : {}),
       },
     },
   };

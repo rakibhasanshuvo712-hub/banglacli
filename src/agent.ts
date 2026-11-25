@@ -1,6 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
-import { BanglaCLIConfig, updateModel, saveConfig } from './config.js';
+import { BanglaCLIConfig, getEnvProviderKey, saveConfig, updateModel } from './config.js';
 import {
   BUILD_GEMINI_TOOLS,
   PLAN_GEMINI_TOOLS,
@@ -176,14 +176,20 @@ interface ChatMessage {
 }
 
 const GEMINI_FALLBACK_MAP: Record<string, string[]> = {
-  'gemini-3.5-flash-lite': ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'],
-  'gemini-3.5-flash': ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'],
-  'gemini-3.8-flash': ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
-  'gemini-3.1-flash-lite': ['gemini-3.5-flash-lite', 'gemini-3.5-flash'],
-  'gemini-2.0-flash': ['gemini-3.5-flash-lite', 'gemini-3.5-flash'],
-  'gemini-2.0-flash-lite': ['gemini-3.5-flash-lite', 'gemini-3.5-flash'],
-  'gemini-2.5-flash': ['gemini-3.5-flash-lite', 'gemini-3.5-flash'],
-  'gemini-2.5-pro': ['gemini-3.5-flash', 'gemini-3.5-flash-lite'],
+  'gemini-3.5-flash-lite': ['gemini-3.1-flash-lite', 'gemma-4-31b-it', 'gemma-4-26b-a4b-it', 'gemini-3.5-flash'],
+  'gemini-3.1-flash-lite': ['gemini-3.5-flash-lite', 'gemma-4-31b-it', 'gemma-4-26b-a4b-it', 'gemini-3.5-flash'],
+  'gemma-4-31b-it': ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemma-4-26b-a4b-it'],
+  'gemma-4-26b-a4b-it': ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemma-4-31b-it'],
+  'gemini-3.5-flash': ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemma-4-31b-it', 'gemini-3.8-flash'],
+  'gemini-3.6-flash': ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemma-4-31b-it'],
+  'gemini-3.7-flash': ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemma-4-31b-it'],
+  'gemini-3.8-flash': ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemma-4-31b-it'],
+  'gemini-4-hydrogen': ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemma-4-31b-it'],
+  'gemini-4-argon': ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemma-4-31b-it'],
+  'gemini-2.0-flash': ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'],
+  'gemini-2.0-flash-lite': ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'],
+  'gemini-2.5-flash': ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'],
+  'gemini-2.5-pro': ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'],
 };
 
 export class BanglaAgent {
@@ -217,21 +223,33 @@ export class BanglaAgent {
   }
 
   private initClients(): void {
+    // Hydrate empty API key from savedProviders or env before client init
+    if (!this.config.apiKey) {
+      this.config.apiKey =
+        this.config.savedProviders?.[this.config.provider]?.apiKey ||
+        getEnvProviderKey(this.config.provider) ||
+        '';
+    }
+
     if (this.config.provider === 'gemini') {
       const normalized = normalizeGeminiModel(this.config.model);
       if (!normalized || !GEMINI_CASCADE_CHAIN.includes(normalized)) {
         this.config.model = 'gemini-3.5-flash-lite';
-        updateModel('gemini-3.5-flash-lite');
       } else {
         this.config.model = normalized;
-        updateModel(normalized);
       }
+      delete (this.config as any).baseURL;
       this.geminiClient = new GoogleGenAI({ apiKey: this.config.apiKey });
       this.openAIClient = undefined;
     } else {
+      const baseURL =
+        this.config.provider === 'openrouter'
+          ? 'https://openrouter.ai/api/v1'
+          : this.config.baseURL || this.config.savedProviders?.custom?.baseURL;
+      this.config.baseURL = baseURL;
       this.openAIClient = new OpenAI({
-        apiKey: this.config.apiKey,
-        baseURL: this.config.baseURL,
+        apiKey: this.config.apiKey || 'ollama',
+        baseURL,
       });
       this.geminiClient = undefined;
     }
@@ -323,116 +341,178 @@ export class BanglaAgent {
   }
 
   private attemptedModelsInCascade = new Set<string>();
+  private deadProvidersInTurn = new Set<string>();
   private cascadeStepsCount = 0;
-  private readonly MAX_CASCADE_STEPS = 60;
+  private readonly MAX_CASCADE_STEPS = 40;
 
   public resetCascadeAttempts(): void {
     this.attemptedModelsInCascade.clear();
+    this.deadProvidersInTurn.clear();
     this.cascadeStepsCount = 0;
   }
 
   /**
-   * Sync active OpenAI message history into Gemini content format.
+   * Persist active provider + model to config store once verified working.
+   */
+  private persistVerifiedActiveModel(): void {
+    try {
+      saveConfig(this.config);
+      this.onModelChangeCallback?.(this.config.model, this.config.provider);
+    } catch {}
+  }
+
+  /**
+   * Sync active OpenAI message history into Gemini content format (preserving tool calls/results).
    */
   public syncMessagesToGemini(): void {
-    if (this.openAIMessages.length > 0) {
-      this.geminiContents = [];
-      for (const msg of this.openAIMessages) {
-        if (msg.role === 'user') {
-          if (Array.isArray(msg.content)) {
-            const parts: any[] = [];
-            for (const item of msg.content as any[]) {
-              if (item.type === 'text') {
-                parts.push({ text: item.text });
-              } else if (item.type === 'image_url' && item.image_url?.url) {
-                const url = item.image_url.url;
-                const match = url.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/);
-                if (match) {
-                  parts.push({
-                    inlineData: {
-                      mimeType: match[1],
-                      data: match[2],
-                    },
-                  });
-                }
+    if (this.openAIMessages.length === 0) return;
+
+    const rawContents: Array<{ role: string; parts: Array<any> }> = [];
+    for (const msg of this.openAIMessages) {
+      if (msg.role === 'user') {
+        if (Array.isArray(msg.content)) {
+          const parts: any[] = [];
+          for (const item of msg.content as any[]) {
+            if (item.type === 'text' && item.text) {
+              parts.push({ text: item.text });
+            } else if (item.type === 'image_url' && item.image_url?.url) {
+              const url = item.image_url.url;
+              const match = url.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/);
+              if (match) {
+                parts.push({
+                  inlineData: {
+                    mimeType: match[1],
+                    data: match[2],
+                  },
+                });
               }
             }
-            this.geminiContents.push({ role: 'user', parts });
-          } else {
-            const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
-            this.geminiContents.push({ role: 'user', parts: [{ text: content }] });
           }
-        } else if (msg.role === 'assistant') {
-          const content = typeof msg.content === 'string' ? msg.content : '';
+          if (parts.length > 0) {
+            rawContents.push({ role: 'user', parts });
+          }
+        } else {
+          const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
           if (content) {
-            this.geminiContents.push({ role: 'model', parts: [{ text: content }] });
+            rawContents.push({ role: 'user', parts: [{ text: content }] });
           }
+        }
+      } else if (msg.role === 'assistant') {
+        const textParts: string[] = [];
+        if (typeof msg.content === 'string' && msg.content.trim()) {
+          textParts.push(msg.content);
+        }
+        const toolCalls = (msg as any).tool_calls;
+        if (Array.isArray(toolCalls) && toolCalls.length > 0) {
+          const summary = toolCalls
+            .map((tc: any) => `${tc.function?.name}(${(tc.function?.arguments || '').slice(0, 200)})`)
+            .join(', ');
+          textParts.push(`[Called tools: ${summary}]`);
+        }
+        const combined = textParts.join('\n').trim();
+        if (combined) {
+          rawContents.push({ role: 'model', parts: [{ text: combined }] });
+        }
+      } else if (msg.role === 'tool') {
+        const toolText = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+        if (toolText) {
+          rawContents.push({
+            role: 'user',
+            parts: [{ text: `[Tool Output]: ${toolText.slice(0, 6000)}` }],
+          });
         }
       }
     }
+
+    // Merge consecutive entries with the same role so Gemini alternates user/model cleanly
+    const merged: Array<{ role: string; parts: Array<any> }> = [];
+    for (const item of rawContents) {
+      const prev = merged[merged.length - 1];
+      if (prev && prev.role === item.role) {
+        prev.parts.push(...item.parts);
+      } else {
+        merged.push({ role: item.role, parts: [...item.parts] });
+      }
+    }
+    this.geminiContents = merged;
   }
 
   /**
-   * Sync active Gemini content history into OpenAI message format.
+   * Sync active Gemini content history into OpenAI message format (preserving functionCall & functionResponse).
    */
   public syncMessagesToOpenAI(): void {
-    if (this.geminiContents.length > 0) {
-      this.openAIMessages = [
-        {
-          role: 'system',
-          content: getSystemPrompt(this.mode),
-        },
-      ];
-      for (const c of this.geminiContents) {
-        if (c.role === 'user') {
-          const textParts: string[] = [];
-          const imageParts: any[] = [];
-          for (const p of c.parts) {
-            if (p.text) textParts.push(p.text);
-            if (p.inlineData) {
-              imageParts.push({
-                type: 'image_url',
-                image_url: {
-                  url: `data:${p.inlineData.mimeType};base64,${p.inlineData.data}`,
-                },
-              });
-            }
+    if (this.geminiContents.length === 0) return;
+
+    this.openAIMessages = [
+      {
+        role: 'system',
+        content: getSystemPrompt(this.mode),
+      },
+    ];
+    for (const c of this.geminiContents) {
+      if (c.role === 'user') {
+        const textParts: string[] = [];
+        const imageParts: any[] = [];
+        for (const p of c.parts) {
+          if (p.text) textParts.push(p.text);
+          if (p.functionResponse) {
+            const out = p.functionResponse.response?.output ?? JSON.stringify(p.functionResponse.response || '');
+            textParts.push(`[Tool "${p.functionResponse.name}" Result]:\n${String(out).slice(0, 6000)}`);
           }
-          if (imageParts.length > 0) {
-            this.openAIMessages.push({
-              role: 'user',
-              content: [
-                { type: 'text', text: textParts.join('\n') },
-                ...imageParts,
-              ] as any,
+          if (p.inlineData) {
+            imageParts.push({
+              type: 'image_url',
+              image_url: {
+                url: `data:${p.inlineData.mimeType};base64,${p.inlineData.data}`,
+              },
             });
-          } else {
-            const text = textParts.join('\n');
-            if (text) {
-              this.openAIMessages.push({ role: 'user', content: text });
-            }
           }
-        } else if (c.role === 'model') {
-          const text = c.parts
-            .map((p: any) => p.text || (p.functionCall ? `Tool call: ${JSON.stringify(p.functionCall)}` : ''))
-            .filter(Boolean)
-            .join('\n');
+        }
+        if (imageParts.length > 0) {
+          this.openAIMessages.push({
+            role: 'user',
+            content: [
+              { type: 'text', text: textParts.join('\n') },
+              ...imageParts,
+            ] as any,
+          });
+        } else {
+          const text = textParts.join('\n').trim();
           if (text) {
-            this.openAIMessages.push({
-              role: 'assistant',
-              content: text,
-            });
+            this.openAIMessages.push({ role: 'user', content: text });
           }
+        }
+      } else if (c.role === 'model') {
+        const text = c.parts
+          .map((p: any) =>
+            p.text
+              ? p.text
+              : p.functionCall
+              ? `[Called tool ${p.functionCall.name}(${JSON.stringify(p.functionCall.args || {}).slice(0, 300)})]`
+              : ''
+          )
+          .filter(Boolean)
+          .join('\n');
+        if (text) {
+          this.openAIMessages.push({
+            role: 'assistant',
+            content: text,
+          });
         }
       }
     }
   }
 
+  private getKeyForProvider(provider: 'gemini' | 'openrouter' | 'custom'): string | undefined {
+    const saved = this.config.savedProviders?.[provider]?.apiKey;
+    if (saved) return saved;
+    if (this.config.provider === provider && this.config.apiKey) return this.config.apiKey;
+    return getEnvProviderKey(provider);
+  }
+
   /**
-   * Intelligently cascade to the next available model when token quota or rate limit is reached.
-   * Cycles through 100% of available models across all agents and providers in the CLI.
-   * If and only when all tokens are completely exhausted across all providers,
-   * renders the Token Renewal Countdown report.
+   * Intelligently cascade to the next available model when token quota, auth error, or rate limit is reached.
+   * Cycles cleanly across providers without looping back into dead providers or persisting broken models.
    */
   public async cascadeModel(currentModel: string, reason: string): Promise<string | null> {
     this.cascadeStepsCount++;
@@ -446,145 +526,135 @@ export class BanglaAgent {
       return null;
     }
 
-    // 1. If currently on Gemini:
-    if (this.config.provider === 'gemini') {
-      // Try next unattempted Gemini model
+    const lowerReason = reason.toLowerCase();
+    const isProviderAuthOrBalanceFailure =
+      lowerReason.includes('401') ||
+      lowerReason.includes('403') ||
+      lowerReason.includes('auth error') ||
+      lowerReason.includes('api key') ||
+      lowerReason.includes('user not found') ||
+      lowerReason.includes('free-models-per-day') ||
+      lowerReason.includes('free_daily_limit') ||
+      lowerReason.includes('daily free') ||
+      lowerReason.includes('insufficient_quota') ||
+      lowerReason.includes('insufficient_balance') ||
+      lowerReason.includes('insufficient balance') ||
+      lowerReason.includes('402') ||
+      lowerReason.includes('provider unusable');
+
+    if (isProviderAuthOrBalanceFailure) {
+      this.deadProvidersInTurn.add(this.config.provider);
+    }
+
+    const switchToGemini = (noticeReason: string): string | null => {
+      if (this.deadProvidersInTurn.has('gemini')) return null;
+      const geminiKey = this.getKeyForProvider('gemini');
+      if (!geminiKey) return null;
+
       for (const rawModel of GEMINI_CASCADE_CHAIN) {
         const model = normalizeGeminiModel(rawModel);
         if (!this.attemptedModelsInCascade.has(model)) {
-          this.attemptedModelsInCascade.add(model);
-          renderCascadeNotice(currentModel, model, reason);
+          renderCascadeNotice(currentModel, model, noticeReason);
+          this.config.provider = 'gemini';
+          this.config.apiKey = geminiKey;
           this.config.model = model;
-          updateModel(model);
-          this.onModelChangeCallback?.(model, 'gemini');
+          delete (this.config as any).baseURL;
+          this.initClients();
+          this.syncMessagesToGemini();
           return model;
         }
       }
+      return null;
+    };
 
-      // Gemini chain fully exhausted! Cross-cascade to OpenRouter Free
-      const openRouterSaved = this.config.savedProviders?.openrouter;
-      const openRouterKey =
-        openRouterSaved?.apiKey ||
-        ((this.config.provider as string) === 'openrouter' ? this.config.apiKey : undefined);
-      if (openRouterKey) {
-        for (const model of OPENROUTER_FREE_CASCADE_CHAIN) {
-          if (!this.attemptedModelsInCascade.has(model)) {
-            this.attemptedModelsInCascade.add(model);
-            renderCascadeNotice(
-              currentModel,
-              model,
-              'All Google Gemini tokens exhausted; cascading to OpenRouter Free'
-            );
-            this.config.provider = 'openrouter';
-            this.config.apiKey = openRouterKey;
-            this.config.model = model;
-            this.config.baseURL = 'https://openrouter.ai/api/v1';
-            this.initClients();
-            saveConfig(this.config);
-            this.syncMessagesToOpenAI();
-            this.onModelChangeCallback?.(model, 'openrouter');
-            return model;
-          }
-        }
-      }
-    } else if (this.config.provider === 'openrouter' || this.config.provider === 'custom') {
-      // 2. If currently on OpenRouter/Custom:
-      const isAccountWideLimit =
-        reason.includes('free-models-per-day') ||
-        reason.includes('daily free') ||
-        reason.includes('insufficient_quota') ||
-        reason.includes('insufficient_balance') ||
-        reason.includes('Insufficient Balance') ||
-        reason.includes('402') ||
-        reason.includes('quota') ||
-        reason.includes('Daily quota') ||
-        reason.includes('Rate Limit') ||
-        reason.includes('rate limit') ||
-        reason.includes('rate-limit') ||
-        reason.includes('Provider failure') ||
-        reason.includes('provider failure');
-
-      const geminiSaved = this.config.savedProviders?.gemini;
-      const geminiKey =
-        geminiSaved?.apiKey ||
-        ((this.config.provider as string) === 'gemini' ? this.config.apiKey : undefined);
-
-      // If OpenRouter daily limit or custom provider limit is hit, jump straight to Gemini for zero-delay continuity
-      if (isAccountWideLimit && geminiKey) {
-        for (const rawModel of GEMINI_CASCADE_CHAIN) {
-          const model = normalizeGeminiModel(rawModel);
-          if (!this.attemptedModelsInCascade.has(model)) {
-            this.attemptedModelsInCascade.add(model);
-            renderCascadeNotice(
-              currentModel,
-              model,
-              'Quota limit reached on active provider; cascading immediately to Google Gemini'
-            );
-            this.config.provider = 'gemini';
-            this.config.apiKey = geminiKey;
-            this.config.model = model;
-            delete (this.config as any).baseURL;
-            this.initClients();
-            saveConfig(this.config);
-            this.syncMessagesToGemini();
-            this.onModelChangeCallback?.(model, 'gemini');
-            return model;
-          }
-        }
-      }
+    const switchToOpenRouter = (noticeReason: string): string | null => {
+      if (this.deadProvidersInTurn.has('openrouter')) return null;
+      const openRouterKey = this.getKeyForProvider('openrouter');
+      if (!openRouterKey) return null;
 
       for (const model of OPENROUTER_FREE_CASCADE_CHAIN) {
         if (!this.attemptedModelsInCascade.has(model)) {
-          this.attemptedModelsInCascade.add(model);
-          renderCascadeNotice(currentModel, model, reason);
+          renderCascadeNotice(currentModel, model, noticeReason);
+          this.config.provider = 'openrouter';
+          this.config.apiKey = openRouterKey;
           this.config.model = model;
-          updateModel(model);
-          this.onModelChangeCallback?.(model, this.config.provider);
+          this.config.baseURL = 'https://openrouter.ai/api/v1';
+          this.initClients();
+          this.syncMessagesToOpenAI();
           return model;
         }
       }
+      return null;
+    };
 
-      // OpenRouter chain exhausted! Cross-cascade to Gemini
-      if (geminiKey) {
-        for (const rawModel of GEMINI_CASCADE_CHAIN) {
-          const model = normalizeGeminiModel(rawModel);
-          if (!this.attemptedModelsInCascade.has(model)) {
-            this.attemptedModelsInCascade.add(model);
-            renderCascadeNotice(
-              currentModel,
-              model,
-              'All OpenRouter free tokens exhausted; cascading to Google Gemini'
-            );
-            this.config.provider = 'gemini';
-            this.config.apiKey = geminiKey;
-            this.config.model = model;
-            delete (this.config as any).baseURL;
-            this.initClients();
-            saveConfig(this.config);
-            this.syncMessagesToGemini();
-            this.onModelChangeCallback?.(model, 'gemini');
-            return model;
-          }
-        }
+    const switchToCustom = (noticeReason: string): string | null => {
+      if (this.deadProvidersInTurn.has('custom')) return null;
+      const customSaved = this.config.savedProviders?.custom;
+      const customKey =
+        customSaved?.apiKey ||
+        ((this.config.provider as string) === 'custom' ? this.config.apiKey : undefined) ||
+        getEnvProviderKey('custom');
+      const customBaseURL = customSaved?.baseURL || (this.config.provider === 'custom' ? this.config.baseURL : undefined);
+      if (!customKey || !customBaseURL) return null;
+
+      // Determine an endpoint-appropriate model instead of sending an OpenRouter slug to DeepSeek/Groq
+      let targetModel = customSaved?.model || 'deepseek-chat';
+      if (customBaseURL.includes('deepseek.com') && (targetModel.includes('/') || targetModel.includes('llama'))) {
+        targetModel = 'deepseek-chat';
+      } else if (customBaseURL.includes('groq.com') && targetModel.includes('/')) {
+        targetModel = 'llama-3.3-70b-versatile';
       }
-    }
 
-    // Also check Custom provider (Groq / Cerebras) if configured
-    const customSaved = this.config.savedProviders?.custom;
-    if (customSaved?.apiKey && (this.config.provider as string) !== 'custom') {
+      if (this.attemptedModelsInCascade.has(`custom:${targetModel}`)) return null;
+      this.attemptedModelsInCascade.add(`custom:${targetModel}`);
+
+      renderCascadeNotice(currentModel, targetModel, noticeReason);
       this.config.provider = 'custom';
-      this.config.apiKey = customSaved.apiKey;
-      this.config.baseURL = customSaved.baseURL || 'https://api.groq.com/openai/v1';
-      this.config.model = customSaved.model || 'llama-3.3-70b-versatile';
+      this.config.apiKey = customKey;
+      this.config.baseURL = customBaseURL;
+      this.config.model = targetModel;
       this.initClients();
-      saveConfig(this.config);
-      renderCascadeNotice(currentModel, this.config.model, 'Cascading to Custom/Groq provider');
-      this.onModelChangeCallback?.(this.config.model, 'custom');
-      return this.config.model;
+      this.syncMessagesToOpenAI();
+      return targetModel;
+    };
+
+    // Route intelligently based on current active provider
+    if (this.config.provider === 'gemini') {
+      const nextGemini = !isProviderAuthOrBalanceFailure ? switchToGemini(reason) : null;
+      if (nextGemini) return nextGemini;
+
+      this.deadProvidersInTurn.add('gemini');
+      const nextOR = switchToOpenRouter('Google Gemini unavailable/exhausted; cascading to OpenRouter Free');
+      if (nextOR) return nextOR;
+
+      const nextCustom = switchToCustom('Cascading to configured Custom endpoint');
+      if (nextCustom) return nextCustom;
+    } else if (this.config.provider === 'openrouter') {
+      // On OpenRouter auth error or daily limit, jump immediately to Gemini instead of looping 12 dead OR calls
+      if (isProviderAuthOrBalanceFailure) {
+        const nextGemini = switchToGemini('OpenRouter unavailable/limit reached; cascading immediately to Google Gemini');
+        if (nextGemini) return nextGemini;
+      }
+
+      const nextOR = !isProviderAuthOrBalanceFailure ? switchToOpenRouter(reason) : null;
+      if (nextOR) return nextOR;
+
+      this.deadProvidersInTurn.add('openrouter');
+      const nextGemini = switchToGemini('OpenRouter free models exhausted; cascading to Google Gemini');
+      if (nextGemini) return nextGemini;
+
+      const nextCustom = switchToCustom('Cascading to configured Custom endpoint');
+      if (nextCustom) return nextCustom;
+    } else if (this.config.provider === 'custom') {
+      this.deadProvidersInTurn.add('custom');
+      const nextGemini = switchToGemini('Custom provider unavailable; cascading to Google Gemini');
+      if (nextGemini) return nextGemini;
+
+      const nextOR = switchToOpenRouter('Custom provider unavailable; cascading to OpenRouter Free');
+      if (nextOR) return nextOR;
     }
 
-    // Active Model Explorer: dynamically scan all 77 models and live free endpoints
-    // to find an alive model with free tokens before rendering exhausted notice
+    // Active Model Explorer: dynamically scan remaining live free endpoints before giving up
     const explored = await exploreAndSelectFreeModel(this.config, this.attemptedModelsInCascade);
     if (explored) {
       this.attemptedModelsInCascade.add(explored.id);
@@ -724,59 +794,9 @@ export class BanglaAgent {
 
     try {
       if (this.config.provider === 'gemini') {
-        const reply = await this.chatGemini(englishEnforcedInput, options);
-        if (options?.signal?.aborted) {
-          return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
-        }
-        // Check if Gemini failed with 503, 429, or server overload message
-        if (
-          typeof reply === 'string' &&
-          (reply.includes('503') ||
-            reply.includes('UNAVAILABLE') ||
-            reply.includes('high demand') ||
-            reply.includes('RESOURCE_EXHAUSTED') ||
-            reply.includes('429') ||
-            reply.includes('Rate Limit Exceeded') ||
-            reply.includes('Server Overload'))
-        ) {
-          const nextModel = await this.cascadeModel(this.config.model, 'Gemini server overload / rate limit');
-          if (nextModel) {
-            if (this.config.provider === 'gemini') {
-              return await this.chatGemini(englishEnforcedInput, options);
-            } else {
-              this.syncMessagesToOpenAI();
-              return await this.chatOpenAI(englishEnforcedInput, options);
-            }
-          }
-          return chalk.yellow('\n⏳ All free model tokens are currently exhausted across all providers. Check the renewal countdown above.');
-        }
-        return reply;
+        return await this.chatGemini(englishEnforcedInput, options);
       } else {
-        const reply = await this.chatOpenAI(englishEnforcedInput, options);
-        if (options?.signal?.aborted) {
-          return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
-        }
-        // Check if OpenAI/OpenRouter/Custom failed with auth or rate-limit message
-        if (
-          typeof reply === 'string' &&
-          (reply.includes('API Key Error') ||
-            reply.includes('Authentication failed') ||
-            reply.includes('Rate Limit Exceeded') ||
-            reply.includes('free-models-per-day'))
-        ) {
-          const nextModel = await this.cascadeModel(this.config.model, 'Daily quota / rate limit reached');
-          if (nextModel) {
-            if ((this.config.provider as string) === 'gemini') {
-              this.syncMessagesToGemini();
-              return await this.chatGemini(englishEnforcedInput, options);
-            } else {
-              this.syncMessagesToOpenAI();
-              return await this.chatOpenAI(englishEnforcedInput, options);
-            }
-          }
-          return chalk.yellow('\n⏳ All free model tokens are currently exhausted across all providers. Check the renewal countdown above.');
-        }
-        return reply;
+        return await this.chatOpenAI(englishEnforcedInput, options);
       }
     } catch (err: any) {
       if (options?.signal?.aborted) {
@@ -785,10 +805,8 @@ export class BanglaAgent {
       const nextModel = await this.cascadeModel(this.config.model, 'Provider failure auto-recovery');
       if (nextModel) {
         if (this.config.provider === 'gemini') {
-          this.syncMessagesToGemini();
           return await this.chatGemini(englishEnforcedInput, options);
         } else {
-          this.syncMessagesToOpenAI();
           return await this.chatOpenAI(englishEnforcedInput, options);
         }
       }
@@ -851,6 +869,7 @@ export class BanglaAgent {
 
       let response: any = null;
       let lastError: any = null;
+      let usedGeminiModel = this.config.model;
 
       // Candidate models: normalized requested model first, then fallback models, excluding already attempted models
       const normalizedCurrent = normalizeGeminiModel(this.config.model);
@@ -877,6 +896,7 @@ export class BanglaAgent {
           }
 
           attempts++;
+          let timeoutId: NodeJS.Timeout | undefined;
           try {
             const abortPromise = new Promise<never>((_, reject) => {
               if (options?.signal?.aborted) {
@@ -886,9 +906,9 @@ export class BanglaAgent {
               options?.signal?.addEventListener('abort', () => reject(new Error('ABORTED_BY_USER')), { once: true });
             });
 
-            const timeoutPromise = new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error('Gemini API request timed out (35s)')), 35000)
-            );
+            const timeoutPromise = new Promise<never>((_, reject) => {
+              timeoutId = setTimeout(() => reject(new Error('Gemini API request timed out (18s)')), 18000);
+            });
 
             response = await Promise.race([
               this.geminiClient.models.generateContent({
@@ -902,19 +922,21 @@ export class BanglaAgent {
               timeoutPromise,
               abortPromise,
             ]);
+            if (timeoutId) clearTimeout(timeoutId);
 
+            usedGeminiModel = candidateModel;
             if (candidateModel !== this.config.model) {
               spinner.stop();
-              renderCascadeNotice(this.config.model, candidateModel, 'Gemini high demand / failover');
+              renderCascadeNotice(this.config.model, candidateModel, 'Gemini failover');
               this.config.model = candidateModel;
-              updateModel(candidateModel);
-              this.onModelChangeCallback?.(candidateModel, 'gemini');
               spinner.start();
             }
+            this.persistVerifiedActiveModel();
 
             lastError = null;
             break;
           } catch (err: any) {
+            if (timeoutId) clearTimeout(timeoutId);
             if (options?.signal?.aborted || err?.message === 'ABORTED_BY_USER') {
               spinner.stop();
               return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
@@ -923,26 +945,37 @@ export class BanglaAgent {
             lastError = err;
             this.attemptedModelsInCascade.add(candidateModel);
             const errMsg = err?.message || String(err);
-            const isTemporary =
-              errMsg.includes('503') ||
-              errMsg.includes('UNAVAILABLE') ||
-              errMsg.includes('high demand') ||
-              errMsg.includes('429') ||
-              errMsg.includes('RESOURCE_EXHAUSTED') ||
-              errMsg.includes('no longer available') ||
-              errMsg.includes('NOT_FOUND') ||
-              errMsg.includes('timed out') ||
-              errMsg.includes('timeout') ||
-              errMsg.includes('404');
 
-            if (!isTemporary) {
-              // Critical auth error, don't retry other models
+            // Fail fast without sleeping when model quota/availability/auth/timeout occurs
+            const noRetryOnSameModel =
+              errMsg.includes('exceeded your current quota') ||
+              errMsg.includes('free_tier') ||
+              errMsg.includes('RESOURCE_EXHAUSTED') ||
+              errMsg.includes('404') ||
+              errMsg.includes('NOT_FOUND') ||
+              errMsg.includes('no longer available') ||
+              errMsg.includes('API_KEY_INVALID') ||
+              errMsg.includes('401') ||
+              errMsg.includes('403') ||
+              errMsg.includes('timed out') ||
+              errMsg.includes('timeout');
+
+            if (noRetryOnSameModel) {
               break;
             }
 
-            // Short pause before retrying
+            const isTransient =
+              errMsg.includes('503') ||
+              errMsg.includes('UNAVAILABLE') ||
+              errMsg.includes('high demand') ||
+              errMsg.includes('429');
+
+            if (!isTransient) {
+              break;
+            }
+
             if (attempts < maxModelAttempts) {
-              await new Promise((resolve) => setTimeout(resolve, 1500));
+              await new Promise((resolve) => setTimeout(resolve, 800));
             }
           }
         }
@@ -951,7 +984,6 @@ export class BanglaAgent {
           break;
         }
 
-        // If auth error, break out of all candidate models
         if (lastError) {
           const errMsg = lastError?.message || String(lastError);
           if (errMsg.includes('API_KEY_INVALID') || errMsg.includes('403') || errMsg.includes('401')) {
@@ -962,18 +994,17 @@ export class BanglaAgent {
 
       spinner.stop();
 
-      if (!response && lastError) {
-        const errMsg = lastError?.message || String(lastError);
+      if (!response) {
+        const errMsg = lastError ? (lastError?.message || String(lastError)) : 'All Gemini candidates exhausted';
         if (errMsg.includes('API_KEY_INVALID') || errMsg.includes('403') || errMsg.includes('401')) {
           const nextModel = await this.cascadeModel(
             this.config.model,
-            'Gemini auth error, cascading to OpenRouter/Custom'
+            'Gemini auth error (401/403), cascading to OpenRouter/Custom'
           );
           if (nextModel) {
             if (this.config.provider === 'gemini') {
               return await this.chatGemini(userInput, options);
             } else {
-              this.syncMessagesToOpenAI();
               return await this.chatOpenAI(userInput, options);
             }
           }
@@ -982,9 +1013,8 @@ export class BanglaAgent {
               `Please run ${chalk.yellow('/config')} to update your API key.`
           );
         } else {
-          // All local candidate Gemini models failed; cascade to next provider / model in chain
           const nextModel = await this.cascadeModel(
-            this.config.model,
+            usedGeminiModel,
             errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED')
               ? 'Gemini Rate Limit / Token Quota Exceeded (429)'
               : 'Gemini Server High Demand / Provider Error'
@@ -993,7 +1023,6 @@ export class BanglaAgent {
             if (this.config.provider === 'gemini') {
               return await this.chatGemini(userInput, options);
             } else {
-              this.syncMessagesToOpenAI();
               return await this.chatOpenAI(userInput, options);
             }
           }
@@ -1013,15 +1042,40 @@ export class BanglaAgent {
         this.metrics.totalTokens += response.usageMetadata.totalTokenCount || 0;
       }
 
+      // Check if candidate hit MALFORMED_FUNCTION_CALL
+      if (candidate?.finishReason === 'MALFORMED_FUNCTION_CALL' && functionCalls.length === 0) {
+        this.geminiContents.push({
+          role: 'user',
+          parts: [
+            {
+              text: '[System: Your previous function call had malformed arguments. Please call the tool again with valid JSON parameters.]',
+            },
+          ],
+        });
+        continue;
+      }
+
       // Check if candidate returned content
       if (candidate?.content) {
         this.geminiContents.push(candidate.content);
       }
 
+      // Extract text directly from candidate parts (avoids @google/genai noisy getter warnings)
+      const directText = (candidate?.content?.parts || [])
+        .map((p: any) => (typeof p.text === 'string' ? p.text : ''))
+        .join('')
+        .trim();
+
       // If no function calls, we have the final assistant response!
       if (!functionCalls || functionCalls.length === 0) {
-        const text = response.text || '';
-        return text;
+        if (!directText && turnCount < maxTurns) {
+          this.geminiContents.push({
+            role: 'user',
+            parts: [{ text: 'Please continue and provide your response or call the needed tool.' }],
+          });
+          continue;
+        }
+        return directText || '';
       }
 
       // Execute each function call
@@ -1075,8 +1129,18 @@ export class BanglaAgent {
       return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
     }
 
-    if (!this.openAIClient) {
-      throw new Error('OpenAI client is not initialized.');
+    if (!this.openAIClient || !this.config.apiKey) {
+      const nextModel = await this.cascadeModel(
+        this.config.model,
+        `Auth error / Missing API key for ${this.config.provider}`
+      );
+      if (nextModel) {
+        if ((this.config.provider as string) === 'gemini') {
+          return await this.chatGemini(userInput, options);
+        }
+      } else {
+        throw new Error('OpenAI client is not initialized.');
+      }
     }
 
     const lastMsg = this.openAIMessages[this.openAIMessages.length - 1];
@@ -1127,7 +1191,7 @@ export class BanglaAgent {
 
       let completion: OpenAI.Chat.Completions.ChatCompletion | null = null;
       let cascadeAttempts = 0;
-      const maxCascadeAttempts = 60;
+      const maxCascadeAttempts = 40;
 
       while (cascadeAttempts < maxCascadeAttempts) {
         if (options?.signal?.aborted) {
@@ -1135,6 +1199,11 @@ export class BanglaAgent {
           return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
         }
 
+        if (!this.openAIClient) {
+          break;
+        }
+
+        let timeoutId: NodeJS.Timeout | undefined;
         try {
           const abortPromise = new Promise<never>((_, reject) => {
             if (options?.signal?.aborted) {
@@ -1142,6 +1211,10 @@ export class BanglaAgent {
               return;
             }
             options?.signal?.addEventListener('abort', () => reject(new Error('ABORTED_BY_USER')), { once: true });
+          });
+
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            timeoutId = setTimeout(() => reject(new Error('Provider API request timed out (22s)')), 22000);
           });
 
           completion = await Promise.race([
@@ -1154,129 +1227,49 @@ export class BanglaAgent {
               },
               {
                 signal: options?.signal,
-                timeout: 35000,
+                timeout: 22000,
               }
             ),
+            timeoutPromise,
             abortPromise,
           ]);
+          if (timeoutId) clearTimeout(timeoutId);
+          this.persistVerifiedActiveModel();
           break;
         } catch (err: any) {
+          if (timeoutId) clearTimeout(timeoutId);
           if (options?.signal?.aborted || err?.message === 'ABORTED_BY_USER') {
             spinner.stop();
             return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
           }
+
           const errMsg = err?.message || String(err);
-          const isDailyQuotaExhausted =
-            errMsg.includes('free-models-per-day') ||
-            errMsg.includes('free_daily_limit');
+          const lowerErr = errMsg.toLowerCase();
 
-          if (isDailyQuotaExhausted && (this.config.provider === 'openrouter' || this.config.provider === 'custom')) {
-            spinner.stop();
-            const nextModel = await this.cascadeModel(
-              this.config.model,
-              'OpenRouter daily free limit reached'
-            );
-            if (nextModel) {
-              if ((this.config.provider as string) === 'gemini') {
-                this.syncMessagesToGemini();
-                return await this.chatGemini(userInput, options);
-              }
-              spinner.start();
-              continue;
-            }
-            return chalk.yellow(
-              '\n⏳ All free model tokens are currently exhausted across all providers. Check the renewal countdown above.'
-            );
-          }
-
-          const isLimitOrOverload =
-            errMsg.includes('429') ||
-            errMsg.includes('rate limit') ||
-            errMsg.includes('quota') ||
-            errMsg.includes('RESOURCE_EXHAUSTED') ||
-            errMsg.includes('insufficient_quota') ||
-            errMsg.includes('503') ||
-            errMsg.includes('UNAVAILABLE') ||
-            errMsg.includes('high demand') ||
-            errMsg.includes('502') ||
-            errMsg.includes('500') ||
-            errMsg.includes('404') ||
-            errMsg.includes('no longer available') ||
-            errMsg.includes('not found') ||
-            errMsg.includes('402') ||
-            errMsg.includes('400') ||
-            errMsg.includes('not a valid model ID');
-
-          if (isLimitOrOverload && (this.config.provider === 'openrouter' || this.config.provider === 'custom')) {
-            cascadeAttempts++;
-            spinner.stop();
-            const nextModel = await this.cascadeModel(
-              this.config.model,
-              errMsg.includes('429') || errMsg.includes('free-models-per-day') || errMsg.includes('free_daily_limit')
-                ? 'Daily free token quota / Rate limit reached'
-                : 'Server load / Unavailable'
-            );
-            if (nextModel) {
-              if ((this.config.provider as string) === 'gemini') {
-                this.syncMessagesToGemini();
-                return await this.chatGemini(userInput, options);
-              }
-              spinner.text = chalk.cyan(`banglacli continuing with [${nextModel}]...`);
-              spinner.start();
-              continue;
-            }
-            return chalk.yellow(
-              '\n⏳ All free model tokens are currently exhausted across all providers. Check the renewal countdown above.'
-            );
-          }
-
-          spinner.stop();
-          if (
-            errMsg.includes('401') ||
-            errMsg.includes('Incorrect API key') ||
-            errMsg.includes('invalid_api_key') ||
-            errMsg.includes('Authentication failed')
+          let cascadeReason = `Server load / Unavailable`;
+          if (lowerErr.includes('free-models-per-day') || lowerErr.includes('free_daily_limit')) {
+            cascadeReason = 'OpenRouter daily free limit reached (free-models-per-day)';
+          } else if (
+            lowerErr.includes('401') ||
+            lowerErr.includes('incorrect api key') ||
+            lowerErr.includes('invalid_api_key') ||
+            lowerErr.includes('user not found') ||
+            lowerErr.includes('authentication failed')
           ) {
-            const nextModel = await this.cascadeModel(
-              this.config.model,
-              `Auth error on ${this.config.provider}`
-            );
-            if (nextModel) {
-              if ((this.config.provider as string) === 'gemini') {
-                this.syncMessagesToGemini();
-                return await this.chatGemini(userInput, options);
-              }
-              spinner.start();
-              continue;
-            }
-
-            return chalk.red(
-              `\n✖ API Key Error: Authentication failed for ${this.config.provider}.\n` +
-                `Please run ${chalk.yellow('/provider')} or ${chalk.yellow('/config')} to select a free model.`
-            );
-          } else if (errMsg.includes('429') || errMsg.includes('rate limit')) {
-            const nextModel = await this.cascadeModel(this.config.model, 'Rate Limit Exceeded (429)');
-            if (nextModel) {
-              if ((this.config.provider as string) === 'gemini') {
-                this.syncMessagesToGemini();
-                return await this.chatGemini(userInput, options);
-              } else {
-                return await this.chatOpenAI(userInput, options);
-              }
-            }
-            return chalk.yellow(
-              '\n⏳ All free model tokens are currently exhausted across all providers. Check the renewal countdown above.'
-            );
+            cascadeReason = `Auth error (401) on ${this.config.provider}`;
+          } else if (lowerErr.includes('402') || lowerErr.includes('insufficient balance') || lowerErr.includes('insufficient_quota')) {
+            cascadeReason = `402 Insufficient Balance on ${this.config.provider}`;
+          } else if (lowerErr.includes('429') || lowerErr.includes('rate limit')) {
+            cascadeReason = 'Daily free token quota / Rate limit reached (429)';
+          } else {
+            cascadeReason = `Provider auto-failover: ${errMsg.slice(0, 60)}`;
           }
 
           cascadeAttempts++;
-          const nextModel = await this.cascadeModel(
-            this.config.model,
-            `Provider auto-failover: ${errMsg.slice(0, 50)}`
-          );
+          spinner.stop();
+          const nextModel = await this.cascadeModel(this.config.model, cascadeReason);
           if (nextModel) {
             if ((this.config.provider as string) === 'gemini') {
-              this.syncMessagesToGemini();
               return await this.chatGemini(userInput, options);
             }
             spinner.text = chalk.cyan(`banglacli continuing with [${nextModel}]...`);
@@ -1284,7 +1277,16 @@ export class BanglaAgent {
             continue;
           }
 
-          throw new Error(`Provider Error (${this.config.provider}): ${errMsg}`);
+          if (lowerErr.includes('401') || lowerErr.includes('invalid_api_key') || lowerErr.includes('user not found')) {
+            return chalk.red(
+              `\n✖ API Key Error: Authentication failed for ${this.config.provider}.\n` +
+                `Please run ${chalk.yellow('/provider')} or ${chalk.yellow('/config')} to configure a valid key.`
+            );
+          }
+
+          return chalk.yellow(
+            '\n⏳ All free model tokens are currently exhausted across all providers. Check the renewal countdown above.'
+          );
         }
       }
 
@@ -1308,8 +1310,15 @@ export class BanglaAgent {
         );
       }
 
-      const choice = completion.choices[0];
+      const choice = completion.choices?.[0];
       if (!choice || !choice.message) {
+        const nextModel = await this.cascadeModel(this.config.model, 'Empty choices returned from model');
+        if (nextModel) {
+          if ((this.config.provider as string) === 'gemini') {
+            return await this.chatGemini(userInput, options);
+          }
+          continue;
+        }
         throw new Error('No response returned from the model.');
       }
 
@@ -1325,7 +1334,17 @@ export class BanglaAgent {
 
       // If no tool calls, this is the final assistant response
       if (!message.tool_calls || message.tool_calls.length === 0) {
-        return message.content || '';
+        const rawText = message.content?.trim() || '';
+        const reasoningText = ((message as any).reasoning || '').trim();
+        if (!rawText && reasoningText && turnCount < maxTurns) {
+          // Some free reasoning models exhaust tokens thinking before emitting final text/tool_calls
+          this.openAIMessages.push({
+            role: 'user',
+            content: 'Please proceed directly with your final answer or call the required tool now.',
+          });
+          continue;
+        }
+        return message.content || reasoningText || '';
       }
 
       // Process tool calls
@@ -1337,12 +1356,22 @@ export class BanglaAgent {
         if (toolCall.type !== 'function') continue;
 
         const fnName = toolCall.function.name;
-        let fnArgs: Record<string, any> = {};
+        let fnArgs: Record<string, any> | null = null;
+        let parseError: string | null = null;
 
         try {
           fnArgs = JSON.parse(toolCall.function.arguments || '{}');
-        } catch {
-          fnArgs = {};
+        } catch (e: any) {
+          parseError = e?.message || 'Invalid JSON';
+        }
+
+        if (parseError || !fnArgs || typeof fnArgs !== 'object') {
+          this.openAIMessages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: `Error: Could not parse JSON arguments for "${fnName}" (${parseError}). Please fix the JSON escaping and call "${fnName}" again.`,
+          });
+          continue;
         }
 
         updateFixedBottomStatus(`Executing tool: ${fnName}... (Esc to abort)`, {

@@ -1,10 +1,11 @@
 import { GoogleGenAI } from '@google/genai';
-import { BanglaCLIConfig, saveConfig, updateModel } from './config.js';
+import { BanglaCLIConfig, getEnvProviderKey, saveConfig } from './config.js';
 import {
   AGENT_MODELS,
   fetchLiveOpenRouterFreeModels,
   normalizeGeminiModel,
   GEMINI_CASCADE_CHAIN,
+  OPENROUTER_FREE_CASCADE_CHAIN,
 } from './models.js';
 import { renderModelExplorationNotice } from './ui.js';
 import chalk from 'chalk';
@@ -21,31 +22,36 @@ export interface FreeModelCandidate {
  * Ultra-fast probe to test if a candidate model has active free tokens and returns 200 OK.
  */
 async function probeCandidate(candidate: FreeModelCandidate): Promise<boolean> {
-  const timeoutMs = 4500;
+  const timeoutMs = 5000;
 
   if (candidate.provider === 'gemini') {
+    let timer: NodeJS.Timeout | undefined;
     try {
       const ai = new GoogleGenAI({ apiKey: candidate.apiKey });
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), timeoutMs);
       const normalized = normalizeGeminiModel(candidate.id);
 
-      const res = await ai.models.generateContent({
-        model: normalized,
-        contents: [{ role: 'user', parts: [{ text: 'Say OK' }] }],
-        config: { maxOutputTokens: 10 },
-      });
-      clearTimeout(timeout);
+      const res = await Promise.race([
+        ai.models.generateContent({
+          model: normalized,
+          contents: [{ role: 'user', parts: [{ text: 'Say OK' }] }],
+          config: { maxOutputTokens: 10 },
+        }),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error('PROBE_TIMEOUT')), timeoutMs);
+        }),
+      ]);
+      if (timer) clearTimeout(timer);
       return Boolean(res && (res.text !== undefined || (res.candidates && res.candidates.length > 0)));
     } catch {
+      if (timer) clearTimeout(timer);
       return false;
     }
   }
 
-  // OpenRouter / Custom / Groq
+  // OpenRouter / Custom / Groq / Local
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     const targetUrl = candidate.baseURL
       ? candidate.baseURL.replace(/\/+$/, '') + '/chat/completions'
       : 'https://openrouter.ai/api/v1/chat/completions';
@@ -71,13 +77,19 @@ async function probeCandidate(candidate: FreeModelCandidate): Promise<boolean> {
       return false;
     }
 
-    const data = (await res.json()) as any;
-    // Check if error payload returned in JSON or rate limited
+    const rawText = await res.text();
+    let data: any = null;
+    try {
+      data = JSON.parse(rawText.trim());
+    } catch {
+      return false;
+    }
     if (data?.error) {
       return false;
     }
     return Boolean(data?.choices && data.choices.length > 0);
   } catch {
+    clearTimeout(timeout);
     return false;
   }
 }
@@ -99,27 +111,38 @@ export async function exploreAndSelectFreeModel(
 
   const geminiKey =
     config.savedProviders?.gemini?.apiKey ||
-    (config.provider === 'gemini' ? config.apiKey : undefined);
+    (config.provider === 'gemini' ? config.apiKey : undefined) ||
+    getEnvProviderKey('gemini');
 
   const openRouterKey =
     config.savedProviders?.openrouter?.apiKey ||
-    (config.provider === 'openrouter' ? config.apiKey : undefined);
+    (config.provider === 'openrouter' ? config.apiKey : undefined) ||
+    getEnvProviderKey('openrouter');
 
   const customKey =
     config.savedProviders?.custom?.apiKey ||
     (config.provider === 'custom' ? config.apiKey : undefined);
-  const customBaseURL = config.savedProviders?.custom?.baseURL || config.baseURL;
+  const customBaseURL =
+    config.savedProviders?.custom?.baseURL ||
+    (config.provider === 'custom' ? config.baseURL : undefined);
 
   const candidatePool: FreeModelCandidate[] = [];
-  const seenIds = new Set<string>();
+  const seenKeys = new Set<string>();
 
-  // 1. Google Gemini free candidates
+  const pushCandidate = (c: FreeModelCandidate) => {
+    const dedupeKey = `${c.provider}:${c.id}`;
+    if (!seenKeys.has(dedupeKey) && !excludedModels.has(c.id)) {
+      seenKeys.add(dedupeKey);
+      candidatePool.push(c);
+    }
+  };
+
+  // 1. Google Gemini free candidates (highest reliability, 1,500 RPD)
   if (geminiKey) {
     for (const m of GEMINI_CASCADE_CHAIN) {
       const norm = normalizeGeminiModel(m);
-      if (!seenIds.has(norm) && !excludedModels.has(norm) && !excludedModels.has(m)) {
-        seenIds.add(norm);
-        candidatePool.push({
+      if (!excludedModels.has(norm) && !excludedModels.has(m)) {
+        pushCandidate({
           id: norm,
           name: norm,
           provider: 'gemini',
@@ -129,20 +152,25 @@ export async function exploreAndSelectFreeModel(
     }
   }
 
-  // 2. OpenRouter free candidates from presets
+  // 2. OpenRouter verified free tool-capable candidates
   if (openRouterKey) {
-    for (const p of AGENT_MODELS) {
-      const isFree =
-        p.category === 'free' ||
-        p.id.endsWith(':free') ||
-        p.id.includes('free') ||
-        p.id.includes('flash') ||
-        p.badge === 'Free' ||
-        p.badge === 'Live Free';
+    for (const m of OPENROUTER_FREE_CASCADE_CHAIN) {
+      pushCandidate({
+        id: m,
+        name: m,
+        provider: 'openrouter',
+        apiKey: openRouterKey,
+        baseURL: 'https://openrouter.ai/api/v1',
+      });
+    }
 
-      if (isFree && !seenIds.has(p.id) && !excludedModels.has(p.id)) {
-        seenIds.add(p.id);
-        candidatePool.push({
+    for (const p of AGENT_MODELS) {
+      if (
+        p.provider === 'openrouter' &&
+        (p.id === 'openrouter/free' || p.id.endsWith(':free')) &&
+        !p.id.includes('lyria')
+      ) {
+        pushCandidate({
           id: p.id,
           name: p.name || p.id,
           provider: 'openrouter',
@@ -152,31 +180,26 @@ export async function exploreAndSelectFreeModel(
       }
     }
 
-    // 3. Live models from OpenRouter API
+    // 3. Live tool-capable free models from OpenRouter API
     try {
       const liveFree = await fetchLiveOpenRouterFreeModels();
       for (const m of liveFree) {
-        if (!seenIds.has(m.id) && !excludedModels.has(m.id)) {
-          seenIds.add(m.id);
-          candidatePool.push({
-            id: m.id,
-            name: m.name,
-            provider: 'openrouter',
-            apiKey: openRouterKey,
-            baseURL: 'https://openrouter.ai/api/v1',
-          });
-        }
+        pushCandidate({
+          id: m.id,
+          name: m.name,
+          provider: 'openrouter',
+          apiKey: openRouterKey,
+          baseURL: 'https://openrouter.ai/api/v1',
+        });
       }
     } catch {}
   }
 
-  // 4. Custom (e.g. Groq free tier) candidates
-  if (customKey) {
-    const groqFreeModels = ['llama-3.3-70b-versatile', 'gemma2-9b-it', 'llama-3.1-8b-instant'];
-    for (const g of groqFreeModels) {
-      if (!seenIds.has(g) && !excludedModels.has(g)) {
-        seenIds.add(g);
-        candidatePool.push({
+  // 4. Custom endpoint candidates matching configured baseURL
+  if (customKey && customBaseURL) {
+    if (customBaseURL.includes('groq.com')) {
+      for (const g of ['llama-3.3-70b-versatile', 'qwen-2.5-coder-32b', 'llama-3.1-8b-instant']) {
+        pushCandidate({
           id: g,
           name: g,
           provider: 'custom',
@@ -184,6 +207,25 @@ export async function exploreAndSelectFreeModel(
           baseURL: customBaseURL,
         });
       }
+    } else if (customBaseURL.includes('deepseek.com')) {
+      for (const d of ['deepseek-chat', 'deepseek-reasoner']) {
+        pushCandidate({
+          id: d,
+          name: d,
+          provider: 'custom',
+          apiKey: customKey,
+          baseURL: customBaseURL,
+        });
+      }
+    } else if (config.savedProviders?.custom?.model) {
+      const m = config.savedProviders.custom.model;
+      pushCandidate({
+        id: m,
+        name: m,
+        provider: 'custom',
+        apiKey: customKey,
+        baseURL: customBaseURL,
+      });
     }
   }
 
@@ -208,7 +250,6 @@ export async function exploreAndSelectFreeModel(
     const winner = results.find((r): r is FreeModelCandidate => r !== null);
 
     if (winner) {
-      // Update global configuration and save to persistent storage
       config.model = winner.id;
       config.provider = winner.provider;
       config.apiKey = winner.apiKey;
@@ -217,7 +258,6 @@ export async function exploreAndSelectFreeModel(
       } else {
         delete (config as any).baseURL;
       }
-      updateModel(winner.id);
       saveConfig(config);
 
       if (!silent) {

@@ -145,6 +145,9 @@ export async function listFiles(dirPath = '.'): Promise<string> {
  * 2. read_file: Read file content
  */
 export async function readFile(filePath: string): Promise<string> {
+  if (typeof filePath !== 'string' || !filePath.trim()) {
+    return 'Error: Missing or invalid "filePath" argument.';
+  }
   const rootDir = process.cwd();
   const targetFile = path.resolve(rootDir, filePath);
 
@@ -175,6 +178,12 @@ export async function readFile(filePath: string): Promise<string> {
 export async function writeFile(filePath: string, content: string, signal?: AbortSignal): Promise<string> {
   if (signal?.aborted) {
     return 'Action cancelled by user (Escape key pressed).';
+  }
+  if (typeof filePath !== 'string' || !filePath.trim()) {
+    return 'Error: Missing or invalid "filePath" argument.';
+  }
+  if (typeof content !== 'string') {
+    return `Error: Missing or invalid "content" string for "${filePath}".`;
   }
   const rootDir = process.cwd();
   const targetFile = path.resolve(rootDir, filePath);
@@ -225,7 +234,7 @@ export async function writeFile(filePath: string, content: string, signal?: Abor
 
 /**
  * 3b. edit_file: Surgically edits an existing file by replacing a unique target text block.
- * Avoids rewriting entire large files, saves tokens, and tracks reversible session history.
+ * Avoids rewriting entire large files, handles CRLF/LF differences cleanly, and tracks reversible session history.
  */
 export async function editFile(
   filePath: string,
@@ -236,6 +245,16 @@ export async function editFile(
   if (signal?.aborted) {
     return 'Action cancelled by user (Escape key pressed).';
   }
+  if (typeof filePath !== 'string' || !filePath.trim()) {
+    return 'Error: Missing or invalid "filePath" argument.';
+  }
+  if (typeof target !== 'string' || typeof replacement !== 'string') {
+    return `Error: Missing "target" or "replacement" string for "${filePath}".`;
+  }
+  if (target.length === 0) {
+    return `Error: "target" cannot be empty. Provide exact lines to replace or use write_file.`;
+  }
+
   const rootDir = process.cwd();
   const targetFile = path.resolve(rootDir, filePath);
 
@@ -249,13 +268,29 @@ export async function editFile(
   }
 
   const content = fs.readFileSync(targetFile, 'utf8');
+  const usesCRLF = content.includes('\r\n');
+
+  let effectiveTarget = target;
+  let effectiveReplacement = replacement;
+  let workingContent = content;
+  let normalizedMode = false;
 
   if (!content.includes(target)) {
-    return `Error: Target string not found in "${filePath}". Please use read_file first to verify the exact lines and whitespace before calling edit_file.`;
+    // Retry matching with normalized LF line endings (handles Windows CRLF files edited with LF prompts)
+    const contentLF = content.replace(/\r\n/g, '\n');
+    const targetLF = target.replace(/\r\n/g, '\n');
+    if (contentLF.includes(targetLF)) {
+      normalizedMode = true;
+      workingContent = contentLF;
+      effectiveTarget = targetLF;
+      effectiveReplacement = replacement.replace(/\r\n/g, '\n');
+    } else {
+      return `Error: Target string not found in "${filePath}". Please use read_file first to verify the exact lines and whitespace before calling edit_file.`;
+    }
   }
 
   // Check for uniqueness
-  const occurrences = content.split(target).length - 1;
+  const occurrences = workingContent.split(effectiveTarget).length - 1;
   if (occurrences > 1) {
     return `Warning: Target string matches ${occurrences} times in "${filePath}". Please include more surrounding context lines in 'target' so it matches uniquely.`;
   }
@@ -264,8 +299,8 @@ export async function editFile(
   if (!safetySession.autoApproveAll) {
     const summary =
       `${chalk.yellow('Surgically edit file:')} ${chalk.cyan(filePath)}\n` +
-      `Replacing: ${target.split('\n').length} line(s) (${target.length} bytes)\n` +
-      `With: ${replacement.split('\n').length} line(s) (${replacement.length} bytes)`;
+      `Replacing: ${effectiveTarget.split('\n').length} line(s) (${effectiveTarget.length} bytes)\n` +
+      `With: ${effectiveReplacement.split('\n').length} line(s) (${effectiveReplacement.length} bytes)`;
 
     const decision = await askToolConfirmation('edit_file', summary);
     if (decision === 'no') {
@@ -276,20 +311,30 @@ export async function editFile(
     }
   }
 
+  // Perform literal replacement without $-pattern expansion
+  const idx = workingContent.indexOf(effectiveTarget);
+  let updatedContent =
+    workingContent.slice(0, idx) +
+    effectiveReplacement +
+    workingContent.slice(idx + effectiveTarget.length);
+
+  if (normalizedMode && usesCRLF) {
+    updatedContent = updatedContent.replace(/\n/g, '\r\n');
+  }
+
   // Track session history for /undo and /diff
   sessionFileHistory.push({
     filePath,
     isNew: false,
     previousContent: content,
-    newContent: content.replace(target, replacement),
+    newContent: updatedContent,
     timestamp: new Date(),
   });
 
-  const updatedContent = content.replace(target, replacement);
   fs.writeFileSync(targetFile, updatedContent, 'utf8');
 
-  const beforeLines = target.split('\n').length;
-  const afterLines = replacement.split('\n').length;
+  const beforeLines = effectiveTarget.split('\n').length;
+  const afterLines = effectiveReplacement.split('\n').length;
   return `✔ Successfully edited "${filePath}" (surgically replaced ${beforeLines} line(s) with ${afterLines} line(s)).`;
 }
 
@@ -301,6 +346,9 @@ let commandExecutionMutex = Promise.resolve();
  * Guarantees that multiple commands never run at the same time, avoiding lengthy timeouts.
  */
 export async function runCommand(command: string, signal?: AbortSignal): Promise<string> {
+  if (typeof command !== 'string' || !command.trim()) {
+    return 'Error: Missing or invalid "command" string.';
+  }
   // Wait for any active command to complete so execution is strictly continuous and sequential
   const prevLock = commandExecutionMutex;
   let release: () => void = () => {};
@@ -543,12 +591,20 @@ function runActualProcess(command: string, signal?: AbortSignal): Promise<string
         return;
       }
 
+      const capOutput = (raw: string, maxChars = 15000): string => {
+        const trimmed = raw.trim();
+        if (trimmed.length <= maxChars) return trimmed;
+        const head = trimmed.slice(0, 4000);
+        const tail = trimmed.slice(-10000);
+        return `${head}\n\n... [truncated ${trimmed.length - 14000} chars] ...\n\n${tail}`;
+      };
+
       const outputParts: string[] = [];
       if (stdout && stdout.trim()) {
-        outputParts.push(`[stdout]:\n${stdout.trim()}`);
+        outputParts.push(`[stdout]:\n${capOutput(stdout)}`);
       }
       if (stderr && stderr.trim()) {
-        outputParts.push(`[stderr]:\n${stderr.trim()}`);
+        outputParts.push(`[stderr]:\n${capOutput(stderr)}`);
       }
 
       if (code !== 0 && code !== null) {

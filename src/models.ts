@@ -1,6 +1,13 @@
 import chalk from 'chalk';
 import * as p from '@clack/prompts';
-import { ProviderType, BanglaCLIConfig, saveConfig, PROVIDER_LABELS, PROVIDER_KEY_URLS } from './config.js';
+import {
+  ProviderType,
+  BanglaCLIConfig,
+  saveConfig,
+  PROVIDER_LABELS,
+  PROVIDER_KEY_URLS,
+  getEnvProviderKey,
+} from './config.js';
 import { createSpinner } from './ui.js';
 import { prepareInteractiveArea, interactiveSelect } from './prompt.js';
 
@@ -480,6 +487,24 @@ export const AGENT_MODELS: AgentModelPreset[] = [
     contextLength: '1,048,576',
   },
   {
+    id: 'gemma-4-31b-it',
+    name: 'Gemma 4 31B Instruct (Google AI Studio Free)',
+    provider: 'gemini',
+    category: 'gemini',
+    description: 'Google DeepMind open-weights 31B coding model with native tool calling on Gemini API.',
+    badge: '31B Free',
+    contextLength: '262,144',
+  },
+  {
+    id: 'gemma-4-26b-a4b-it',
+    name: 'Gemma 4 26B A4B MoE (Google AI Studio Free)',
+    provider: 'gemini',
+    category: 'gemini',
+    description: 'Fast MoE coding model running natively on Google AI Studio free tier.',
+    badge: 'MoE Free',
+    contextLength: '262,144',
+  },
+  {
     id: 'gemini-2.0-flash',
     name: 'Gemini 2.0 Flash (Compatible Alias)',
     provider: 'gemini',
@@ -891,33 +916,17 @@ export const AGENT_MODELS: AgentModelPreset[] = [
 
 export const OPENROUTER_FREE_CASCADE_CHAIN = [
   'openrouter/free',
-  'inclusionai/ling-3.2-flash:free',
-  'baidu/ernie-5.5-flash-preview:free',
-  'liquid/lfm-3-1.7b:free',
-  'particle-ai/particle-1:free',
-  'recursive/flint-v1.0:free',
-  'nvidia/nemotron-3.5-super-vl:free',
   'nvidia/nemotron-3.5-lightning:free',
   'nvidia/nemotron-3-ultra-550b-a55b:free',
-  'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
-  'google/gemma-4-26b-a4b-it:free',
   'google/gemma-4-31b-it:free',
-  'google/lyria-3-pro-preview',
-  'google/lyria-3-clip-preview',
-  'deepseek-v4.1-flash-free',
-  'glm-5.3-flash-free',
-  'longcat-2.5-preview-free',
-  'solar-mini-4',
-  'tencent/hy4-flash',
-  'z-ai/glm-5.3-flash',
-  'beam-free',
-  'exo-free',
-  'flint-40b-free',
-  'mimo-v2.6-flash-free',
-  'mimo-v2.5-free',
-  'nemotron-3-ultra-free',
-  'nemotron-3.5-lightning-free',
-  'nemotron-3.5-super-vl-free',
+  'google/gemma-4-26b-a4b-it:free',
+  'particle-ai/particle-1:free',
+  'inclusionai/ling-3.2-flash:free',
+  'baidu/ernie-5.5-flash-preview:free',
+  'nvidia/nemotron-3.5-super-vl:free',
+  'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+  'recursive/flint-v1.0:free',
+  'liquid/lfm-3-1.7b:free',
 ];
 
 export function normalizeGeminiModel(model: string): string {
@@ -941,21 +950,22 @@ export function normalizeGeminiModel(model: string): string {
 
 export const GEMINI_CASCADE_CHAIN = [
   'gemini-3.5-flash-lite',
-  'gemini-3.5-flash',
   'gemini-3.1-flash-lite',
+  'gemma-4-31b-it',
+  'gemma-4-26b-a4b-it',
+  'gemini-3.5-flash',
   'gemini-3.6-flash',
   'gemini-3.7-flash',
   'gemini-3.8-flash',
+  'gemini-omni-flash-preview',
   'gemini-4-argon',
   'gemini-4-carbon',
   'gemini-4-hydrogen',
   'gemini-4-neon',
-  'gemma-4-26b-a4b-it',
-  'gemma-4-31b-it',
 ];
 
 /**
- * Fetch live free models from OpenRouter API in real time.
+ * Fetch live free, tool-capable coding models from OpenRouter API in real time.
  */
 export async function fetchLiveOpenRouterFreeModels(): Promise<AgentModelPreset[]> {
   try {
@@ -968,11 +978,19 @@ export async function fetchLiveOpenRouterFreeModels(): Promise<AgentModelPreset[
     const rawList = data?.data || [];
 
     const freeModels: AgentModelPreset[] = rawList
-      .filter(
-        (m: any) =>
+      .filter((m: any) => {
+        const isFree =
+          m.id === 'openrouter/free' ||
           m.id?.endsWith(':free') ||
-          (m.pricing && m.pricing.prompt === '0' && m.pricing.completion === '0')
-      )
+          (m.pricing && m.pricing.prompt === '0' && m.pricing.completion === '0');
+        if (!isFree) return false;
+        // Skip audio/music models and models that explicitly reject tool calling
+        if (m.id?.includes('lyria')) return false;
+        if (Array.isArray(m.supported_parameters) && !m.supported_parameters.includes('tools')) {
+          return false;
+        }
+        return true;
+      })
       .map((m: any) => ({
         id: m.id,
         name: m.name || m.id,
@@ -1008,6 +1026,26 @@ export async function selectAgentModelInteractive(
   const availableRows = Math.max(4, termRows - headerHeight - 6);
   const selectMaxItems = Math.max(3, Math.min(6, availableRows));
 
+  const hasGeminiReady = Boolean(
+    currentConfig.savedProviders?.gemini?.apiKey ||
+      getEnvProviderKey('gemini') ||
+      (currentConfig.provider === 'gemini' && currentConfig.apiKey)
+  );
+  const hasOpenRouterReady = Boolean(
+    currentConfig.savedProviders?.openrouter?.apiKey ||
+      getEnvProviderKey('openrouter') ||
+      (currentConfig.provider === 'openrouter' && currentConfig.apiKey)
+  );
+  const hasGroqReady = Boolean(
+    process.env.GROQ_API_KEY ||
+      (currentConfig.savedProviders?.custom?.baseURL?.includes('groq.com') &&
+        currentConfig.savedProviders?.custom?.apiKey)
+  );
+
+  const orBadge = hasOpenRouterReady ? chalk.green(' [✔ Ready]') : chalk.yellow(' [🔑 Needs OpenRouter Key]');
+  const geminiBadge = hasGeminiReady ? chalk.green(' [✔ Ready]') : chalk.yellow(' [🔑 Needs Gemini Key]');
+  const groqBadge = hasGroqReady ? chalk.green(' [✔ Ready]') : chalk.yellow(' [🔑 Needs Groq Key]');
+
   const currentPreset = AGENT_MODELS.find((m) => m.id === currentConfig.model);
   const defaultCategory =
     currentPreset?.category ||
@@ -1024,64 +1062,64 @@ export async function selectAgentModelInteractive(
       maxItems: selectMaxItems,
       options: [
         {
-          value: 'free',
-          label: `${chalk.bold.green('🌟 100% Free Tier Agents')} ${chalk.dim('(OpenRouter Free, Particle-1, Gemma, Nemotron)')}`,
-          hint: '13+ verified zero-plan free models',
+          value: 'gemini',
+          label: `${chalk.bold.yellow('🔷 Google Gemini Free Suite')}${geminiBadge} ${chalk.dim('(Gemini 3.5/3.1 Flash Lite, Gemma 4)')}`,
+          hint: '1M - 2M tokens context, 1,500 req/day 100% free',
         },
         {
-          value: 'zen',
-          label: `${chalk.bold.hex('#00E5FF')('⚡ OpenCode & Freebuff Built-in Free Roster')} ${chalk.dim('(DeepSeek V4.1 Free, GLM 5.3 Free, Solar, MiMo)')}`,
-          hint: 'Built-in $0 endpoints: Zero-Retention, NVIDIA Trials, Freebuff allowances',
+          value: 'free',
+          label: `${chalk.bold.green('🌟 100% Free Tier Agents')}${orBadge} ${chalk.dim('(OpenRouter Free, Nemotron, Gemma 4, Particle-1)')}`,
+          hint: 'Verified tool-capable free OpenRouter models',
         },
         {
           value: 'live_sync',
-          label: `${chalk.bold.hex('#00FFFF')('🔄 Live Sync: Fetch ALL Free Models from OpenRouter')} ${chalk.dim('(Real-time)')}`,
-          hint: 'Queries OpenRouter API live for every free model active right now',
+          label: `${chalk.bold.hex('#00FFFF')('🔄 Live Sync: OpenRouter Active Free Models')}${orBadge}`,
+          hint: 'Queries OpenRouter API live for every tool-capable free model active right now',
         },
         {
-          value: 'gemini',
-          label: `${chalk.bold.yellow('🔷 Google Gemini Free Suite')} ${chalk.dim('(Gemini 3.5 Flash Lite, 3.5 Flash, 3.8 Flash, 2.0/2.5/1.5)')}`,
-          hint: '1M - 2M tokens context, 1,500 req/day 100% free',
+          value: 'zen',
+          label: `${chalk.bold.hex('#00E5FF')('⚡ OpenCode & Freebuff Built-in Roster')}${orBadge} ${chalk.dim('(DeepSeek V4.1, GLM 5.3, Solar)')}`,
+          hint: 'Zero-retention & trial endpoints routed via OpenRouter',
         },
         {
           value: 'deepseek',
           label: `${chalk.bold.hex('#00D2FF')('🧠 DeepSeek Frontier Models')} ${chalk.dim('(DeepSeek V4.1, R1 Reasoner, Distill 70B)')}`,
-          hint: '5M free tokens on DeepSeek platform, Groq & OpenRouter',
+          hint: 'DeepSeek Platform, Groq & OpenRouter',
         },
         {
           value: 'hy4',
-          label: `${chalk.bold.hex('#FF6D00')('⚡ Tencent HY4 Suite')} ${chalk.dim('(Hy4 Flash, Hy4 1M Frontier, Hy4 Preview)')}`,
-          hint: '1M tokens context, free promotional tokens',
+          label: `${chalk.bold.hex('#FF6D00')('⚡ Tencent HY4 Suite')}${orBadge} ${chalk.dim('(Hy4 Flash, Hy4 1M Frontier)')}`,
+          hint: '1M tokens context',
         },
         {
           value: 'glm',
-          label: `${chalk.bold.hex('#7C4DFF')('🚀 Zhipu AI GLM 5.3 Suite')} ${chalk.dim('(GLM 5.3 Flash, GLM 5.3 1M, FlashX, Prime)')}`,
-          hint: '1M tokens, daily free tokens on BigModel & OpenRouter',
+          label: `${chalk.bold.hex('#7C4DFF')('🚀 Zhipu AI GLM 5.3 Suite')}${orBadge} ${chalk.dim('(GLM 5.3 Flash, GLM 5.3 1M)')}`,
+          hint: '1M tokens, daily free tokens',
         },
         {
           value: 'groq',
-          label: `${chalk.bold.hex('#FF9900')('⚡ Groq Cloud Free Tier')} ${chalk.dim('(Llama 3.3 70B, Qwen Coder)')}`,
+          label: `${chalk.bold.hex('#FF9900')('⚡ Groq Cloud Free Tier')}${groqBadge} ${chalk.dim('(Llama 3.3 70B, Qwen Coder)')}`,
           hint: '14,400 requests/day, 500+ tokens/sec',
         },
         {
           value: 'flagship',
-          label: `${chalk.bold.hex('#FFD700')('👑 Frontier Flagship Coding Agents')} ${chalk.dim('(Claude 3.5 Sonnet, GPT-4o, o3-mini, Codestral)')}`,
+          label: `${chalk.bold.hex('#FFD700')('👑 Frontier Flagship Coding Agents')}${orBadge} ${chalk.dim('(Claude 3.5 Sonnet, GPT-4o, Codestral)')}`,
           hint: 'OpenCode SOTA benchmark models (OpenRouter BYOK)',
         },
         {
           value: 'local',
-          label: `${chalk.bold.magenta('💻 Local Offline Models')} ${chalk.dim('(Ollama: Qwen Coder, DeepSeek R1)')}`,
-          hint: 'Runs offline on localhost:11434',
+          label: `${chalk.bold.magenta('💻 Local Offline Models')} ${chalk.green('[✔ No API Key Needed]')} ${chalk.dim('(Ollama: Qwen Coder, DeepSeek R1)')}`,
+          hint: 'Runs 100% locally on localhost:11434',
         },
         {
           value: 'all',
-          label: `${chalk.bold('📋 Browse All Zero-Plan Free Models')}`,
+          label: `${chalk.bold('📋 Browse All Model Presets')}`,
           hint: 'View complete list of all presets',
         },
         {
           value: 'custom',
           label: `${chalk.bold('✏️  Enter Custom Model ID Manually')}`,
-          hint: 'Type any model slug (e.g. mistralai/mistral-large:free)',
+          hint: 'Type any model slug for your current provider',
         },
       ],
     })) as string;
@@ -1115,7 +1153,7 @@ export async function selectAgentModelInteractive(
     spinner.stop();
 
     if (liveModels.length > 0) {
-      console.log(chalk.green(`✔ Found ${liveModels.length} active free models on OpenRouter right now!\n`));
+      console.log(chalk.green(`✔ Found ${liveModels.length} active free tool-capable models on OpenRouter!\n`));
       modelsToShow = liveModels;
     } else {
       console.log(chalk.yellow('⚠️ Could not connect to OpenRouter live API. Falling back to built-in presets.\n'));
@@ -1148,32 +1186,115 @@ export async function selectAgentModelInteractive(
 
   if (!preset) return null;
 
+  const updatedConfig = await resolveAndSavePreset(preset, currentConfig);
+  if (!updatedConfig) return null;
+
+  p.outro(
+    chalk.green(
+      `✔ Active Agent Model: ${chalk.bold(preset.name)}\n` +
+        `Provider: ${chalk.bold(PROVIDER_LABELS[updatedConfig.provider])}\n` +
+        `Model ID: ${chalk.cyan(preset.id)}`
+    )
+  );
+
+  return updatedConfig;
+}
+
+/**
+ * Shared credential resolver for switching presets cleanly without unexpected OpenRouter prompts.
+ */
+async function resolveAndSavePreset(
+  preset: AgentModelPreset,
+  currentConfig: BanglaCLIConfig
+): Promise<BanglaCLIConfig | null> {
   const targetProvider = preset.provider;
   let targetApiKey = currentConfig.apiKey;
-  let targetBaseURL = preset.baseURL || currentConfig.baseURL;
+  let targetBaseURL = targetProvider === 'gemini' ? undefined : preset.baseURL || currentConfig.baseURL;
 
-  // Check if provider switch is required
-  if (targetProvider !== currentConfig.provider) {
+  const isLocalOllama = Boolean(preset.baseURL?.includes('localhost') || preset.category === 'local');
+  const isCustomBaseUrlChange =
+    targetProvider === 'custom' &&
+    Boolean(preset.baseURL) &&
+    currentConfig.baseURL !== preset.baseURL;
+
+  if (isLocalOllama) {
+    targetApiKey = 'ollama';
+    targetBaseURL = preset.baseURL || 'http://localhost:11434/v1';
+  } else if (targetProvider !== currentConfig.provider || isCustomBaseUrlChange) {
     const saved = currentConfig.savedProviders?.[targetProvider];
+    const specificEnvKey =
+      targetProvider === 'custom' && preset.baseURL?.includes('groq.com')
+        ? process.env.GROQ_API_KEY?.trim()
+        : targetProvider === 'custom' && preset.baseURL?.includes('deepseek.com')
+        ? process.env.DEEPSEEK_API_KEY?.trim()
+        : getEnvProviderKey(targetProvider);
 
-    if (saved && saved.apiKey) {
+    const savedMatchesCustomUrl =
+      targetProvider !== 'custom' ||
+      !preset.baseURL ||
+      !saved?.baseURL ||
+      saved.baseURL.replace(/\/+$/, '') === preset.baseURL.replace(/\/+$/, '');
+
+    if (saved && saved.apiKey && savedMatchesCustomUrl) {
       targetApiKey = saved.apiKey;
-      targetBaseURL = preset.baseURL || saved.baseURL;
+      targetBaseURL = targetProvider === 'gemini' ? undefined : preset.baseURL || saved.baseURL;
+    } else if (specificEnvKey) {
+      targetApiKey = specificEnvKey;
+      targetBaseURL = targetProvider === 'gemini' ? undefined : preset.baseURL;
     } else {
+      const serviceName = preset.baseURL?.includes('groq.com')
+        ? 'Groq Cloud'
+        : preset.baseURL?.includes('deepseek.com')
+        ? 'DeepSeek'
+        : preset.baseURL?.includes('cerebras.ai')
+        ? 'Cerebras'
+        : PROVIDER_LABELS[targetProvider];
+
+      const serviceUrl = preset.baseURL?.includes('groq.com')
+        ? 'https://console.groq.com/keys'
+        : preset.baseURL?.includes('deepseek.com')
+        ? 'https://platform.deepseek.com/api_keys'
+        : preset.baseURL?.includes('cerebras.ai')
+        ? 'https://cloud.cerebras.ai'
+        : PROVIDER_KEY_URLS[targetProvider];
+
+      const promptChoice = await interactiveSelect<'enter' | 'cancel'>({
+        message: `${serviceName} requires an API key to use "${preset.id}". What would you like to do?`,
+        options: [
+          {
+            value: 'cancel',
+            label: chalk.green(`⬅ Keep using current model (${currentConfig.model})`),
+            hint: 'Do not ask for a key — keep working immediately',
+          },
+          {
+            value: 'enter',
+            label: chalk.cyan(`🔑 Enter API Key for ${serviceName}`),
+            hint: serviceUrl,
+          },
+        ],
+      });
+
+      if (!promptChoice || promptChoice === 'cancel' || p.isCancel(promptChoice)) {
+        return null;
+      }
+
       p.note(
-        `${chalk.white('Get key for ' + PROVIDER_LABELS[targetProvider] + ':')}\n` +
-          `${chalk.bold.underline.cyan(PROVIDER_KEY_URLS[targetProvider])}\n`,
+        `${chalk.white('Get API key for ' + serviceName + ':')}\n` +
+          `${chalk.bold.underline.cyan(serviceUrl)}\n`,
         chalk.bold('API Key Required')
       );
 
       const enteredKey = (await p.password({
-        message: chalk.cyan(`Enter API Key for ${PROVIDER_LABELS[targetProvider]}:`),
+        message: chalk.cyan(`Enter API Key for ${serviceName}:`),
         validate: (v) => (!v || v.trim().length === 0 ? 'Key cannot be empty!' : undefined),
       })) as string;
 
       if (p.isCancel(enteredKey)) return null;
       targetApiKey = enteredKey.trim();
+      targetBaseURL = targetProvider === 'gemini' ? undefined : preset.baseURL;
     }
+  } else if (targetProvider === 'openrouter') {
+    targetBaseURL = 'https://openrouter.ai/api/v1';
   }
 
   const updatedConfig: BanglaCLIConfig = {
@@ -1181,27 +1302,21 @@ export async function selectAgentModelInteractive(
     provider: targetProvider,
     apiKey: targetApiKey,
     model: preset.id,
-    baseURL: targetBaseURL,
+    ...(targetBaseURL ? { baseURL: targetBaseURL } : {}),
     savedProviders: {
       ...currentConfig.savedProviders,
       [targetProvider]: {
         apiKey: targetApiKey,
         model: preset.id,
-        baseURL: targetBaseURL,
+        ...(targetBaseURL ? { baseURL: targetBaseURL } : {}),
       },
     },
   };
+  if (!targetBaseURL) {
+    delete (updatedConfig as any).baseURL;
+  }
 
   saveConfig(updatedConfig);
-
-  p.outro(
-    chalk.green(
-      `✔ Active Agent Model: ${chalk.bold(preset.name)}\n` +
-        `Provider: ${chalk.bold(PROVIDER_LABELS[targetProvider])}\n` +
-        `Model ID: ${chalk.cyan(preset.id)}`
-    )
-  );
-
   return updatedConfig;
 }
 
@@ -1238,72 +1353,5 @@ export async function applyModelDirect(
   preset: AgentModelPreset,
   currentConfig: BanglaCLIConfig
 ): Promise<BanglaCLIConfig | null> {
-  const targetProvider = preset.provider;
-  let targetApiKey = currentConfig.apiKey;
-  let targetBaseURL = preset.baseURL || currentConfig.baseURL;
-
-  const isCustomBaseUrlChange =
-    targetProvider === 'custom' &&
-    preset.baseURL &&
-    currentConfig.baseURL &&
-    preset.baseURL !== currentConfig.baseURL;
-
-  if (targetProvider !== currentConfig.provider || isCustomBaseUrlChange) {
-    const saved = currentConfig.savedProviders?.[targetProvider];
-
-    if (saved && saved.apiKey && !isCustomBaseUrlChange) {
-      targetApiKey = saved.apiKey;
-      targetBaseURL = preset.baseURL || saved.baseURL;
-    } else {
-      const serviceName = preset.baseURL?.includes('groq.com')
-        ? 'Groq Cloud'
-        : preset.baseURL?.includes('deepseek.com')
-        ? 'DeepSeek'
-        : preset.baseURL?.includes('cerebras.ai')
-        ? 'Cerebras'
-        : PROVIDER_LABELS[targetProvider];
-
-      const serviceUrl = preset.baseURL?.includes('groq.com')
-        ? 'https://console.groq.com/keys'
-        : preset.baseURL?.includes('deepseek.com')
-        ? 'https://platform.deepseek.com/api_keys'
-        : preset.baseURL?.includes('cerebras.ai')
-        ? 'https://cloud.cerebras.ai'
-        : PROVIDER_KEY_URLS[targetProvider];
-
-      p.note(
-        `${chalk.white('Get API key for ' + serviceName + ':')}\n` +
-          `${chalk.bold.underline.cyan(serviceUrl)}\n`,
-        chalk.bold('API Key Required')
-      );
-
-      const enteredKey = (await p.password({
-        message: chalk.cyan(`Enter API Key for ${serviceName}:`),
-        validate: (v) => (!v || v.trim().length === 0 ? 'Key cannot be empty!' : undefined),
-      })) as string;
-
-      if (p.isCancel(enteredKey)) return null;
-      targetApiKey = enteredKey.trim();
-      targetBaseURL = preset.baseURL;
-    }
-  }
-
-  const updatedConfig: BanglaCLIConfig = {
-    ...currentConfig,
-    provider: targetProvider,
-    apiKey: targetApiKey,
-    model: preset.id,
-    baseURL: targetBaseURL,
-    savedProviders: {
-      ...currentConfig.savedProviders,
-      [targetProvider]: {
-        apiKey: targetApiKey,
-        model: preset.id,
-        baseURL: targetBaseURL,
-      },
-    },
-  };
-
-  saveConfig(updatedConfig);
-  return updatedConfig;
+  return resolveAndSavePreset(preset, currentConfig);
 }

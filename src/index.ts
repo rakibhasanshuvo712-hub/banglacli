@@ -124,7 +124,7 @@ const program = new Command();
 program
   .name('banglacli')
   .description('Next-Gen Autonomous BYOK terminal coding agent that speaks Bangla, Banglish & English.')
-  .version('4.2.4', '-v, --version', 'Output the current version')
+  .version('4.2.5', '-v, --version', 'Output the current version')
   .option('-m, --model <model>', 'Override model for this session')
   .option('-M, --mode <mode>', 'Execution mode: "build" (default) or "plan"', 'build')
   .option('-p, --prompt <prompt>', 'Run a single prompt and exit')
@@ -207,14 +207,25 @@ program
 
     // Sync session config when agent auto-cascades to another model
     agent.setOnModelChange((newModel, newProvider) => {
+      const freshConfig = getConfig();
+      if (freshConfig) {
+        config = freshConfig;
+      }
       if (config) {
         config.model = newModel;
         if (newProvider) {
           config.provider = newProvider as any;
+          if (config.provider === 'gemini') {
+            delete (config as any).baseURL;
+          } else if (config.provider === 'openrouter') {
+            config.baseURL = 'https://openrouter.ai/api/v1';
+          }
           const saved = config.savedProviders?.[config.provider];
-          if (saved) {
+          if (saved && saved.apiKey) {
             config.apiKey = saved.apiKey;
-            config.baseURL = saved.baseURL;
+            if (config.provider !== 'gemini') {
+              config.baseURL = saved.baseURL || config.baseURL;
+            }
           }
         }
         saveConfig(config);
@@ -264,8 +275,9 @@ program
       } finally {
         detachEscape();
         updateFixedBottomStatus('', { mode: agent.getMode(), model: config.model });
+        meshNode?.stop();
       }
-      return;
+      process.exit(0);
     }
 
     // Activate fixed-dock layout: sticky header at top + docked input box at bottom.
@@ -294,6 +306,7 @@ program
       if (input === null) {
         deactivateFixedDock();
         restoreTerminalViewport();
+        meshNode?.stop();
         console.log(chalk.yellow('\nGoodbye! Exiting banglacli.\n'));
         process.exit(0);
       }
@@ -314,6 +327,7 @@ program
       if (lowerCmd === '/exit' || lowerCmd === '/quit') {
         deactivateFixedDock();
         restoreTerminalViewport();
+        meshNode?.stop();
         console.log(chalk.hex('#00FF7F')('\nThanks for using banglacli. Happy coding! 🚀\n'));
         process.exit(0);
       }
@@ -474,8 +488,6 @@ program
         lowerCmd === '/mode build' ||
         lowerCmd === 'build mode' ||
         lowerCmd === 'switch to build mode' ||
-        lowerCmd === 'you are in build mode' ||
-        lowerCmd === 'you are in build mode recheck' ||
         lowerCmd === 'switch build'
       ) {
         agent.setMode('build');
@@ -487,6 +499,16 @@ program
         );
         console.log(chalk.hex('#00FF7F')('\n⚡ Active mode switched to BUILD MODE (Autonomous Full-Stack Coding & Execution Enabled).\n'));
         continue;
+      }
+
+      if (lowerCmd.includes('you are in build mode') && agent.getMode() !== 'build') {
+        agent.setMode('build');
+        meshNode?.updateState({ mode: 'build' });
+        updateDockedModel(
+          PROVIDER_LABELS[config.provider] || config.provider,
+          config.model,
+          'build'
+        );
       }
 
       if (lowerCmd === '/guide' || lowerCmd === '/keys') {
@@ -819,16 +841,35 @@ program
               );
             }
             continue;
-          } else if (query.includes('/') || query.startsWith('gemini-') || query.startsWith('gpt-')) {
-            // Apply custom model slug directly
-            config.model = query;
-            saveConfig(config);
-            agent.updateConfig(config);
-            updateDockedModel(
-              PROVIDER_LABELS[config.provider] || config.provider,
-              config.model,
-              agent.getMode()
+          } else if (query.includes('/') || query.startsWith('gemini-') || query.startsWith('gemma-') || query.startsWith('gpt-')) {
+            // Apply custom model slug cleanly with provider detection
+            const inferredProvider =
+              query.startsWith('gemini-') || query.startsWith('gemma-')
+                ? ('gemini' as const)
+                : query.includes('/')
+                ? ('openrouter' as const)
+                : config.provider;
+            const inferredConfig = await applyModelDirect(
+              {
+                id: query,
+                name: query,
+                provider: inferredProvider,
+                category: inferredProvider === 'gemini' ? 'gemini' : 'free',
+                description: 'Direct model slug',
+                badge: 'Direct',
+                baseURL: inferredProvider === 'openrouter' ? 'https://openrouter.ai/api/v1' : undefined,
+              },
+              config
             );
+            if (inferredConfig) {
+              config = inferredConfig;
+              agent.updateConfig(inferredConfig);
+              updateDockedModel(
+                PROVIDER_LABELS[config.provider] || config.provider,
+                config.model,
+                agent.getMode()
+              );
+            }
             continue;
           }
         }
@@ -987,9 +1028,9 @@ program
   .description('Run automated diagnostic check of Node.js runtime, workspace, shell, and provider')
   .action(() => {
     let config = getConfig() || {
-      provider: 'openrouter',
+      provider: 'gemini',
       apiKey: '',
-      model: 'openrouter/free',
+      model: 'gemini-3.5-flash-lite',
     };
 
     const checks: { name: string; status: 'ok' | 'warn' | 'error'; detail: string }[] = [];
@@ -1041,9 +1082,9 @@ program
   .description('Display token limits, pricing, and live cost calculation')
   .action(() => {
     let config = getConfig() || {
-      provider: 'openrouter',
+      provider: 'gemini',
       apiKey: '',
-      model: 'openrouter/free',
+      model: 'gemini-3.5-flash-lite',
     };
 
     renderSessionStats({
@@ -1070,12 +1111,12 @@ async function handleSwitchModel(config: BanglaCLIConfig, agent: BanglaAgent): P
       message: 'Switch Gemini Model:',
       initialValue: config.model,
       options: [
-        { value: 'gemini-2.0-flash', label: 'gemini-2.0-flash (🌟 Recommended - Google Flagship Free, 1M Tokens, 1,500 RPD)' },
-        { value: 'gemini-2.0-flash-lite', label: 'gemini-2.0-flash-lite (Ultra-Fast 30 RPM Free)' },
-        { value: 'gemini-2.5-flash', label: 'gemini-2.5-flash (Next-Gen Flash Preview)' },
-        { value: 'gemini-2.5-pro', label: 'gemini-2.5-pro (2M Context Frontier Preview)' },
-        { value: 'gemini-1.5-flash', label: 'gemini-1.5-flash (Battle-Tested Stable, 1M Tokens)' },
-        { value: 'gemini-1.5-pro', label: 'gemini-1.5-pro (2M Context Long-Form)' },
+        { value: 'gemini-3.5-flash-lite', label: 'gemini-3.5-flash-lite (🌟 Verified Active Free, 1M Tokens, 1,500 RPD)' },
+        { value: 'gemini-3.1-flash-lite', label: 'gemini-3.1-flash-lite (Ultra-Fast Free Tier)' },
+        { value: 'gemma-4-31b-it', label: 'gemma-4-31b-it (Gemma 4 31B Tool-Capable Free)' },
+        { value: 'gemma-4-26b-a4b-it', label: 'gemma-4-26b-a4b-it (Gemma 4 26B MoE Free)' },
+        { value: 'gemini-3.5-flash', label: 'gemini-3.5-flash (Flagship Flash Free)' },
+        { value: 'gemini-3.8-flash', label: 'gemini-3.8-flash (Next-Gen 2M Context)' },
         { value: 'custom_input', label: 'Enter custom model name...' },
       ],
     });
