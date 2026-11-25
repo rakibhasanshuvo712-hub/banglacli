@@ -144,6 +144,28 @@ export function renderModelExplorationNotice(model: string, provider: string, te
 }
 
 /**
+ * Render Never-Stop rolling rate limit cooldown banner.
+ */
+export function renderRollingRateLimitNotice(model: string, seconds: number, reason?: string): void {
+  const cols = process.stdout.columns || 80;
+  const width = Math.max(36, Math.min(cols - 4, 70));
+  const border = chalk.hex('#3B82F6')('─'.repeat(width));
+  process.stdout.write('\r\x1b[2K\n');
+  console.log(border);
+  console.log(
+    chalk.bgHex('#1E40AF').white.bold(' ⏳ ROLLING RATE LIMIT COOLDOWN (NEVER-STOP) ') +
+      ' ' +
+      chalk.white.bold(`[${chalk.yellow(model)}]`)
+  );
+  console.log(
+    chalk.cyan.bold(`Auto-cooling down for ${seconds}s before automatic retry...`) +
+      chalk.gray(reason ? ` (${reason})` : '')
+  );
+  console.log(chalk.gray('banglacli will automatically resume. Press Esc to abort.'));
+  console.log(border + '\n');
+}
+
+/**
  * Display action details before executing a dangerous tool (write_file or run_command).
  */
 export async function askToolConfirmation(

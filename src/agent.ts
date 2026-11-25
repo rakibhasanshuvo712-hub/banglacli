@@ -4,6 +4,8 @@ import {
   BanglaCLIConfig,
   getEnvProviderKey,
   hasSavedConfig,
+  POLLINATIONS_BASE_URL,
+  POLLINATIONS_DEFAULT_MODEL,
   POLLINATIONS_FREE_API_KEY,
   saveConfig,
   updateModel,
@@ -16,8 +18,21 @@ import {
   executeTool,
   getActiveMeshNode,
 } from './tools.js';
-import { createSpinner, renderMarkdown, renderCascadeNotice, renderAllTokensExhaustedReport } from './ui.js';
-import { OPENROUTER_FREE_CASCADE_CHAIN, GEMINI_CASCADE_CHAIN, normalizeGeminiModel } from './models.js';
+import {
+  createSpinner,
+  renderMarkdown,
+  renderCascadeNotice,
+  renderAllTokensExhaustedReport,
+  renderRollingRateLimitNotice,
+} from './ui.js';
+import {
+  OPENROUTER_FREE_CASCADE_CHAIN,
+  GEMINI_CASCADE_CHAIN,
+  GROQ_CASCADE_CHAIN,
+  DEEPSEEK_CASCADE_CHAIN,
+  POLLINATIONS_CASCADE_CHAIN,
+  normalizeGeminiModel,
+} from './models.js';
 import { detectProjectContext } from './detector.js';
 import { updateFixedBottomStatus } from './prompt.js';
 import type { ImagePayload } from './image.js';
@@ -350,12 +365,14 @@ export class BanglaAgent {
   private attemptedModelsInCascade = new Set<string>();
   private deadProvidersInTurn = new Set<string>();
   private cascadeStepsCount = 0;
-  private readonly MAX_CASCADE_STEPS = 40;
+  private neverStopAttempts = 0;
+  private readonly MAX_CASCADE_STEPS = 50;
 
   public resetCascadeAttempts(): void {
     this.attemptedModelsInCascade.clear();
     this.deadProvidersInTurn.clear();
     this.cascadeStepsCount = 0;
+    this.neverStopAttempts = 0;
   }
 
   /**
@@ -606,27 +623,35 @@ export class BanglaAgent {
       const customBaseURL = customSaved?.baseURL || (this.config.provider === 'custom' ? this.config.baseURL : undefined);
       if (!customKey || !customBaseURL) return null;
 
-      // Determine an endpoint-appropriate model instead of sending an OpenRouter slug to DeepSeek/Groq/Pollinations
-      let targetModel = customSaved?.model || 'deepseek-chat';
-      if (customBaseURL.includes('pollinations.ai')) {
-        targetModel = 'openai';
-      } else if (customBaseURL.includes('deepseek.com') && (targetModel.includes('/') || targetModel.includes('llama'))) {
-        targetModel = 'deepseek-chat';
-      } else if (customBaseURL.includes('groq.com') && targetModel.includes('/')) {
-        targetModel = 'llama-3.3-70b-versatile';
+      let candidateModels: string[] = [];
+      if (customBaseURL.includes('groq.com')) {
+        candidateModels = GROQ_CASCADE_CHAIN;
+      } else if (customBaseURL.includes('deepseek.com')) {
+        candidateModels = DEEPSEEK_CASCADE_CHAIN;
+      } else if (customBaseURL.includes('pollinations.ai')) {
+        candidateModels = POLLINATIONS_CASCADE_CHAIN;
+      } else if (customSaved?.model) {
+        candidateModels = [customSaved.model];
+      } else {
+        candidateModels = ['deepseek-chat', 'llama-3.3-70b-versatile'];
       }
 
-      if (this.attemptedModelsInCascade.has(`custom:${targetModel}`)) return null;
-      this.attemptedModelsInCascade.add(`custom:${targetModel}`);
-
-      renderCascadeNotice(currentModel, targetModel, noticeReason);
-      this.config.provider = 'custom';
-      this.config.apiKey = customKey;
-      this.config.baseURL = customBaseURL;
-      this.config.model = targetModel;
-      this.initClients();
-      this.syncMessagesToOpenAI();
-      return targetModel;
+      for (const targetModel of candidateModels) {
+        const dedupeKey = `custom:${targetModel}`;
+        if (!this.attemptedModelsInCascade.has(dedupeKey) && !this.attemptedModelsInCascade.has(targetModel)) {
+          this.attemptedModelsInCascade.add(dedupeKey);
+          this.attemptedModelsInCascade.add(targetModel);
+          renderCascadeNotice(currentModel, targetModel, noticeReason);
+          this.config.provider = 'custom';
+          this.config.apiKey = customKey;
+          this.config.baseURL = customBaseURL;
+          this.config.model = targetModel;
+          this.initClients();
+          this.syncMessagesToOpenAI();
+          return targetModel;
+        }
+      }
+      return null;
     };
 
     // Route intelligently based on current active provider
@@ -657,11 +682,14 @@ export class BanglaAgent {
       const nextCustom = switchToCustom('Cascading to configured Custom endpoint');
       if (nextCustom) return nextCustom;
     } else if (this.config.provider === 'custom') {
+      const nextCustom = !isProviderAuthOrBalanceFailure ? switchToCustom(reason) : null;
+      if (nextCustom) return nextCustom;
+
       this.deadProvidersInTurn.add('custom');
-      const nextGemini = switchToGemini('Custom provider unavailable; cascading to Google Gemini');
+      const nextGemini = switchToGemini('Custom provider rate-limited/exhausted; cascading to Google Gemini');
       if (nextGemini) return nextGemini;
 
-      const nextOR = switchToOpenRouter('Custom provider unavailable; cascading to OpenRouter Free');
+      const nextOR = switchToOpenRouter('Custom provider rate-limited/exhausted; cascading to OpenRouter Free');
       if (nextOR) return nextOR;
     }
 
@@ -677,6 +705,48 @@ export class BanglaAgent {
       }
       this.onModelChangeCallback?.(explored.id, explored.provider);
       return explored.id;
+    }
+
+    // 🚀 NEVER-STOP RESILIENCE LOOP:
+    // If all free endpoints are temporarily in rolling rate-limits (e.g. 15 RPM),
+    // NEVER stop or abort execution! Auto-cooldown for a few seconds, reset attempts, and continue!
+    if (this.neverStopAttempts < 10) {
+      this.neverStopAttempts++;
+      const cooldownSec = 10;
+      renderRollingRateLimitNotice(currentModel, cooldownSec, 'All free models in rolling rate limit');
+      for (let rem = cooldownSec; rem > 0; rem--) {
+        const msg = `⏳ Free rate limits active • Auto-cooling down (${rem}s) [Never-Stop Mode]... (Esc to cancel)`;
+        updateFixedBottomStatus(msg, { mode: this.mode, model: this.config.model });
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+      // Reset attempted models to allow fresh rolling RPM attempts
+      this.attemptedModelsInCascade.clear();
+      this.deadProvidersInTurn.clear();
+
+      const recovered = await exploreAndSelectFreeModel(this.config, new Set(), true);
+      if (recovered) {
+        this.initClients();
+        if (recovered.provider === 'gemini') {
+          this.syncMessagesToGemini();
+        } else {
+          this.syncMessagesToOpenAI();
+        }
+        this.onModelChangeCallback?.(recovered.id, recovered.provider);
+        return recovered.id;
+      }
+    }
+
+    // 🛡️ Final guaranteed fallback: Built-in Zero-Key Pollinations AI (works without any user key)
+    if (this.config.baseURL !== POLLINATIONS_BASE_URL || this.config.model !== POLLINATIONS_DEFAULT_MODEL) {
+      renderCascadeNotice(currentModel, POLLINATIONS_DEFAULT_MODEL, 'Switching to Zero-Key Built-in Free AI');
+      this.config.provider = 'custom';
+      this.config.apiKey = POLLINATIONS_FREE_API_KEY;
+      this.config.baseURL = POLLINATIONS_BASE_URL;
+      this.config.model = POLLINATIONS_DEFAULT_MODEL;
+      this.initClients();
+      this.syncMessagesToOpenAI();
+      this.onModelChangeCallback?.(this.config.model, this.config.provider);
+      return this.config.model;
     }
 
     // Only if every single model across all providers is 100% exhausted
@@ -1303,6 +1373,47 @@ export class BanglaAgent {
 
           const errMsg = err?.message || String(err);
           const lowerErr = errMsg.toLowerCase();
+
+          // Rolling rate limit handling (Groq, OpenRouter, Gemini, Pollinations)
+          const isRateLimit =
+            err?.status === 429 ||
+            lowerErr.includes('429') ||
+            lowerErr.includes('rate limit') ||
+            lowerErr.includes('rate_limit') ||
+            lowerErr.includes('tokens per minute') ||
+            lowerErr.includes('requests per minute') ||
+            lowerErr.includes('tpm') ||
+            lowerErr.includes('rpm') ||
+            lowerErr.includes('too many requests') ||
+            lowerErr.includes('retry after');
+
+          if (isRateLimit && cascadeAttempts < 4) {
+            const matchSeconds =
+              lowerErr.match(/try again in\s+([0-9.]+)\s*s/i) ||
+              lowerErr.match(/retry after\s+([0-9.]+)\s*s/i) ||
+              lowerErr.match(/in\s+([0-9.]+)\s*seconds/i);
+            const waitSec = matchSeconds
+              ? Math.ceil(parseFloat(matchSeconds[1])) + 1
+              : err?.headers?.['retry-after']
+              ? parseInt(err.headers['retry-after'], 10) + 1
+              : 0;
+
+            if (waitSec > 0 && waitSec <= 20) {
+              cascadeAttempts++;
+              for (let rem = waitSec; rem > 0; rem--) {
+                if (options?.signal?.aborted) {
+                  spinner.stop();
+                  return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
+                }
+                const note = `Rolling rate limit cooldown (${rem}s) on [${this.config.model}] • Auto-resuming...`;
+                spinner.text = chalk.cyan(note);
+                updateFixedBottomStatus(note, { mode: this.mode, model: this.config.model });
+                await new Promise((r) => setTimeout(r, 1000));
+              }
+              spinner.text = chalk.cyan(`banglacli continuing with [${this.config.model}]...`);
+              continue;
+            }
+          }
 
           // Handle built-in Zero-Key public endpoint cooldown cleanly without failing multi-step turns
           const isPollinations = Boolean(this.config.baseURL?.toLowerCase().includes('pollinations.ai'));

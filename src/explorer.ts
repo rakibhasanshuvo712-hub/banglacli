@@ -14,6 +14,9 @@ import {
   normalizeGeminiModel,
   GEMINI_CASCADE_CHAIN,
   OPENROUTER_FREE_CASCADE_CHAIN,
+  GROQ_CASCADE_CHAIN,
+  DEEPSEEK_CASCADE_CHAIN,
+  POLLINATIONS_CASCADE_CHAIN,
 } from './models.js';
 import { renderModelExplorationNotice } from './ui.js';
 import chalk from 'chalk';
@@ -220,20 +223,20 @@ export async function exploreAndSelectFreeModel(
   // 4. Custom endpoint candidates matching configured baseURL
   if (customKey && customBaseURL && !customBaseURL.includes('pollinations.ai')) {
     if (customBaseURL.includes('groq.com')) {
-      for (const g of ['llama-3.3-70b-versatile', 'qwen-2.5-coder-32b', 'llama-3.1-8b-instant']) {
+      for (const g of GROQ_CASCADE_CHAIN) {
         pushCandidate({
           id: g,
-          name: g,
+          name: `Groq (${g})`,
           provider: 'custom',
           apiKey: customKey,
           baseURL: customBaseURL,
         });
       }
     } else if (customBaseURL.includes('deepseek.com')) {
-      for (const d of ['deepseek-chat', 'deepseek-reasoner']) {
+      for (const d of DEEPSEEK_CASCADE_CHAIN) {
         pushCandidate({
           id: d,
-          name: d,
+          name: `DeepSeek (${d})`,
           provider: 'custom',
           apiKey: customKey,
           baseURL: customBaseURL,
@@ -265,15 +268,17 @@ export async function exploreAndSelectFreeModel(
     }
   } catch {}
 
-  // 6. Final fallback: Built-in Zero-Key Pollinations AI (if not already excluded)
-  if (!excludedModels.has(POLLINATIONS_DEFAULT_MODEL)) {
-    pushCandidate({
-      id: POLLINATIONS_DEFAULT_MODEL,
-      name: 'Zero-Key Built-in Free AI (GPT-OSS 20B)',
-      provider: 'custom',
-      apiKey: POLLINATIONS_FREE_API_KEY,
-      baseURL: POLLINATIONS_BASE_URL,
-    });
+  // 6. Built-in Zero-Key Pollinations AI candidates (guaranteed fallback)
+  for (const polModel of POLLINATIONS_CASCADE_CHAIN) {
+    if (!excludedModels.has(polModel)) {
+      pushCandidate({
+        id: polModel,
+        name: `Zero-Key Free AI (${polModel})`,
+        provider: 'custom',
+        apiKey: POLLINATIONS_FREE_API_KEY,
+        baseURL: POLLINATIONS_BASE_URL,
+      });
+    }
   }
 
   if (candidatePool.length === 0) {

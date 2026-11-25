@@ -350,16 +350,8 @@ program
       return;
     }
 
-    // Activate fixed-dock layout: sticky header at top + docked input box at bottom.
-    // Gracefully falls back to inline banner on non-TTY or small terminals.
-    const isDocked = activateFixedDock(
-      formatProviderLabel(config),
-      config.model,
-      initialMode
-    );
-    if (!isDocked) {
-      printBanner(formatProviderLabel(config), config.model, process.cwd());
-    }
+    // Show banner ONCE at startup (never pinned, never repeated)
+    printBanner(formatProviderLabel(config), config.model, process.cwd());
 
     let running = true;
     let stagedImages: ImagePayload[] = [];
@@ -522,12 +514,8 @@ program
         if (modeChoice) {
           agent.setMode(modeChoice);
           meshNode?.updateState({ mode: modeChoice });
+          console.log(chalk.green(`\n✔ Agent mode switched to: ${modeChoice === 'build' ? '⚡ BUILD Mode' : '📋 PLAN Mode'}\n`));
         }
-        activateFixedDock(
-          formatProviderLabel(config),
-          config.model,
-          agent.getMode()
-        );
         continue;
       }
 
@@ -824,12 +812,8 @@ program
         if (newConfig) {
           config = newConfig;
           agent.updateConfig(newConfig);
+          console.log(chalk.green(`\n✔ Provider updated to: ${formatProviderLabel(config)} (${config.model})\n`));
         }
-        activateFixedDock(
-          formatProviderLabel(config),
-          config.model,
-          agent.getMode()
-        );
         continue;
       }
 
@@ -842,11 +826,7 @@ program
         const newConfig = await promptConfig(false, config);
         config = newConfig;
         agent.updateConfig(newConfig);
-        activateFixedDock(
-          formatProviderLabel(config),
-          config.model,
-          agent.getMode()
-        );
+        console.log(chalk.green(`\n✔ Configuration updated: ${formatProviderLabel(config)} (${config.model})\n`));
         continue;
       }
 
@@ -868,12 +848,8 @@ program
         if (newConfig) {
           config = newConfig;
           agent.updateConfig(newConfig);
+          console.log(chalk.green(`\n✔ Active model updated to: ${config.model} [${config.provider.toUpperCase()}]\n`));
         }
-        activateFixedDock(
-          formatProviderLabel(config),
-          config.model,
-          agent.getMode()
-        );
         continue;
       }
 
@@ -946,12 +922,8 @@ program
         if (newConfig) {
           config = newConfig;
           agent.updateConfig(newConfig);
+          console.log(chalk.green(`\n✔ Active model updated to: ${config.model} [${config.provider.toUpperCase()}]\n`));
         }
-        activateFixedDock(
-          formatProviderLabel(config),
-          config.model,
-          agent.getMode()
-        );
         continue;
       }
 

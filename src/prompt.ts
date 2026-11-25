@@ -42,7 +42,7 @@ function getDockedRows(rows: number): {
 // 100% Mathematically Exact Border Renderers (using string-width)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function renderTopBorder(
+export function renderTopBorder(
   width: number,
   isBuild: boolean,
   model: string,
@@ -60,26 +60,18 @@ function renderTopBorder(
 
   let rightWidth = stringWidth(rightText);
 
-  let availForModel = width - (4 + modeWidth + 4 + 1 + 1 + rightWidth + 3);
+  let availForModel = width - (4 + modeWidth + 4 + 1 + rightWidth + 3 + 1);
   if (availForModel < 8) {
     rightText = '';
     rightWidth = 0;
-    availForModel = width - (4 + modeWidth + 4 + 1 + 1 + rightWidth + 3);
+    availForModel = width - (4 + modeWidth + 4 + 1 + rightWidth + 3 + 1);
   }
 
   let modelDisplay = model;
-  let modelText = ` 🤖 ${modelDisplay} `;
-  if (stringWidth(modelText) > availForModel) {
-    let short = modelDisplay.includes('/')
-      ? modelDisplay.split('/').pop() || modelDisplay
-      : modelDisplay;
-    while (short.length > 0 && stringWidth(` 🤖 ${short}… `) > availForModel) {
-      short = short.slice(0, -1);
-    }
-    modelDisplay = short ? `${short}…` : '…';
-    modelText = ` 🤖 ${modelDisplay} `;
+  if (modelDisplay.includes('/')) {
+    modelDisplay = modelDisplay.split('/').pop() || modelDisplay;
   }
-
+  let modelText = ` 🤖 ${modelDisplay} `;
   while (stringWidth(modelText) > availForModel && modelDisplay.length > 1) {
     modelDisplay = modelDisplay.slice(0, -1);
     modelText = ` 🤖 ${modelDisplay}… `;
@@ -98,7 +90,7 @@ function renderTopBorder(
   return leftPrefix + borderColor('─'.repeat(dashesCount)) + rightSuffix;
 }
 
-function renderBottomBorder(
+export function renderBottomBorder(
   width: number,
   borderColor: (s: string) => string,
   customHint?: string
@@ -141,27 +133,54 @@ function renderBottomBorder(
   );
 }
 
-function renderContentLine(
+export function renderContentLine(
   width: number,
   lineText: string,
   isFirst: boolean,
   isBuild: boolean,
   borderColor: (s: string) => string
 ): string {
-  const promptArrow = isBuild
-    ? chalk.hex('#00FF7F').bold('❯ ')
-    : chalk.hex('#FFB300').bold('❯ ');
-  const prefix = isFirst
-    ? borderColor('│ ') + promptArrow
-    : borderColor('│ ') + chalk.dim('· ');
+  const promptArrow = isFirst
+    ? isBuild
+      ? chalk.hex('#00FF7F').bold('❯ ')
+      : chalk.hex('#FFB300').bold('❯ ')
+    : chalk.dim('· ');
+  const prefix = borderColor('│ ') + promptArrow;
+  const prefixWidth = 4; // '│ ' (2) + '❯ ' (2)
+  const suffix = borderColor(' │');
+  const suffixWidth = 2; // ' │' (2)
 
-  const textCapacity = Math.max(1, width - 6);
+  const textCapacity = Math.max(1, width - prefixWidth - suffixWidth);
   let visibleText = lineText;
   while (stringWidth(visibleText) > textCapacity && visibleText.length > 0) {
     visibleText = visibleText.slice(1);
   }
 
-  return prefix + chalk.white(visibleText);
+  const textWidth = stringWidth(visibleText);
+  const paddingSpaces = Math.max(0, width - prefixWidth - suffixWidth - textWidth);
+
+  return prefix + chalk.white(visibleText) + ' '.repeat(paddingSpaces) + suffix;
+}
+
+export function renderHintLine(
+  width: number,
+  hintText: string,
+  borderColor: (s: string) => string
+): string {
+  const prefixWidth = 2; // '│ ' (2)
+  const suffix = borderColor(' │');
+  const suffixWidth = 2; // ' │' (2)
+
+  const maxHintWidth = Math.max(1, width - prefixWidth - suffixWidth);
+  let visibleHint = hintText;
+  while (stringWidth(visibleHint) > maxHintWidth && visibleHint.length > 0) {
+    visibleHint = visibleHint.slice(0, -1);
+  }
+
+  const hintWidth = stringWidth(visibleHint);
+  const paddingSpaces = Math.max(0, width - prefixWidth - suffixWidth - hintWidth);
+
+  return borderColor('│ ') + chalk.dim(visibleHint) + ' '.repeat(paddingSpaces) + suffix;
 }
 
 function renderStatusLine(
@@ -342,35 +361,17 @@ export function writeStickyHeader(
 
 /**
  * Prepares the screen for interactive prompts (e.g. model selector, mode picker).
- * Pinned upper header is drawn at rows 1..H in compact layout, everything below row H is cleared,
- * and the cursor is placed at row H+1 for clean in-place execution.
- * Prevents overlapping, terminal buffer corruption, and displacement of the pinned header.
+ * Renders a clean divider inline without clearing the terminal or displacing history.
  */
 export function prepareInteractiveArea(
-  provider: string,
-  model: string,
-  mode: 'build' | 'plan'
+  _provider?: string,
+  _model?: string,
+  _mode?: 'build' | 'plan'
 ): number {
   deactivateFixedDock();
-  const rows = process.stdout.rows || 24;
   const cols = process.stdout.columns || 80;
-
-  try {
-    if (process.stdin.isTTY) {
-      process.stdin.setRawMode(false);
-    }
-    process.stdin.resume();
-  } catch {}
-
-  process.stdout.write('\x1b[r\x1b[?25h');
-  process.stdout.write('\x1b[2J\x1b[H');
-
-  const headerHeight = writeStickyHeader(cols, rows, provider, model, mode, true);
-  _dockedHeaderHeight = headerHeight;
-
-  // Clear everything from row headerHeight + 1 down to the bottom
-  process.stdout.write(`\x1b[${headerHeight + 1};1H\x1b[J`);
-  return headerHeight;
+  console.log('\n' + chalk.dim('─'.repeat(Math.min(cols, 80))));
+  return 1;
 }
 
 /**
@@ -1075,73 +1076,19 @@ function writeDockedBox(rows: number, cols: number, model: string, mode: 'build'
 }
 
 /**
- * Activates fixed-dock layout with DECSTBM scrolling region.
+ * Fixed dock is disabled in favor of clean inline boxed prompt.
+ * Keeps standard terminal scrollback intact without pinned headers or buffer displacement.
  */
 export function activateFixedDock(
   provider: string,
   model: string,
   mode: 'build' | 'plan'
 ): boolean {
-  const rows = process.stdout.rows;
-  const cols = process.stdout.columns;
-  if (!process.stdout.isTTY || !rows || rows < 16 || !cols) return false;
-
-  _dockedActive = true;
-  _dockedRows = rows;
-  _dockedCols = cols;
+  _dockedActive = false;
   _dockedProvider = provider;
   _dockedModel = model;
   _dockedMode = mode;
-
-  process.stdout.write('\x1b[?25l');
-
-  // Clean screen viewport
-  process.stdout.write('\x1b[2J\x1b[H');
-
-  // Render Pinned Header (includes colorful BANGLACLI art + developer + commands)
-  const headerHeight = writeStickyHeader(cols, rows, provider, model, mode);
-  _dockedHeaderHeight = headerHeight;
-
-  // Render Fixed Bottom Box
-  writeDockedBox(rows, cols, model, mode);
-
-  // Set DECSTBM Scroll Region
-  // Keep terminal scroll margins completely reset (\x1b[r) so user's mouse wheel, trackpad, and terminal scrollbar are never locked
-  process.stdout.write('\x1b[r');
-
-  const { contentRow } = getDockedRows(rows);
-  // Position cursor inside input box
-  process.stdout.write(`\x1b[${contentRow};5H\x1b[?25h`);
-
-  try {
-    if (process.stdin.isTTY) {
-      process.stdin.resume();
-    }
-  } catch {}
-
-  process.stdout.removeListener('resize', onDockedResize);
-  process.stdout.on('resize', onDockedResize);
-  return true;
-}
-
-function onDockedResize(): void {
-  if (!_dockedActive) return;
-  const rows = process.stdout.rows;
-  const cols = process.stdout.columns;
-  if (!rows || !cols || rows < 16) return;
-
-  _dockedRows = rows;
-  _dockedCols = cols;
-
-  process.stdout.write('\x1b[?25l');
-  const headerHeight = writeStickyHeader(cols, rows, _dockedProvider, _dockedModel, _dockedMode);
-  _dockedHeaderHeight = headerHeight;
-  writeDockedBox(rows, cols, _dockedModel, _dockedMode);
-
-  // Keep terminal scroll margins completely reset (\x1b[r) so user's mouse wheel, trackpad, and terminal scrollbar are never locked
-  process.stdout.write('\x1b[r');
-  const { contentRow } = getDockedRows(rows);
-  process.stdout.write(`\x1b[${contentRow};5H\x1b[?25h`);
+  return false;
 }
 
 export function updateDockedModel(
@@ -1152,33 +1099,14 @@ export function updateDockedModel(
   _dockedProvider = provider;
   _dockedModel = model;
   _dockedMode = mode;
-  // If the prompt box is not actively waiting for user input (e.g. agent is currently executing or streaming),
-  // do not rewrite headers into the scroll stream. The updated model will be cleanly rendered on the next prompt turn.
-  if (!_dockedActive || !_dockedPromptActive) return;
-  const rows = process.stdout.rows;
-  const cols = process.stdout.columns;
-  if (!rows || !cols) return;
-
-  try {
-    process.stdout.write('\x1b[s');
-    const headerHeight = writeStickyHeader(cols, rows, provider, model, mode);
-    _dockedHeaderHeight = headerHeight;
-
-    const isBuild = mode === 'build';
-    const borderColor = isBuild ? chalk.hex('#00FF7F') : chalk.hex('#FFB300');
-    const boxWidth = getSafeBoxWidth(cols);
-    const { topRow } = getDockedRows(rows);
-    process.stdout.write(`\x1b[${topRow};1H\x1b[2K${renderTopBorder(boxWidth, isBuild, model, borderColor)}`);
-    process.stdout.write('\x1b[u');
-  } catch {}
 }
 
 export function deactivateFixedDock(): void {
-  if (!_dockedActive) return;
   _dockedActive = false;
   _dockedPromptActive = false;
-  process.stdout.removeListener('resize', onDockedResize);
-  restoreTerminalViewport();
+  try {
+    process.stdout.write('\x1b[r\x1b[?25h');
+  } catch {}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1217,6 +1145,10 @@ export function getPromptHistory(): string[] {
 // DOCKED PROMPT — Interactive reader inside fixed bottom box
 // ─────────────────────────────────────────────────────────────────────────────
 async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string | null> {
+  return readInlinePrompt(options);
+}
+
+async function _legacyDockedPrompt(options: OpenCodePromptOptions): Promise<string | null> {
   const isBuildMode = options.mode === 'build';
   const borderColor = isBuildMode ? chalk.hex('#00FF7F') : chalk.hex('#FFB300');
 
@@ -1228,20 +1160,9 @@ async function readDockedPrompt(options: OpenCodePromptOptions): Promise<string 
     const startCol = 5;
     _dockedPromptActive = true;
 
-    // Self-healing re-render on every turn
-    process.stdout.write('\x1b[?25l');
-    const headerHeight = writeStickyHeader(
-      cols,
-      rows,
-      options.provider || _dockedProvider,
-      options.model,
-      options.mode
-    );
-    _dockedHeaderHeight = headerHeight;
     writeDockedBox(rows, cols, options.model, options.mode);
 
     const scrollBottom = rows - boxRows;
-    // Keep terminal scroll margins completely reset (\x1b[r) so user's mouse wheel, trackpad, and terminal scrollbar are never locked
     process.stdout.write('\x1b[r');
 
     process.stdout.write(`\x1b[${contentRow};${startCol}H\x1b[?25h`);
@@ -1705,10 +1626,11 @@ async function readInlinePrompt(options: OpenCodePromptOptions): Promise<string 
     let savedDraft = '';
 
     const boxWidth = getSafeBoxWidth();
+    const hintText = '· Shift+Enter: newline • /help for commands • ↑/↓: history';
 
     process.stdout.write(renderTopBorder(boxWidth, isBuildMode, options.model, borderColor) + '\n');
     process.stdout.write(renderContentLine(boxWidth, '', true, isBuildMode, borderColor) + '\n');
-    process.stdout.write(borderColor('│ ') + chalk.dim('· Shift+Enter: newline • /help for commands • ↑/↓: history') + '\n');
+    process.stdout.write(renderHintLine(boxWidth, hintText, borderColor) + '\n');
     process.stdout.write(renderBottomBorder(boxWidth, borderColor));
     process.stdout.write('\x1b[2A\x1b[5G');
 
@@ -1717,21 +1639,24 @@ async function readInlinePrompt(options: OpenCodePromptOptions): Promise<string 
         boxWidth, bufferLines[cursorLine], cursorLine === 0, isBuildMode, borderColor
       );
       const activeCol = 5 + Math.min(cursorCol, boxWidth - 8);
-      process.stdout.write(`\r\x1b[K${lineStr}\r\x1b[${activeCol}G`);
+      process.stdout.write(`\r${lineStr}\r\x1b[${activeCol}G`);
     };
 
     const redrawFrom = (startLine: number) => {
+      if (cursorLine > startLine) {
+        process.stdout.write(`\x1b[${cursorLine - startLine}A`);
+      }
       const lines: string[] = [];
       for (let i = startLine; i < bufferLines.length; i++) {
         lines.push(renderContentLine(boxWidth, bufferLines[i], i === 0, isBuildMode, borderColor));
       }
-      lines.push(borderColor('│ ') + chalk.dim('· Shift+Enter: newline • /help for commands • ↑/↓: history'));
+      lines.push(renderHintLine(boxWidth, hintText, borderColor));
       lines.push(renderBottomBorder(boxWidth, borderColor));
       process.stdout.write('\r\x1b[J');
       process.stdout.write(lines.join('\n'));
-      const linesUp = bufferLines.length - cursorLine + 1;
+      const linesUp = (lines.length - 1) - (cursorLine - startLine);
       const activeCol = 5 + Math.min(cursorCol, boxWidth - 8);
-      process.stdout.write(`\x1b[${linesUp}A\x1b[${activeCol}G`);
+      process.stdout.write(`\x1b[${linesUp}A\r\x1b[${activeCol}G`);
     };
 
     const cleanup = () => {
@@ -1751,8 +1676,21 @@ async function readInlinePrompt(options: OpenCodePromptOptions): Promise<string 
       }
       historyIdx = -1;
       savedDraft = '';
-      const downLines = bufferLines.length - cursorLine + 1;
-      process.stdout.write(`\x1b[${downLines}B\r\n`);
+
+      // Move cursor up to top border and cleanly clear the box
+      const linesUpToTop = cursorLine + 1;
+      process.stdout.write(`\x1b[${linesUpToTop}A\r\x1b[J`);
+
+      const promptArrow = isBuildMode
+        ? chalk.hex('#00FF7F').bold('❯ ')
+        : chalk.hex('#FFB300').bold('❯ ');
+
+      const submittedLines = fullContent.split('\n');
+      for (let i = 0; i < submittedLines.length; i++) {
+        const pfx = i === 0 ? promptArrow : chalk.dim('· ');
+        process.stdout.write(`${pfx}${chalk.white.bold(submittedLines[i])}\r\n`);
+      }
+      process.stdout.write('\r\n');
       resolve(fullContent);
     };
 
@@ -1839,8 +1777,8 @@ async function readInlinePrompt(options: OpenCodePromptOptions): Promise<string 
 
       if (str === '\t' || str === '\x09' || str === '\x1bOQ' || str === '\x1b[12~') {
         cleanup();
-        const down = bufferLines.length - cursorLine;
-        process.stdout.write(`\x1b[${down}B\r\n`);
+        const linesUpToTop = cursorLine + 1;
+        process.stdout.write(`\x1b[${linesUpToTop}A\r\x1b[J`);
         resolve('/model');
         return;
       }
@@ -1991,9 +1929,6 @@ async function readInlinePrompt(options: OpenCodePromptOptions): Promise<string 
 // PUBLIC API: readOpenCodePrompt
 // ─────────────────────────────────────────────────────────────────────────────
 export async function readOpenCodePrompt(options: OpenCodePromptOptions): Promise<string | null> {
-  if (_dockedActive) {
-    return readDockedPrompt(options);
-  }
   return readInlinePrompt(options);
 }
 

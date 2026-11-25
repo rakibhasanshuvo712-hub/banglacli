@@ -981,6 +981,27 @@ export const GEMINI_CASCADE_CHAIN = [
   'gemini-4-neon',
 ];
 
+export const GROQ_CASCADE_CHAIN = [
+  'llama-3.3-70b-versatile',
+  'llama-3.1-8b-instant',
+  'qwen-2.5-coder-32b',
+  'mixtral-8x7b-32768',
+  'deepseek-r1-distill-llama-70b',
+  'gemma2-9b-it',
+];
+
+export const DEEPSEEK_CASCADE_CHAIN = [
+  'deepseek-chat',
+  'deepseek-reasoner',
+];
+
+export const POLLINATIONS_CASCADE_CHAIN = [
+  'openai',
+  'deepseek',
+  'mistral',
+  'qwen-coder',
+];
+
 /**
  * Fetch live free, tool-capable coding models from OpenRouter API in real time.
  */
