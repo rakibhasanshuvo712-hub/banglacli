@@ -156,7 +156,7 @@ const program = new Command();
 program
   .name('banglacli')
   .description('Next-Gen Autonomous BYOK terminal coding agent that speaks Bangla, Banglish & English.')
-  .version('4.2.7', '-v, --version', 'Output the current version')
+  .version('4.2.9', '-v, --version', 'Output the current version')
   .option('-m, --model <model>', 'Override model for this session')
   .option('-M, --mode <mode>', 'Execution mode: "build" (default) or "plan"', 'build')
   .option('-p, --prompt <prompt>', 'Run a single prompt and exit')
