@@ -1,6 +1,13 @@
 import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
-import { BanglaCLIConfig, getEnvProviderKey, saveConfig, updateModel } from './config.js';
+import {
+  BanglaCLIConfig,
+  getEnvProviderKey,
+  hasSavedConfig,
+  POLLINATIONS_FREE_API_KEY,
+  saveConfig,
+  updateModel,
+} from './config.js';
 import {
   BUILD_GEMINI_TOOLS,
   PLAN_GEMINI_TOOLS,
@@ -356,7 +363,9 @@ export class BanglaAgent {
    */
   private persistVerifiedActiveModel(): void {
     try {
-      saveConfig(this.config);
+      if (hasSavedConfig() || this.config.apiKey !== POLLINATIONS_FREE_API_KEY) {
+        saveConfig(this.config);
+      }
       this.onModelChangeCallback?.(this.config.model, this.config.provider);
     } catch {}
   }
@@ -597,9 +606,11 @@ export class BanglaAgent {
       const customBaseURL = customSaved?.baseURL || (this.config.provider === 'custom' ? this.config.baseURL : undefined);
       if (!customKey || !customBaseURL) return null;
 
-      // Determine an endpoint-appropriate model instead of sending an OpenRouter slug to DeepSeek/Groq
+      // Determine an endpoint-appropriate model instead of sending an OpenRouter slug to DeepSeek/Groq/Pollinations
       let targetModel = customSaved?.model || 'deepseek-chat';
-      if (customBaseURL.includes('deepseek.com') && (targetModel.includes('/') || targetModel.includes('llama'))) {
+      if (customBaseURL.includes('pollinations.ai')) {
+        targetModel = 'openai';
+      } else if (customBaseURL.includes('deepseek.com') && (targetModel.includes('/') || targetModel.includes('llama'))) {
         targetModel = 'deepseek-chat';
       } else if (customBaseURL.includes('groq.com') && targetModel.includes('/')) {
         targetModel = 'llama-3.3-70b-versatile';
@@ -1293,6 +1304,34 @@ export class BanglaAgent {
           const errMsg = err?.message || String(err);
           const lowerErr = errMsg.toLowerCase();
 
+          // Handle built-in Zero-Key public endpoint cooldown cleanly without failing multi-step turns
+          const isPollinations = Boolean(this.config.baseURL?.toLowerCase().includes('pollinations.ai'));
+          if (
+            isPollinations &&
+            (err?.status === 402 || lowerErr.includes('free_limit') || lowerErr.includes('retry after'))
+          ) {
+            const hasFasterKey = Boolean(
+              this.getKeyForProvider('gemini') || this.getKeyForProvider('openrouter')
+            );
+            if (!hasFasterKey && cascadeAttempts < 3) {
+              const match = errMsg.match(/retry after\s+(\d+)\s*s/i);
+              const waitSec = Math.min(50, Math.max(5, match ? parseInt(match[1], 10) + 1 : 45));
+              cascadeAttempts++;
+              for (let rem = waitSec; rem > 0; rem--) {
+                if (options?.signal?.aborted) {
+                  spinner.stop();
+                  return chalk.yellow('\n⏹️ Task cancelled by user (Escape key pressed).');
+                }
+                const note = `Free Zero-Key cooldown (${rem}s) • Tip: /config for instant free Gemini key`;
+                spinner.text = chalk.cyan(note);
+                updateFixedBottomStatus(note, { mode: this.mode, model: this.config.model });
+                await new Promise((r) => setTimeout(r, 1000));
+              }
+              spinner.text = chalk.cyan(`banglacli continuing with [${this.config.model}]...`);
+              continue;
+            }
+          }
+
           let cascadeReason = `Server load / Unavailable`;
           if (lowerErr.includes('free-models-per-day') || lowerErr.includes('free_daily_limit')) {
             cascadeReason = 'OpenRouter daily free limit reached (free-models-per-day)';
@@ -1370,7 +1409,11 @@ export class BanglaAgent {
       }
 
       const message = choice.message;
-      this.openAIMessages.push(message);
+      const historyMessage: any = { ...message };
+      if (Array.isArray(historyMessage.tool_calls) && historyMessage.tool_calls.length === 0) {
+        delete historyMessage.tool_calls;
+      }
+      this.openAIMessages.push(historyMessage);
 
       this.metrics.totalRequests++;
       if (completion.usage) {

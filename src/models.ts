@@ -1,15 +1,19 @@
 import chalk from 'chalk';
-import * as p from '@clack/prompts';
 import {
   ProviderType,
   BanglaCLIConfig,
   saveConfig,
+  formatProviderLabel,
   PROVIDER_LABELS,
   PROVIDER_KEY_URLS,
   getEnvProviderKey,
+  POLLINATIONS_BASE_URL,
+  POLLINATIONS_DEFAULT_MODEL,
+  POLLINATIONS_FREE_API_KEY,
+  detectLocalOllamaModels,
 } from './config.js';
 import { createSpinner } from './ui.js';
-import { prepareInteractiveArea, interactiveSelect } from './prompt.js';
+import { prepareInteractiveArea, interactiveSelect, interactiveInput } from './prompt.js';
 
 export interface AgentModelPreset {
   id: string;
@@ -23,6 +27,19 @@ export interface AgentModelPreset {
 }
 
 export const AGENT_MODELS: AgentModelPreset[] = [
+  // ==========================================
+  // 🚀 Built-in Zero-Key Instant Free Model
+  // ==========================================
+  {
+    id: POLLINATIONS_DEFAULT_MODEL,
+    name: 'Zero-Key Built-in Free AI (GPT-OSS 20B)',
+    provider: 'custom',
+    category: 'free',
+    description: 'No API key required! Built-in public endpoint (~45s cooldown/reply).',
+    badge: 'Zero-Key',
+    contextLength: '128,000',
+    baseURL: POLLINATIONS_BASE_URL,
+  },
   // ==========================================
   // 🌟 100% Free OpenRouter Models (Zero Cost)
   // ==========================================
@@ -1017,13 +1034,13 @@ export async function selectAgentModelInteractive(
   initialCategory?: string
 ): Promise<BanglaCLIConfig | null> {
   const headerHeight = prepareInteractiveArea(
-    PROVIDER_LABELS[currentConfig.provider] || currentConfig.provider,
+    formatProviderLabel(currentConfig),
     currentConfig.model,
     mode
   );
 
   const termRows = process.stdout.rows || 24;
-  const availableRows = Math.max(4, termRows - headerHeight - 6);
+  const availableRows = Math.max(4, termRows - headerHeight - 8);
   const selectMaxItems = Math.max(3, Math.min(6, availableRows));
 
   const hasGeminiReady = Boolean(
@@ -1051,7 +1068,7 @@ export async function selectAgentModelInteractive(
     currentPreset?.category ||
     (currentConfig.provider === 'gemini' ? 'gemini' : currentConfig.provider === 'openrouter' ? 'free' : 'free');
 
-  p.intro(chalk.bold.hex('#00FF7F')('🤖 OpenCode AI Agent & Model Selector'));
+  console.log(chalk.bold.hex('#00FF7F')('\n🤖 banglaCLI AI Agent & Model Selector\n'));
 
   // 1. Choose Category (or use initialCategory shortcut)
   let categoryChoice = initialCategory;
@@ -1063,58 +1080,58 @@ export async function selectAgentModelInteractive(
       options: [
         {
           value: 'gemini',
-          label: `${chalk.bold.yellow('🔷 Google Gemini Free Suite')}${geminiBadge} ${chalk.dim('(Gemini 3.5/3.1 Flash Lite, Gemma 4)')}`,
-          hint: '1M - 2M tokens context, 1,500 req/day 100% free',
+          label: `${chalk.bold.yellow('🔷 Google Gemini Free Suite')}${geminiBadge}`,
+          hint: 'Gemini 3.5/3.1 Flash Lite, Gemma 4 • 1M-2M context, 1,500 req/day free',
         },
         {
           value: 'free',
-          label: `${chalk.bold.green('🌟 100% Free Tier Agents')}${orBadge} ${chalk.dim('(OpenRouter Free, Nemotron, Gemma 4, Particle-1)')}`,
-          hint: 'Verified tool-capable free OpenRouter models',
+          label: `${chalk.bold.green('🌟 Free Models & Zero-Key Starter AI')}${orBadge}`,
+          hint: 'Includes Zero-Key GPT-OSS 20B (no key) + OpenRouter free models (Nemotron, Gemma 4)',
         },
         {
           value: 'live_sync',
           label: `${chalk.bold.hex('#00FFFF')('🔄 Live Sync: OpenRouter Active Free Models')}${orBadge}`,
-          hint: 'Queries OpenRouter API live for every tool-capable free model active right now',
+          hint: 'Queries OpenRouter API live for active tool-capable free models',
         },
         {
           value: 'zen',
-          label: `${chalk.bold.hex('#00E5FF')('⚡ OpenCode & Freebuff Built-in Roster')}${orBadge} ${chalk.dim('(DeepSeek V4.1, GLM 5.3, Solar)')}`,
-          hint: 'Zero-retention & trial endpoints routed via OpenRouter',
+          label: `${chalk.bold.hex('#00E5FF')('⚡ OpenCode & Freebuff Built-in Roster')}${orBadge}`,
+          hint: 'DeepSeek V4.1, GLM 5.3, Solar routed via OpenRouter',
         },
         {
           value: 'deepseek',
-          label: `${chalk.bold.hex('#00D2FF')('🧠 DeepSeek Frontier Models')} ${chalk.dim('(DeepSeek V4.1, R1 Reasoner, Distill 70B)')}`,
-          hint: 'DeepSeek Platform, Groq & OpenRouter',
+          label: `${chalk.bold.hex('#00D2FF')('🧠 DeepSeek Frontier Models')}`,
+          hint: 'DeepSeek Platform (5M free), Groq & OpenRouter',
         },
         {
           value: 'hy4',
-          label: `${chalk.bold.hex('#FF6D00')('⚡ Tencent HY4 Suite')}${orBadge} ${chalk.dim('(Hy4 Flash, Hy4 1M Frontier)')}`,
-          hint: '1M tokens context',
+          label: `${chalk.bold.hex('#FF6D00')('⚡ Tencent HY4 Suite')}${orBadge}`,
+          hint: 'Hy4 Flash, Hy4 1M Frontier (1M tokens context)',
         },
         {
           value: 'glm',
-          label: `${chalk.bold.hex('#7C4DFF')('🚀 Zhipu AI GLM 5.3 Suite')}${orBadge} ${chalk.dim('(GLM 5.3 Flash, GLM 5.3 1M)')}`,
-          hint: '1M tokens, daily free tokens',
+          label: `${chalk.bold.hex('#7C4DFF')('🚀 Zhipu AI GLM 5.3 Suite')}${orBadge}`,
+          hint: 'GLM 5.3 Flash, GLM 5.3 1M (daily free tokens)',
         },
         {
           value: 'groq',
-          label: `${chalk.bold.hex('#FF9900')('⚡ Groq Cloud Free Tier')}${groqBadge} ${chalk.dim('(Llama 3.3 70B, Qwen Coder)')}`,
-          hint: '14,400 requests/day, 500+ tokens/sec',
+          label: `${chalk.bold.hex('#FF9900')('⚡ Groq & Cerebras Free Tier')}${groqBadge}`,
+          hint: 'Llama 3.3 70B, Qwen Coder • 14,400 requests/day, 500+ tok/s',
         },
         {
           value: 'flagship',
-          label: `${chalk.bold.hex('#FFD700')('👑 Frontier Flagship Coding Agents')}${orBadge} ${chalk.dim('(Claude 3.5 Sonnet, GPT-4o, Codestral)')}`,
-          hint: 'OpenCode SOTA benchmark models (OpenRouter BYOK)',
+          label: `${chalk.bold.hex('#FFD700')('👑 Frontier Flagship Coding Agents')}${orBadge}`,
+          hint: 'Claude 3.5 Sonnet, GPT-4o, Codestral via OpenRouter',
         },
         {
           value: 'local',
-          label: `${chalk.bold.magenta('💻 Local Offline Models')} ${chalk.green('[✔ No API Key Needed]')} ${chalk.dim('(Ollama: Qwen Coder, DeepSeek R1)')}`,
-          hint: 'Runs 100% locally on localhost:11434',
+          label: `${chalk.bold.magenta('💻 Local Offline Models')} ${chalk.green('[✔ No API Key Needed]')}`,
+          hint: 'Runs 100% locally via Ollama on localhost:11434',
         },
         {
           value: 'all',
           label: `${chalk.bold('📋 Browse All Model Presets')}`,
-          hint: 'View complete list of all presets',
+          hint: 'View complete catalog of all presets',
         },
         {
           value: 'custom',
@@ -1124,22 +1141,22 @@ export async function selectAgentModelInteractive(
       ],
     })) as string;
 
-    if (!categoryChoice || p.isCancel(categoryChoice)) return null;
+    if (!categoryChoice) return null;
   }
 
   // Handle custom input
   if (categoryChoice === 'custom') {
-    const customModel = (await p.text({
-      message: chalk.cyan('Enter model ID:'),
+    const customModel = await interactiveInput({
+      message: 'Enter model ID:',
       initialValue: currentConfig.model,
       validate: (v) => (!v || v.trim().length === 0 ? 'Model ID cannot be empty!' : undefined),
-    })) as string;
+    });
 
-    if (p.isCancel(customModel)) return null;
+    if (!customModel) return null;
 
     currentConfig.model = customModel.trim();
     saveConfig(currentConfig);
-    p.outro(chalk.green(`✔ Active Agent Model set to: ${chalk.bold(currentConfig.model)}`));
+    console.log(chalk.green(`✔ Active Agent Model set to: ${chalk.bold(currentConfig.model)}\n`));
     return currentConfig;
   }
 
@@ -1159,6 +1176,23 @@ export async function selectAgentModelInteractive(
       console.log(chalk.yellow('⚠️ Could not connect to OpenRouter live API. Falling back to built-in presets.\n'));
       modelsToShow = AGENT_MODELS.filter((m) => m.category === 'free');
     }
+  } else if (categoryChoice === 'local') {
+    const installedOllama = await detectLocalOllamaModels(700);
+    const dynamicPresets: AgentModelPreset[] = installedOllama.map((name) => ({
+      id: name,
+      name: `Local Ollama: ${name}`,
+      provider: 'custom',
+      category: 'local',
+      description: 'Detected running locally on Ollama (localhost:11434).',
+      badge: 'Installed Locally',
+      contextLength: 'Local RAM',
+      baseURL: 'http://localhost:11434/v1',
+    }));
+    const existingIds = new Set(dynamicPresets.map((m) => m.id));
+    modelsToShow = [
+      ...dynamicPresets,
+      ...AGENT_MODELS.filter((m) => m.category === 'local' && !existingIds.has(m.id)),
+    ];
   } else if (categoryChoice === 'all') {
     modelsToShow = AGENT_MODELS;
   } else {
@@ -1167,8 +1201,8 @@ export async function selectAgentModelInteractive(
 
   const modelOptions = modelsToShow.map((m) => ({
     value: m.id,
-    label: `${chalk.bold(m.name)} ${chalk.dim(`[${m.badge || m.category}]`)} ${m.contextLength ? chalk.cyan(`(${m.contextLength})`) : ''}`,
-    hint: m.description,
+    label: `${chalk.bold(m.name)} ${chalk.dim(`[${m.badge || m.category}]`)}`,
+    hint: `${m.contextLength ? `${m.contextLength} context • ` : ''}${m.description}`,
   }));
 
   const selectedModelId = await interactiveSelect({
@@ -1178,7 +1212,7 @@ export async function selectAgentModelInteractive(
     options: modelOptions,
   });
 
-  if (!selectedModelId || p.isCancel(selectedModelId)) return null;
+  if (!selectedModelId) return null;
 
   const preset =
     modelsToShow.find((m) => m.id === selectedModelId) ||
@@ -1189,11 +1223,10 @@ export async function selectAgentModelInteractive(
   const updatedConfig = await resolveAndSavePreset(preset, currentConfig);
   if (!updatedConfig) return null;
 
-  p.outro(
+  console.log(
     chalk.green(
       `✔ Active Agent Model: ${chalk.bold(preset.name)}\n` +
-        `Provider: ${chalk.bold(PROVIDER_LABELS[updatedConfig.provider])}\n` +
-        `Model ID: ${chalk.cyan(preset.id)}`
+        `  Provider: ${chalk.bold(formatProviderLabel(updatedConfig))} • Model ID: ${chalk.cyan(preset.id)}\n`
     )
   );
 
@@ -1211,7 +1244,12 @@ async function resolveAndSavePreset(
   let targetApiKey = currentConfig.apiKey;
   let targetBaseURL = targetProvider === 'gemini' ? undefined : preset.baseURL || currentConfig.baseURL;
 
-  const isLocalOllama = Boolean(preset.baseURL?.includes('localhost') || preset.category === 'local');
+  const isLocalOllama = Boolean(
+    preset.baseURL?.includes('localhost') ||
+      preset.baseURL?.includes('127.0.0.1') ||
+      preset.category === 'local'
+  );
+  const isBuiltInZeroKey = Boolean(preset.baseURL?.includes('pollinations.ai'));
   const isCustomBaseUrlChange =
     targetProvider === 'custom' &&
     Boolean(preset.baseURL) &&
@@ -1220,6 +1258,9 @@ async function resolveAndSavePreset(
   if (isLocalOllama) {
     targetApiKey = 'ollama';
     targetBaseURL = preset.baseURL || 'http://localhost:11434/v1';
+  } else if (isBuiltInZeroKey) {
+    targetApiKey = POLLINATIONS_FREE_API_KEY;
+    targetBaseURL = POLLINATIONS_BASE_URL;
   } else if (targetProvider !== currentConfig.provider || isCustomBaseUrlChange) {
     const saved = currentConfig.savedProviders?.[targetProvider];
     const specificEnvKey =
@@ -1229,13 +1270,16 @@ async function resolveAndSavePreset(
         ? process.env.DEEPSEEK_API_KEY?.trim()
         : getEnvProviderKey(targetProvider);
 
+    const savedIsPlaceholder =
+      saved?.apiKey === POLLINATIONS_FREE_API_KEY || saved?.apiKey === 'ollama';
+
     const savedMatchesCustomUrl =
       targetProvider !== 'custom' ||
       !preset.baseURL ||
       !saved?.baseURL ||
       saved.baseURL.replace(/\/+$/, '') === preset.baseURL.replace(/\/+$/, '');
 
-    if (saved && saved.apiKey && savedMatchesCustomUrl) {
+    if (saved && saved.apiKey && !savedIsPlaceholder && savedMatchesCustomUrl) {
       targetApiKey = saved.apiKey;
       targetBaseURL = targetProvider === 'gemini' ? undefined : preset.baseURL || saved.baseURL;
     } else if (specificEnvKey) {
@@ -1274,22 +1318,19 @@ async function resolveAndSavePreset(
         ],
       });
 
-      if (!promptChoice || promptChoice === 'cancel' || p.isCancel(promptChoice)) {
+      if (!promptChoice || promptChoice === 'cancel') {
         return null;
       }
 
-      p.note(
-        `${chalk.white('Get API key for ' + serviceName + ':')}\n` +
-          `${chalk.bold.underline.cyan(serviceUrl)}\n`,
-        chalk.bold('API Key Required')
-      );
+      console.log(chalk.white('  Get API key for ' + serviceName + ': ') + chalk.bold.underline.cyan(serviceUrl) + '\n');
 
-      const enteredKey = (await p.password({
-        message: chalk.cyan(`Enter API Key for ${serviceName}:`),
+      const enteredKey = await interactiveInput({
+        message: `Enter API Key for ${serviceName}:`,
+        mask: true,
         validate: (v) => (!v || v.trim().length === 0 ? 'Key cannot be empty!' : undefined),
-      })) as string;
+      });
 
-      if (p.isCancel(enteredKey)) return null;
+      if (!enteredKey) return null;
       targetApiKey = enteredKey.trim();
       targetBaseURL = targetProvider === 'gemini' ? undefined : preset.baseURL;
     }

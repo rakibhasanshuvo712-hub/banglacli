@@ -442,6 +442,33 @@ export function isDockedPromptWaiting(): boolean {
 }
 
 /**
+ * Word-wraps plain text to fit within maxWidth visible columns without awkward mid-word slicing.
+ */
+function wrapHintLines(text: string, maxWidth: number): string[] {
+  const limit = Math.max(20, maxWidth);
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [];
+  const rows: string[] = [];
+  let cur = '';
+  for (const word of words) {
+    const candidate = cur ? `${cur} ${word}` : word;
+    if (stringWidth(candidate) <= limit) {
+      cur = candidate;
+    } else {
+      if (cur) rows.push(cur);
+      if (stringWidth(word) > limit) {
+        rows.push(truncateWithAnsi(word, limit));
+        cur = '';
+      } else {
+        cur = word;
+      }
+    }
+  }
+  if (cur) rows.push(cur);
+  return rows;
+}
+
+/**
  * 100% resilient terminal interactive selector that works across all operating systems and shells
  * (PowerShell, Windows Terminal, VS Code terminal, cmd.exe, Git Bash, macOS, Linux).
  * 
@@ -470,7 +497,7 @@ export async function interactiveSelect<T extends string = string>(
 
     let termRows = process.stdout.rows || 24;
     let termCols = process.stdout.columns || 80;
-    const maxVisible = Math.max(3, Math.min(config.maxItems || 8, config.options.length, termRows - 8));
+    const maxVisible = Math.max(3, Math.min(config.maxItems || 8, config.options.length, termRows - 10));
     let scrollOffset = 0;
 
     const updateScroll = () => {
@@ -483,8 +510,9 @@ export async function interactiveSelect<T extends string = string>(
 
     const renderFrame = (): string => {
       updateScroll();
+      const safeWidth = Math.max(40, termCols - 4);
       const lines: string[] = [];
-      lines.push(chalk.cyan.bold('◆ ') + chalk.bold.white(config.message));
+      lines.push(truncateWithAnsi(chalk.cyan.bold('◆ ') + chalk.bold.white(config.message), safeWidth));
 
       const visibleSlice = config.options.slice(scrollOffset, scrollOffset + maxVisible);
       const canScrollUp = scrollOffset > 0;
@@ -501,16 +529,19 @@ export async function interactiveSelect<T extends string = string>(
           ? chalk.hex('#00FF7F').bold(`[${numStr}]`)
           : chalk.dim(`[${numStr}]`);
 
-        let lineContent = '';
-        if (isSelected) {
-          const hintStr = opt.hint ? chalk.hex('#00E5FF')(` (${opt.hint})`) : '';
-          lineContent = `  ${bullet} ${numTag} ${chalk.white.bold(opt.label)}${hintStr}`;
-        } else {
-          const hintStr = opt.hint ? chalk.dim(` (${opt.hint})`) : '';
-          lineContent = `  ${bullet} ${numTag} ${opt.label}${hintStr}`;
-        }
+        const lineContent = isSelected
+          ? `  ${bullet} ${numTag} ${chalk.white.bold(opt.label)}`
+          : `  ${bullet} ${numTag} ${opt.label}`;
 
-        lines.push(truncateWithAnsi(lineContent, termCols - 2));
+        lines.push(truncateWithAnsi(lineContent, safeWidth));
+
+        if (isSelected && opt.hint) {
+          const hintLines = wrapHintLines(opt.hint, safeWidth - 8);
+          for (let h = 0; h < hintLines.length && h < 2; h++) {
+            const pfx = h === 0 ? chalk.hex('#00E5FF')('     ↳ ') : '       ';
+            lines.push(truncateWithAnsi(`${pfx}${chalk.dim(hintLines[h])}`, safeWidth));
+          }
+        }
       }
 
       let footerScroll = '';
@@ -522,8 +553,11 @@ export async function interactiveSelect<T extends string = string>(
         footerScroll = chalk.dim(`  ↓ ... (${cursor + 1}/${config.options.length})`);
       }
 
-      const keyHint = chalk.dim(
-        `  ↑/↓ or 1-${Math.min(9, config.options.length)} to navigate • Enter: confirm • Esc: cancel`
+      const keyHint = truncateWithAnsi(
+        chalk.dim(
+          `  ↑/↓ or 1-${Math.min(9, config.options.length)} to navigate • Enter: confirm • Esc: cancel`
+        ),
+        safeWidth
       );
 
       if (footerScroll) {
@@ -597,100 +631,422 @@ export async function interactiveSelect<T extends string = string>(
       const str = stripTerminalControlNoise(buf.toString('utf-8'));
       if (!str) return;
 
-      // Ctrl+C
-      if (str === '\x03') {
-        cleanup();
-        process.stdout.write('\r\n' + chalk.yellow('Exiting banglacli...\n'));
-        process.exit(0);
-      }
+      let idx = 0;
+      let dirty = false;
 
-      // Escape or 'q' or 'Q'
-      if (str === '\x1b' || str === 'q' || str === 'Q') {
-        cancel();
-        return;
-      }
+      while (idx < str.length) {
+        const rest = str.slice(idx);
 
-      // Enter
-      if (str === '\r' || str === '\n' || str === '\r\n' || str === '\x1bOM' || str === '\x1b[13~') {
-        confirm();
-        return;
-      }
-
-      // Up arrow: \x1b[A, \x1bOA, or 'k', 'K', 'w', 'W'
-      if (
-        str === '\x1b[A' ||
-        str === '\x1bOA' ||
-        str === 'k' ||
-        str === 'K' ||
-        str === 'w' ||
-        str === 'W'
-      ) {
-        cursor = (cursor - 1 + config.options.length) % config.options.length;
-        draw();
-        return;
-      }
-
-      // Down arrow: \x1b[B, \x1bOB, or 'j', 'J', 's', 'S'
-      if (
-        str === '\x1b[B' ||
-        str === '\x1bOB' ||
-        str === 'j' ||
-        str === 'J' ||
-        str === 's' ||
-        str === 'S'
-      ) {
-        cursor = (cursor + 1) % config.options.length;
-        draw();
-        return;
-      }
-
-      // PageUp
-      if (str === '\x1b[5~') {
-        cursor = Math.max(0, cursor - maxVisible);
-        draw();
-        return;
-      }
-
-      // PageDown
-      if (str === '\x1b[6~') {
-        cursor = Math.min(config.options.length - 1, cursor + maxVisible);
-        draw();
-        return;
-      }
-
-      // Home
-      if (str === '\x1b[H' || str === '\x1b[1~') {
-        cursor = 0;
-        draw();
-        return;
-      }
-
-      // End
-      if (str === '\x1b[F' || str === '\x1b[4~') {
-        cursor = config.options.length - 1;
-        draw();
-        return;
-      }
-
-      // Numeric input: '1' - '9', '0'
-      if (/^[0-9]$/.test(str)) {
-        numBuffer += str;
-        const target = parseInt(numBuffer, 10);
-        if (target >= 1 && target <= config.options.length) {
-          cursor = target - 1;
-          draw();
+        // Ctrl+C
+        if (rest.startsWith('\x03')) {
+          cleanup();
+          process.stdout.write('\r\n' + chalk.yellow('Exiting banglacli...\n'));
+          process.exit(0);
         }
-        if (numTimeout) clearTimeout(numTimeout);
-        numTimeout = setTimeout(() => {
-          numBuffer = '';
-        }, 700);
-        return;
+
+        // Arrow / Nav / Enter escape sequences
+        if (rest.startsWith('\x1b[A') || rest.startsWith('\x1bOA')) {
+          cursor = (cursor - 1 + config.options.length) % config.options.length;
+          idx += 3;
+          dirty = true;
+          continue;
+        }
+        if (rest.startsWith('\x1b[B') || rest.startsWith('\x1bOB')) {
+          cursor = (cursor + 1) % config.options.length;
+          idx += 3;
+          dirty = true;
+          continue;
+        }
+        if (rest.startsWith('\x1b[5~')) {
+          cursor = Math.max(0, cursor - maxVisible);
+          idx += 4;
+          dirty = true;
+          continue;
+        }
+        if (rest.startsWith('\x1b[6~')) {
+          cursor = Math.min(config.options.length - 1, cursor + maxVisible);
+          idx += 4;
+          dirty = true;
+          continue;
+        }
+        if (rest.startsWith('\x1b[H')) {
+          cursor = 0;
+          idx += 3;
+          dirty = true;
+          continue;
+        }
+        if (rest.startsWith('\x1b[1~')) {
+          cursor = 0;
+          idx += 4;
+          dirty = true;
+          continue;
+        }
+        if (rest.startsWith('\x1b[F')) {
+          cursor = config.options.length - 1;
+          idx += 3;
+          dirty = true;
+          continue;
+        }
+        if (rest.startsWith('\x1b[4~')) {
+          cursor = config.options.length - 1;
+          idx += 4;
+          dirty = true;
+          continue;
+        }
+        if (rest.startsWith('\x1bOM')) {
+          confirm();
+          return;
+        }
+        if (rest.startsWith('\x1b[13~')) {
+          confirm();
+          return;
+        }
+
+        const ch = str[idx];
+
+        // Lone Escape or 'q'/'Q'
+        if (ch === '\x1b' && idx === str.length - 1) {
+          cancel();
+          return;
+        }
+        if (ch === '\x1b') {
+          // Unknown ANSI sequence chunk: consume CSI sequence cleanly
+          const csiMatch = rest.match(/^\x1b\[[0-9;]*[a-zA-Z~]/);
+          if (csiMatch) {
+            idx += csiMatch[0].length;
+            continue;
+          }
+          cancel();
+          return;
+        }
+
+        if (ch === 'q' || ch === 'Q') {
+          cancel();
+          return;
+        }
+
+        if (ch === '\r' || ch === '\n') {
+          confirm();
+          return;
+        }
+
+        if (ch === 'k' || ch === 'K' || ch === 'w' || ch === 'W') {
+          cursor = (cursor - 1 + config.options.length) % config.options.length;
+          idx += 1;
+          dirty = true;
+          continue;
+        }
+
+        if (ch === 'j' || ch === 'J' || ch === 's' || ch === 'S') {
+          cursor = (cursor + 1) % config.options.length;
+          idx += 1;
+          dirty = true;
+          continue;
+        }
+
+        if (/^[0-9]$/.test(ch)) {
+          numBuffer += ch;
+          const target = parseInt(numBuffer, 10);
+          if (target >= 1 && target <= config.options.length) {
+            cursor = target - 1;
+            dirty = true;
+          }
+          if (numTimeout) clearTimeout(numTimeout);
+          numTimeout = setTimeout(() => {
+            numBuffer = '';
+          }, 700);
+          idx += 1;
+          continue;
+        }
+
+        idx += 1;
+      }
+
+      if (dirty) {
+        draw();
       }
     };
 
     process.stdout.on('resize', onResize);
     process.stdin.on('data', onData);
     draw();
+  });
+}
+
+export interface InteractiveInputConfig {
+  message: string;
+  initialValue?: string;
+  placeholder?: string;
+  mask?: boolean;
+  validate?: (value: string) => string | undefined;
+}
+
+/**
+ * Resilient single-line / masked input prompt matching interactiveSelect visual style.
+ * Supports Windows Terminal / VS Code paste (bracketed & multi-char), Esc cancel, and non-TTY piping.
+ */
+export async function interactiveInput(config: InteractiveInputConfig): Promise<string | null> {
+  if (!process.stdin.isTTY) {
+    const line = await nextNonTtyLine();
+    if (line === null) {
+      return config.initialValue ?? null;
+    }
+    const trimmed = line.trim();
+    if (!trimmed && config.initialValue) return config.initialValue;
+    return trimmed;
+  }
+
+  return new Promise((resolve) => {
+    _interactiveSelectActive = true;
+    let value = config.initialValue || '';
+    let cursorPos = value.length;
+    let errorMsg = '';
+    let inBracketedPaste = false;
+    let pasteBuf = '';
+    let lastLines = 0;
+
+    const wasRaw = process.stdin.isRaw;
+    try {
+      process.stdin.setRawMode(true);
+      process.stdin.resume();
+      process.stdout.write('\x1b[?2004h');
+    } catch {}
+
+    const drawClean = () => {
+      const termCols = process.stdout.columns || 80;
+      const safeWidth = Math.max(36, termCols - 6);
+      const lines: string[] = [];
+      lines.push(truncateWithAnsi(chalk.cyan.bold('◆ ') + chalk.bold.white(config.message), safeWidth));
+
+      const rawDisplay = config.mask ? '•'.repeat(value.length) : value;
+      let visible = rawDisplay;
+      let visibleCursor = cursorPos;
+      if (stringWidth(rawDisplay) > safeWidth - 6) {
+        const sliceStart = Math.max(0, rawDisplay.length - (safeWidth - 8));
+        visible = '…' + rawDisplay.slice(sliceStart);
+        visibleCursor = Math.max(1, cursorPos - sliceStart + 1);
+      }
+
+      const shown =
+        value.length === 0 && config.placeholder
+          ? chalk.dim(truncateWithAnsi(config.placeholder, safeWidth - 6))
+          : chalk.white(visible);
+      lines.push(`  ${chalk.hex('#00FF7F').bold('❯')} ${shown}`);
+
+      if (errorMsg) {
+        lines.push(chalk.red(`  ✖ ${truncateWithAnsi(errorMsg, safeWidth - 6)}`));
+      } else {
+        lines.push(chalk.dim('  Enter: confirm • Esc: cancel'));
+      }
+
+      if (lastLines > 0) {
+        // Cursor is parked on row 1 (input line), one row below title row 0.
+        process.stdout.write('\x1b[1A\r\x1b[J');
+      }
+      process.stdout.write(lines.join('\n') + '\n');
+      lastLines = lines.length;
+
+      const rowsUp = lastLines - 1;
+      const col = Math.min(termCols - 2, 5 + (value.length === 0 ? 0 : visibleCursor));
+      process.stdout.write(`\x1b[${rowsUp}A\x1b[${col}G\x1b[?25h`);
+    };
+
+    const cleanup = () => {
+      _interactiveSelectActive = false;
+      try { process.stdout.write('\x1b[?2004l'); } catch {}
+      process.stdin.removeListener('data', onData);
+      try {
+        if (!wasRaw && process.stdin.isTTY) process.stdin.setRawMode(false);
+      } catch {}
+    };
+
+    const finishClear = () => {
+      if (lastLines > 0) {
+        // Currently parked at input row (row 1 of block). Move up 1 row to top of block and clear down.
+        process.stdout.write('\x1b[1A\r\x1b[J');
+      }
+    };
+
+    const confirm = () => {
+      if (config.validate) {
+        const err = config.validate(value);
+        if (err) {
+          errorMsg = err;
+          drawClean();
+          return;
+        }
+      }
+      cleanup();
+      finishClear();
+      const shownDone = config.mask ? chalk.dim('••••••••') : chalk.hex('#00FF7F').bold(value || '(empty)');
+      process.stdout.write(
+        chalk.hex('#00FF7F')('✔ ') + chalk.bold(config.message) + ' ' + shownDone + '\n\n'
+      );
+      resolve(value);
+    };
+
+    const cancel = () => {
+      cleanup();
+      finishClear();
+      process.stdout.write(chalk.gray('✖ ') + chalk.dim(`${config.message} (cancelled)\n\n`));
+      resolve(null);
+    };
+
+    const insertText = (chunk: string) => {
+      const cleaned = chunk.replace(/[\r\n]+/g, '');
+      if (!cleaned) return;
+      errorMsg = '';
+      value = value.slice(0, cursorPos) + cleaned + value.slice(cursorPos);
+      cursorPos += cleaned.length;
+    };
+
+    const onData = (buf: Buffer) => {
+      let str = stripTerminalControlNoise(buf.toString('utf-8'));
+      if (!str) return;
+
+      if (str.includes('\x1b[200~')) {
+        inBracketedPaste = true;
+        const afterStart = str.split('\x1b[200~')[1] || '';
+        if (afterStart.includes('\x1b[201~')) {
+          const endIdx = afterStart.indexOf('\x1b[201~');
+          const pasted = afterStart.slice(0, endIdx);
+          const trailing = afterStart.slice(endIdx + '\x1b[201~'.length);
+          inBracketedPaste = false;
+          if (pasted) insertText(pasted);
+          if (!trailing) {
+            drawClean();
+            return;
+          }
+          str = trailing;
+        } else {
+          pasteBuf += afterStart;
+          return;
+        }
+      }
+      if (inBracketedPaste) {
+        if (str.includes('\x1b[201~')) {
+          const endIdx = str.indexOf('\x1b[201~');
+          const beforeEnd = str.slice(0, endIdx);
+          const trailing = str.slice(endIdx + '\x1b[201~'.length);
+          pasteBuf += beforeEnd;
+          inBracketedPaste = false;
+          const full = pasteBuf;
+          pasteBuf = '';
+          if (full) insertText(full);
+          if (!trailing) {
+            drawClean();
+            return;
+          }
+          str = trailing;
+        } else {
+          pasteBuf += str;
+          return;
+        }
+      }
+
+      if (str === '\x03') {
+        cleanup();
+        process.stdout.write('\r\n' + chalk.yellow('Exiting banglacli...\n'));
+        process.exit(0);
+      }
+
+      // Fast multi-char paste ending with Enter
+      if (str.length > 1 && /[\r\n]$/.test(str) && !str.includes('\x1b')) {
+        const body = str.replace(/[\r\n]+$/, '');
+        if (body) insertText(body);
+        confirm();
+        return;
+      }
+
+      if (str === '\x1b') {
+        cancel();
+        return;
+      }
+
+      if (str === '\r' || str === '\n' || str === '\r\n' || str === '\x1bOM' || str === '\x1b[13~') {
+        confirm();
+        return;
+      }
+
+      if (str === '\x15') {
+        // Ctrl+U clear line
+        value = '';
+        cursorPos = 0;
+        errorMsg = '';
+        drawClean();
+        return;
+      }
+
+      if (str === '\x08' || str === '\x7f') {
+        if (cursorPos > 0) {
+          value = value.slice(0, cursorPos - 1) + value.slice(cursorPos);
+          cursorPos--;
+          errorMsg = '';
+          drawClean();
+        }
+        return;
+      }
+
+      if (str === '\x1b[D' || str === '\x1bOD') {
+        if (cursorPos > 0) {
+          cursorPos--;
+          drawClean();
+        }
+        return;
+      }
+      if (str === '\x1b[C' || str === '\x1bOC') {
+        if (cursorPos < value.length) {
+          cursorPos++;
+          drawClean();
+        }
+        return;
+      }
+      if (str === '\x1b[H' || str === '\x1b[1~') {
+        cursorPos = 0;
+        drawClean();
+        return;
+      }
+      if (str === '\x1b[F' || str === '\x1b[4~') {
+        cursorPos = value.length;
+        drawClean();
+        return;
+      }
+      if (str === '\x1b[3~') {
+        if (cursorPos < value.length) {
+          value = value.slice(0, cursorPos) + value.slice(cursorPos + 1);
+          errorMsg = '';
+          drawClean();
+        }
+        return;
+      }
+
+      if (str.startsWith('\x1b[')) return;
+
+      const printable = str.replace(/[\x00-\x1f\x7f]/g, '');
+      if (printable.length > 0) {
+        insertText(printable);
+        drawClean();
+      }
+    };
+
+    // Initial draw without previous-line cursor rollback
+    const termCols = process.stdout.columns || 80;
+    const safeWidth = Math.max(36, termCols - 6);
+    const initLines = [
+      truncateWithAnsi(chalk.cyan.bold('◆ ') + chalk.bold.white(config.message), safeWidth),
+      `  ${chalk.hex('#00FF7F').bold('❯')} ${
+        value.length === 0 && config.placeholder
+          ? chalk.dim(truncateWithAnsi(config.placeholder, safeWidth - 6))
+          : chalk.white(config.mask ? '•'.repeat(value.length) : value)
+      }`,
+      chalk.dim('  Enter: confirm • Esc: cancel'),
+    ];
+    process.stdout.write(initLines.join('\n') + '\n');
+    lastLines = initLines.length;
+    const initCol = Math.min(termCols - 2, 5 + (value.length === 0 ? 0 : cursorPos));
+    process.stdout.write(`\x1b[${lastLines - 1}A\x1b[${initCol}G\x1b[?25h`);
+
+    process.stdin.on('data', onData);
   });
 }
 

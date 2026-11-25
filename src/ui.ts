@@ -4,7 +4,6 @@ import { execSync } from 'node:child_process';
 import chalk from 'chalk';
 import { marked } from 'marked';
 import { markedTerminal } from 'marked-terminal';
-import * as p from '@clack/prompts';
 import { interactiveSelect } from './prompt.js';
 import ora, { Ora } from 'ora';
 
@@ -166,7 +165,7 @@ export async function askToolConfirmation(
     ],
   });
 
-  if (!choice || p.isCancel(choice)) {
+  if (!choice) {
     return 'no';
   }
 

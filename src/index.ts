@@ -4,13 +4,18 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { Command } from 'commander';
 import chalk from 'chalk';
-import * as p from '@clack/prompts';
 import {
   getConfig,
   promptConfig,
   switchProviderInteractive,
   updateModel,
   saveConfig,
+  hasSavedConfig,
+  createZeroKeyConfig,
+  detectLocalOllamaModels,
+  formatProviderLabel,
+  isKeylessConfig,
+  POLLINATIONS_FREE_API_KEY,
   PROVIDER_LABELS,
   BanglaCLIConfig,
 } from './config.js';
@@ -43,6 +48,7 @@ import {
   updateDockedModel,
   prepareInteractiveArea,
   interactiveSelect,
+  interactiveInput,
   isInteractivePromptActive,
   isDockedPromptWaiting,
 } from './prompt.js';
@@ -52,6 +58,18 @@ import { captureClipboardImage, loadImagePayload, isImageFile, type ImagePayload
 import { exploreAndSelectFreeModel } from './explorer.js';
 
 // Ensure terminal viewport & mesh connections are cleanly restored on process exit
+function gracefulExit(code = 0): void {
+  process.exitCode = code;
+  try {
+    getActiveMeshNode()?.stop();
+    deactivateFixedDock();
+    restoreTerminalViewport();
+    process.stdin.pause();
+    (process.stdin as any).unref?.();
+  } catch {}
+  setTimeout(() => process.exit(code), 80).unref();
+}
+
 process.on('exit', () => {
   getActiveMeshNode()?.stop();
   deactivateFixedDock();
@@ -138,7 +156,7 @@ const program = new Command();
 program
   .name('banglacli')
   .description('Next-Gen Autonomous BYOK terminal coding agent that speaks Bangla, Banglish & English.')
-  .version('4.2.6', '-v, --version', 'Output the current version')
+  .version('4.2.7', '-v, --version', 'Output the current version')
   .option('-m, --model <model>', 'Override model for this session')
   .option('-M, --mode <mode>', 'Execution mode: "build" (default) or "plan"', 'build')
   .option('-p, --prompt <prompt>', 'Run a single prompt and exit')
@@ -152,17 +170,36 @@ program
       safetySession.autoApproveAll = true;
     }
 
-    // Check for existing configuration
+    // Check for existing configuration (also hydrates .env / .env.local keys)
     let config = getConfig();
 
     if (!config) {
-      console.log(chalk.yellow('\nℹ️  No API key or provider found. Starting initial onboarding...\n'));
-      const prompted = await promptConfig(true);
-      if (!prompted) {
-        console.log(chalk.yellow('\nSetup cancelled. Exiting.\n'));
-        process.exit(0);
+      if (!process.stdin.isTTY || options.prompt) {
+        const localOllama = await detectLocalOllamaModels(600);
+        if (localOllama.length > 0) {
+          config = {
+            provider: 'custom',
+            apiKey: 'ollama',
+            model: localOllama[0],
+            baseURL: 'http://localhost:11434/v1',
+          };
+          console.log(chalk.cyan(`ℹ️  Auto-detected Local Ollama (${localOllama[0]}).`));
+        } else {
+          config = createZeroKeyConfig();
+          console.log(
+            chalk.cyan(
+              'ℹ️  No API key configured — starting with Free Zero-Key AI. Run "banglacli config" anytime to add a free Gemini key.'
+            )
+          );
+        }
+      } else {
+        const prompted = await promptConfig(true);
+        if (!prompted) {
+          console.log(chalk.yellow('\nSetup cancelled. Exiting.\n'));
+          process.exit(0);
+        }
+        config = prompted;
       }
-      config = prompted;
     }
 
     if (options.model) {
@@ -202,7 +239,7 @@ program
         onPeerConnect: (peer) => {
           if (isDockedPromptWaiting()) {
             updateDockedModel(
-              PROVIDER_LABELS[config?.provider || 'gemini'] || config?.provider || 'gemini',
+              formatProviderLabel(config),
               config?.model || 'gemini-3.5-flash-lite',
               agent.getMode()
             );
@@ -219,7 +256,7 @@ program
         onPeerDisconnect: (peer) => {
           if (isDockedPromptWaiting()) {
             updateDockedModel(
-              PROVIDER_LABELS[config?.provider || 'gemini'] || config?.provider || 'gemini',
+              formatProviderLabel(config),
               config?.model || 'gemini-3.5-flash-lite',
               agent.getMode()
             );
@@ -258,10 +295,12 @@ program
             }
           }
         }
-        saveConfig(config);
+        if (hasSavedConfig() || config.apiKey !== POLLINATIONS_FREE_API_KEY) {
+          saveConfig(config);
+        }
         meshNode?.updateState({ model: newModel });
         updateDockedModel(
-          PROVIDER_LABELS[config.provider] || config.provider,
+          formatProviderLabel(config),
           config.model,
           agent.getMode()
         );
@@ -272,7 +311,7 @@ program
     if (options.prompt) {
       console.log(
         chalk.cyan(
-          `\n⚡ Running single prompt with ${config.provider} (${config.model}) in [${initialMode.toUpperCase()} MODE]:`
+          `\n⚡ Running single prompt with ${formatProviderLabel(config)} (${config.model}) in [${initialMode.toUpperCase()} MODE]:`
         )
       );
       console.log(chalk.white(options.prompt) + '\n');
@@ -300,25 +339,26 @@ program
           renderInterruptedNotice();
         } else {
           console.error(chalk.red(`\n✖ Error: ${err.message}\n`));
-          process.exit(1);
+          process.exitCode = 1;
         }
       } finally {
         detachEscape();
         updateFixedBottomStatus('', { mode: agent.getMode(), model: config.model });
         meshNode?.stop();
       }
-      process.exit(0);
+      gracefulExit(process.exitCode ? Number(process.exitCode) : 0);
+      return;
     }
 
     // Activate fixed-dock layout: sticky header at top + docked input box at bottom.
     // Gracefully falls back to inline banner on non-TTY or small terminals.
     const isDocked = activateFixedDock(
-      PROVIDER_LABELS[config.provider] || config.provider,
+      formatProviderLabel(config),
       config.model,
       initialMode
     );
     if (!isDocked) {
-      printBanner(PROVIDER_LABELS[config.provider], config.model, process.cwd());
+      printBanner(formatProviderLabel(config), config.model, process.cwd());
     }
 
     let running = true;
@@ -334,11 +374,9 @@ program
       });
 
       if (input === null) {
-        deactivateFixedDock();
-        restoreTerminalViewport();
-        meshNode?.stop();
         console.log(chalk.yellow('\nGoodbye! Exiting banglacli.\n'));
-        process.exit(0);
+        gracefulExit(0);
+        return;
       }
 
       let trimmed = input.trim();
@@ -355,11 +393,9 @@ program
 
       // Handle Slash Commands
       if (lowerCmd === '/exit' || lowerCmd === '/quit') {
-        deactivateFixedDock();
-        restoreTerminalViewport();
-        meshNode?.stop();
         console.log(chalk.hex('#00FF7F')('\nThanks for using banglacli. Happy coding! 🚀\n'));
-        process.exit(0);
+        gracefulExit(0);
+        return;
       }
 
       if (lowerCmd === '/help') {
@@ -483,12 +519,12 @@ program
           ],
         });
 
-        if (modeChoice && !p.isCancel(modeChoice)) {
+        if (modeChoice) {
           agent.setMode(modeChoice);
           meshNode?.updateState({ mode: modeChoice });
         }
         activateFixedDock(
-          PROVIDER_LABELS[config.provider] || config.provider,
+          formatProviderLabel(config),
           config.model,
           agent.getMode()
         );
@@ -505,7 +541,7 @@ program
         agent.setMode('plan');
         meshNode?.updateState({ mode: 'plan' });
         updateDockedModel(
-          PROVIDER_LABELS[config.provider] || config.provider,
+          formatProviderLabel(config),
           config.model,
           'plan'
         );
@@ -523,7 +559,7 @@ program
         agent.setMode('build');
         meshNode?.updateState({ mode: 'build' });
         updateDockedModel(
-          PROVIDER_LABELS[config.provider] || config.provider,
+          formatProviderLabel(config),
           config.model,
           'build'
         );
@@ -535,7 +571,7 @@ program
         agent.setMode('build');
         meshNode?.updateState({ mode: 'build' });
         updateDockedModel(
-          PROVIDER_LABELS[config.provider] || config.provider,
+          formatProviderLabel(config),
           config.model,
           'build'
         );
@@ -568,7 +604,7 @@ program
         const changes = getSessionChanges();
         renderSessionStats({
           model: config.model,
-          provider: PROVIDER_LABELS[config.provider] || config.provider,
+          provider: formatProviderLabel(config),
           mode: agent.getMode(),
           totalTokens: metrics.totalTokens,
           promptTokens: metrics.promptTokens,
@@ -593,11 +629,13 @@ program
         });
 
         // 2. Active Provider & Model
-        const hasKey = Boolean(config.apiKey && config.apiKey.trim().length > 5);
+        const hasKey = isKeylessConfig(config) || Boolean(config.apiKey && config.apiKey.trim().length > 5);
         checks.push({
           name: 'AI Provider & Key',
           status: hasKey ? 'ok' : 'error',
-          detail: `${PROVIDER_LABELS[config.provider]} with model "${config.model}" (${hasKey ? 'Configured' : 'Missing API Key'})`,
+          detail: `${formatProviderLabel(config)} with model "${config.model}" (${
+            isKeylessConfig(config) ? 'Zero-Key Active' : hasKey ? 'Configured' : 'Missing API Key'
+          })`,
         });
 
         // 3. Workspace access
@@ -778,7 +816,7 @@ program
 
       if (lowerCmd === '/provider') {
         prepareInteractiveArea(
-          PROVIDER_LABELS[config.provider] || config.provider,
+          formatProviderLabel(config),
           config.model,
           agent.getMode()
         );
@@ -788,7 +826,7 @@ program
           agent.updateConfig(newConfig);
         }
         activateFixedDock(
-          PROVIDER_LABELS[config.provider] || config.provider,
+          formatProviderLabel(config),
           config.model,
           agent.getMode()
         );
@@ -797,15 +835,15 @@ program
 
       if (lowerCmd === '/config') {
         prepareInteractiveArea(
-          PROVIDER_LABELS[config.provider] || config.provider,
+          formatProviderLabel(config),
           config.model,
           agent.getMode()
         );
-        const newConfig = await promptConfig(false);
+        const newConfig = await promptConfig(false, config);
         config = newConfig;
         agent.updateConfig(newConfig);
         activateFixedDock(
-          PROVIDER_LABELS[config.provider] || config.provider,
+          formatProviderLabel(config),
           config.model,
           agent.getMode()
         );
@@ -832,7 +870,7 @@ program
           agent.updateConfig(newConfig);
         }
         activateFixedDock(
-          PROVIDER_LABELS[config.provider] || config.provider,
+          formatProviderLabel(config),
           config.model,
           agent.getMode()
         );
@@ -865,7 +903,7 @@ program
               config = directConfig;
               agent.updateConfig(directConfig);
               updateDockedModel(
-                PROVIDER_LABELS[config.provider] || config.provider,
+                formatProviderLabel(config),
                 config.model,
                 agent.getMode()
               );
@@ -895,7 +933,7 @@ program
               config = inferredConfig;
               agent.updateConfig(inferredConfig);
               updateDockedModel(
-                PROVIDER_LABELS[config.provider] || config.provider,
+                formatProviderLabel(config),
                 config.model,
                 agent.getMode()
               );
@@ -910,7 +948,7 @@ program
           agent.updateConfig(newConfig);
         }
         activateFixedDock(
-          PROVIDER_LABELS[config.provider] || config.provider,
+          formatProviderLabel(config),
           config.model,
           agent.getMode()
         );
@@ -1072,11 +1110,13 @@ program
       detail: `${nodeVer} (Node 18+ required for modern async streams)`,
     });
 
-    const hasKey = Boolean(config.apiKey && config.apiKey.trim().length > 5);
+    const hasKey = isKeylessConfig(config) || Boolean(config.apiKey && config.apiKey.trim().length > 5);
     checks.push({
       name: 'AI Provider & Key',
       status: hasKey ? 'ok' : 'error',
-      detail: `${PROVIDER_LABELS[config.provider] || config.provider} with model "${config.model}" (${hasKey ? 'Configured' : 'Missing API Key'})`,
+      detail: `${formatProviderLabel(config)} with model "${config.model}" (${
+        isKeylessConfig(config) ? 'Zero-Key Active' : hasKey ? 'Configured' : 'Missing API Key'
+      })`,
     });
 
     try {
@@ -1119,7 +1159,7 @@ program
 
     renderSessionStats({
       model: config.model,
-      provider: PROVIDER_LABELS[config.provider] || config.provider,
+      provider: formatProviderLabel(config),
       mode: 'build',
       totalTokens: 0,
       promptTokens: 0,
@@ -1151,14 +1191,14 @@ async function handleSwitchModel(config: BanglaCLIConfig, agent: BanglaAgent): P
       ],
     });
 
-    if (!choice || p.isCancel(choice)) return;
+    if (!choice) return;
 
     if (choice === 'custom_input') {
-      const custom = (await p.text({
+      const custom = await interactiveInput({
         message: 'Enter Gemini model ID:',
-        initialValue: config.model || 'gemini-3.8-flash',
-      })) as string;
-      if (p.isCancel(custom)) return;
+        initialValue: config.model || 'gemini-3.5-flash-lite',
+      });
+      if (!custom) return;
       selectedModel = custom.trim();
     } else {
       selectedModel = choice;
@@ -1176,24 +1216,24 @@ async function handleSwitchModel(config: BanglaCLIConfig, agent: BanglaAgent): P
       ],
     });
 
-    if (!choice || p.isCancel(choice)) return;
+    if (!choice) return;
 
     if (choice === 'custom_input') {
-      const custom = (await p.text({
+      const custom = await interactiveInput({
         message: 'Enter model ID (e.g. openrouter/free):',
         initialValue: config.model || 'openrouter/free',
-      })) as string;
-      if (p.isCancel(custom)) return;
+      });
+      if (!custom) return;
       selectedModel = custom.trim();
     } else {
       selectedModel = choice;
     }
   } else {
-    const custom = (await p.text({
-      message: chalk.cyan('Enter custom model name:'),
+    const custom = await interactiveInput({
+      message: 'Enter custom model name:',
       initialValue: config.model,
-    })) as string;
-    if (p.isCancel(custom)) return;
+    });
+    if (!custom) return;
     selectedModel = custom.trim();
   }
 

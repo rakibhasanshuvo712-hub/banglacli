@@ -1,5 +1,13 @@
 import { GoogleGenAI } from '@google/genai';
-import { BanglaCLIConfig, getEnvProviderKey, saveConfig } from './config.js';
+import {
+  BanglaCLIConfig,
+  detectLocalOllamaModels,
+  getEnvProviderKey,
+  POLLINATIONS_BASE_URL,
+  POLLINATIONS_DEFAULT_MODEL,
+  POLLINATIONS_FREE_API_KEY,
+  saveConfig,
+} from './config.js';
 import {
   AGENT_MODELS,
   fetchLiveOpenRouterFreeModels,
@@ -23,6 +31,20 @@ export interface FreeModelCandidate {
  */
 async function probeCandidate(candidate: FreeModelCandidate): Promise<boolean> {
   const timeoutMs = 5000;
+
+  if (candidate.provider === 'custom' && candidate.baseURL?.toLowerCase().includes('pollinations.ai')) {
+    // Check health via /models without consuming the 1-per-45s anonymous inference cooldown
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch('https://text.pollinations.ai/models', { signal: controller.signal });
+      clearTimeout(timer);
+      return res.ok;
+    } catch {
+      clearTimeout(timer);
+      return false;
+    }
+  }
 
   if (candidate.provider === 'gemini') {
     let timer: NodeJS.Timeout | undefined;
@@ -196,7 +218,7 @@ export async function exploreAndSelectFreeModel(
   }
 
   // 4. Custom endpoint candidates matching configured baseURL
-  if (customKey && customBaseURL) {
+  if (customKey && customBaseURL && !customBaseURL.includes('pollinations.ai')) {
     if (customBaseURL.includes('groq.com')) {
       for (const g of ['llama-3.3-70b-versatile', 'qwen-2.5-coder-32b', 'llama-3.1-8b-instant']) {
         pushCandidate({
@@ -227,6 +249,31 @@ export async function exploreAndSelectFreeModel(
         baseURL: customBaseURL,
       });
     }
+  }
+
+  // 5. Local Ollama auto-discovered offline models (zero key)
+  try {
+    const localOllama = await detectLocalOllamaModels(500);
+    for (const m of localOllama) {
+      pushCandidate({
+        id: m,
+        name: `Ollama (${m})`,
+        provider: 'custom',
+        apiKey: 'ollama',
+        baseURL: 'http://localhost:11434/v1',
+      });
+    }
+  } catch {}
+
+  // 6. Final fallback: Built-in Zero-Key Pollinations AI (if not already excluded)
+  if (!excludedModels.has(POLLINATIONS_DEFAULT_MODEL)) {
+    pushCandidate({
+      id: POLLINATIONS_DEFAULT_MODEL,
+      name: 'Zero-Key Built-in Free AI (GPT-OSS 20B)',
+      provider: 'custom',
+      apiKey: POLLINATIONS_FREE_API_KEY,
+      baseURL: POLLINATIONS_BASE_URL,
+    });
   }
 
   if (candidatePool.length === 0) {
